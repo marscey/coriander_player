@@ -106,3 +106,15 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# === BASS Library Configuration ===
+# Define the source directory for BASS libraries
+set(BASS_LIB_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/bass")
+# Define the target directory for BASS libraries (create BASS subdirectory)
+set(BASS_LIB_TARGET_DIR "${INSTALL_BUNDLE_LIB_DIR}/BASS")
+
+# Copy all BASS library files to the target directory
+install(DIRECTORY "${BASS_LIB_SOURCE_DIR}/"
+  DESTINATION "${BASS_LIB_TARGET_DIR}"
+  COMPONENT Runtime
+  FILES_MATCHING PATTERN "*.dll")
