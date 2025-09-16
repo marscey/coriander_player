@@ -6,6 +6,10 @@ import 'package:coriander_player/page/artist_detail_page.dart';
 import 'package:coriander_player/page/artists_page.dart';
 import 'package:coriander_player/page/audio_detail_page.dart';
 import 'package:coriander_player/page/audios_page.dart';
+import 'package:coriander_player/page/cloud_service/cloud_connections_page.dart';
+import 'package:coriander_player/page/cloud_service/cloud_file_browser.dart';
+import 'package:coriander_player/cloud_service/cloud_connection.dart';
+import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
 import 'package:coriander_player/page/folder_detail_page.dart';
 import 'package:coriander_player/page/folders_page.dart';
 import 'package:coriander_player/page/now_playing_page/page.dart';
@@ -93,8 +97,11 @@ class Entry extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: ThemeProvider.instance,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: ThemeProvider.instance),
+        ChangeNotifierProvider(create: (context) => CloudServiceManager()),
+      ],
       builder: (context, _) {
         final theme = Provider.of<ThemeProvider>(context);
         return MaterialApp.router(
@@ -229,6 +236,25 @@ class Entry extends StatelessWidget {
                   final result = state.extra as UnionSearchResult;
                   return SlideTransitionPage(
                     child: SearchResultPage(searchResult: result),
+                  );
+                },
+              ),
+            ],
+          ),
+
+          /// cloud connections page
+          GoRoute(
+            path: app_paths.CLOUD_CONNECTIONS_PAGE,
+            pageBuilder: (context, state) => const SlideTransitionPage(
+              child: CloudConnectionsPage(),
+            ),
+            routes: [
+              GoRoute(
+                path: "browser",
+                pageBuilder: (context, state) {
+                  final connection = state.extra as CloudConnection;
+                  return SlideTransitionPage(
+                    child: CloudFileBrowser(connectionId: connection.id),
                   );
                 },
               ),

@@ -28,11 +28,11 @@ dependencies:
   filepicker_windows: ^2.1.4
   desktop_lyric:
     git:
-      url: https://github.com/Ferry-200/desktop_lyric.git
-      ref: 536be8df55c80a7fdf7cc20f603d3fc76a732821
+      url: https://github.com/marscey/desktop_lyric.git
+      ref: fe84f66ba0b0e304b05c558483b37552c906cc06
   music_api:
     git:
-      url: https://github.com/Ferry-200/music_api_dart.git
+      url: https://github.com/marscey/music_api_dart.git
       ref: c6f3e0abd9c6295b3678ce10d30bc09debda9abe
   pinyin: ^3.3.0
   hotkey_manager: ^0.2.3
@@ -40,6 +40,10 @@ dependencies:
   flutter_rust_bridge: 2.8.0
   rust_lib_coriander_player:
     path: rust_builder
+  http: ^1.2.0
+  webdav_client: ^1.2.2
+  shared_preferences: ^2.2.2
+  xml: ^6.3.0
 
 dev_dependencies:
   flutter_test:

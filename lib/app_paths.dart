@@ -27,11 +27,14 @@ const String WELCOMING_PAGE = "/welcoming";
 
 const String UPDATING_DIALOG = "/updating";
 
+const String CLOUD_CONNECTIONS_PAGE = "/cloud";
+
 /// 可以作为 start page 的 pages
 const List<String> START_PAGES = [
   AUDIOS_PAGE,
   ARTISTS_PAGE,
   ALBUMS_PAGE,
   FOLDERS_PAGE,
+  CLOUD_CONNECTIONS_PAGE,
   PLAYLISTS_PAGE
 ];

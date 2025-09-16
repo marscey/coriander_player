@@ -1,4 +1,46 @@
-# Coriander Player：一款使用 Material You 配色的本地音乐播放器。
+# Coriander Player：一款使用 Material You 配色的跨平台音乐播放器
+
+**本项目是基于 [Ferry-200](https://github.com/Ferry-200/coriander_player) 的开源项目 fork 而来，目标是开发一款跨平台的本地及网盘音乐播放器，目前已新增对 WebDAV 私有云 的支持。**
+
+**项目使用 [GPL-3.0 开源协议](https://www.gnu.org/licenses/gpl-3.0.html)。**
+
+
+## 项目功能清单
+
+### 已实现功能
+
+#### 核心播放器功能
+- 支持多种音频格式播放（mp3, flac, aac, m4a, wav, ogg等）
+- 本地音乐文件扫描与管理
+- 播放列表管理
+- 艺术家、专辑分类浏览
+- 歌词显示（支持内嵌歌词和LRC文件）
+- 桌面歌词组件集成
+- 主题切换（日间/夜间模式）
+- 全局快捷键控制
+
+#### WebDAV私有云集成
+- WebDAV服务器连接与认证
+- 私有云音乐文件浏览与管理
+- 支持WebDAV目录结构的解析与展示
+- 私有云音乐文件下载播放
+
+### TO DO LIST
+
+1. macOS平台适配
+2. WebDAV增强功能实现
+   - 音频文件流式播放功能
+   - 边缓存边播放功能
+   - WebDAV文件元数据直接读取
+3. 实现缓存管理系统
+4. 集成音频信息自动刮削功能
+5. 增强歌词搜索与匹配能力
+6. 提升跨平台兼容性与稳定性
+7. 优化大文件处理性能
+8. 完善错误处理与用户反馈机制
+...
+
+##
 ![音乐页](软件截图/音乐页.png)
 
 ## [更多软件截图在下面（点我滚动到下面）](#软件截图)
@@ -71,9 +113,13 @@ scoop install jin/coriander_player
 
 ## 编译
 1. 开发 flutter 需要的环境
-2. 需要编译 Coriander Player（本仓库） 软件本体和 desktop_lyric。[desktop_lyric](https://github.com/Ferry-200/desktop_lyric.git) 也是 Flutter 应用，直接编译即可
+2. 需要编译 Coriander Player（本仓库） 软件本体和 desktop_lyric。[desktop_lyric](https://github.com/marscey/desktop_lyric.git) 也是 Flutter 应用，直接编译即可
 3. 要把得到的 desktop_lyric 产物放在软件目录的 `desktop_lyric/` 目录下
 4. 编译后要把 BASS 库的 64 位的 `bass.dll`, `bassape.dll`, `bassdsd.dll`, `bassflac.dll`, `bassmidi.dll`, `bassopus.dll`, `basswv.dll`, `basswasapi.dll` 放在软件目录的 `BASS` 文件夹下
+5. 获取 BASS 库文件：
+   - 可以从 [官方网站](https://www.un4seen.com/bass.html) 下载最新版本的 BASS 库
+   - Windows 平台需要下载 Windows 版本的 BASS 库
+   - macOS 平台需要下载 macOS 版本的 BASS 库
 
 ## 歌词特性解释
 1. lrc歌词的间奏识别   
@@ -96,6 +142,8 @@ scoop install jin/coriander_player
    第一行的开始时间是 5905ms，持续 5466ms；第二行则是 23037ms和 5254ms。可见 5905 + 5466 = 11371，与 23037相差超过 5000ms，所以这两行时间可以插入表示间奏的空白行
 
 ## 感谢
+- [Ferry-200](https://github.com/Ferry-200/coriander_player)：创建了原始的 Coriander Player 项目
+- [Ferry-200](https://github.com/Ferry-200/desktop_lyric.git)：Windows桌面歌词组件
 - [music_api](https://github.com/yhsj0919/music_api.git)：实现歌曲的匹配和歌词的获取
 - [Lofty](https://crates.io/crates/lofty)：歌曲标签获取
 - [BASS](https://www.un4seen.com/bass.html)：播放乐曲
