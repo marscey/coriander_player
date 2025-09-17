@@ -114,9 +114,18 @@ scoop install jin/coriander_player
 ## 编译
 1. 开发 flutter 需要的环境
 2. 需要编译 Coriander Player（本仓库） 软件本体和 desktop_lyric。[desktop_lyric](https://github.com/marscey/desktop_lyric.git) 也是 Flutter 应用，直接编译即可
-3. 要把得到的 desktop_lyric 产物放在软件目录的 `desktop_lyric/` 目录下
-4. 编译后要把 BASS 库的 64 位的 `bass.dll`, `bassape.dll`, `bassdsd.dll`, `bassflac.dll`, `bassmidi.dll`, `bassopus.dll`, `basswv.dll`, `basswasapi.dll` 放在软件目录的 `BASS` 文件夹下
+3. **构建desktop_lyric组件**：
+   - windows目录下提供了 `build_desktop_lyric.ps1` 辅助脚本和 `build_desktop_lyric.bat` 批处理文件，用于构建desktop_lyric组件
+   - 方式1：直接双击 windows目录下的 `build_desktop_lyric.bat` 文件运行，脚本会提示选择构建模式（Release/Debug，默认Release）
+   - 方式2：在应用构建完成后，执行PowerShell命令：
+     - 默认Release模式：`powershell -ExecutionPolicy Bypass -File .\windows\build_desktop_lyric.ps1`
+     - 指定Debug模式：`powershell -ExecutionPolicy Bypass -File .\windows\build_desktop_lyric.ps1 -BuildMode Debug`
+   - 脚本会自动将Pub缓存中的本地desktop_lyric仓库复制到项目内临时目录（build/desktop_lyric）进行构建，构建产物会自动复制到软件对应目录下
+   - **手动构建方式（可选）**：
+      - 要把得到的 desktop_lyric 产物放在软件目录的 `desktop_lyric/` 目录下
 5. 获取 BASS 库文件：
+   - CMake 构建系统会自动将 windows/bass 目录下的 BASS 库文件复制到软件目录的 BASS 文件夹中
+   - 请确保 windows/bass 目录下包含所需的 64 位 BASS 库文件：`bass.dll`, `bassape.dll`, `bassdsd.dll`, `bassflac.dll`, `bassmidi.dll`, `bassopus.dll`, `basswv.dll`, `basswasapi.dll`
    - 可以从 [官方网站](https://www.un4seen.com/bass.html) 下载最新版本的 BASS 库
    - Windows 平台需要下载 Windows 版本的 BASS 库
    - macOS 平台需要下载 macOS 版本的 BASS 库
