@@ -17,7 +17,7 @@ class PlatformHelper {
   static String get bassLibraryPath {
     final exeDir = path.dirname(Platform.resolvedExecutable);
     final libDir = Platform.isMacOS
-        ? path.join(exeDir, '..', 'Frameworks')
+        ? path.join(exeDir, '..', 'Frameworks', 'BASS')
         : path.join(exeDir, 'BASS');
     return path.join(libDir, 'libbass.${bassLibraryExtension}');
   }
@@ -39,6 +39,11 @@ class PlatformHelper {
 
   /// 标准化路径，处理平台特定的路径分隔符
   static String normalizePath(String filePath) {
+    // 在macOS平台上特别处理路径分隔符
+    if (Platform.isMacOS) {
+      // 替换所有反斜杠为正斜杠
+      filePath = filePath.replaceAll('\\', '/');
+    }
     // 针对不同平台使用path库进行路径标准化
     return path.normalize(filePath);
   }
@@ -60,7 +65,7 @@ class PlatformHelper {
   static List<String> get bassPluginPaths {
     final exeDir = path.dirname(Platform.resolvedExecutable);
     final libDir = Platform.isMacOS
-        ? path.join(exeDir, '..', 'Frameworks')
+        ? path.join(exeDir, '..', 'Frameworks', 'BASS')
         : path.join(exeDir, 'BASS');
 
     final extensions = {

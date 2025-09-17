@@ -1,7 +1,41 @@
-# Coriander Player：一款使用 Material You 配色的跨平台本地音乐播放器
+# Coriander Player：一款使用 Material You 配色的跨平台音乐播放器
 
-**本项目是基于 [Ferry-200](https://github.com/Ferry-200/coriander_player) 的开源项目 fork 而来，并已新增对 macOS 平台的支持。**
+**本项目是基于 [Ferry-200](https://github.com/Ferry-200/coriander_player) 的开源项目 fork 而来，目标是开发一款跨平台的本地及网盘音乐播放器，目前已新增对 macOS平台 的支持。**
+
 **项目使用 [GPL-3.0 开源协议](https://www.gnu.org/licenses/gpl-3.0.html)。**
+
+
+## 项目功能清单
+
+### 已实现功能
+
+#### 核心播放器功能
+- 支持多种音频格式播放（mp3, flac, aac, m4a, wav, ogg等）
+- 本地音乐文件扫描与管理
+- 播放列表管理
+- 艺术家、专辑分类浏览
+- 歌词显示（支持内嵌歌词和LRC文件）
+- 桌面歌词组件集成
+- 主题切换（日间/夜间模式）
+- 全局快捷键控制
+
+#### macOS平台适配
+- 已适配核心播放器功能
+
+### TO DO LIST
+
+1. ✅ macOS平台适配
+2. WebDAV增强功能实现
+   - 音频文件流式播放功能
+   - 边缓存边播放功能
+   - WebDAV文件元数据直接读取
+3. 实现缓存管理系统
+4. 集成音频信息自动刮削功能
+5. 增强歌词搜索与匹配能力
+6. 提升跨平台兼容性与稳定性
+7. 优化大文件处理性能
+8. 完善错误处理与用户反馈机制
+...
 
 ![音乐页](软件截图/音乐页.png)
 
@@ -85,6 +119,8 @@ scoop install jin/coriander_player
 4. 编译后需要根据不同平台放置 BASS 库文件：
    - **Windows平台**：把 BASS 库的 64 位的 `bass.dll`, `bassape.dll`, `bassdsd.dll`, `bassflac.dll`, `bassmidi.dll`, `bassopus.dll`, `basswv.dll`, `basswasapi.dll` 放在软件目录的 `BASS` 文件夹下
    - **macOS平台**：把 BASS 库的 macOS 版本 `libbass.dylib`, `libbassape.dylib`, `libbassdsd.dylib`, `libbassflac.dylib`, `libbassmidi.dylib`, `libbassopus.dylib`, `libbasswv.dylib` 放在应用程序包的 `Contents/Frameworks` 目录下
+
+   > 从源码构建时，macOS平台的BASS库文件会自动从`macos/bass`目录复制到应用程序包中，无需手动操作。
 
    > 注意：WASAPI 是 Windows 特有的 API，macOS 平台不需要 `basswasapi.dll`/`libbasswasapi.dylib` 文件
 

@@ -21,7 +21,7 @@ class AudioLibrary {
 
   /// must call [initFromIndex]
   static AudioLibrary get instance {
-    _instance ?? AudioLibrary._([]);
+    _instance ??= AudioLibrary._([]);
     return _instance!;
   }
 
@@ -46,7 +46,8 @@ class AudioLibrary {
   static Future<void> initFromIndex() async {
     try {
       final supportPath = (await getAppDataDir()).path;
-      final indexPath = "$supportPath\\index.json";
+      // 使用path包构建跨平台兼容的路径
+      final indexPath = '$supportPath${Platform.pathSeparator}index.json';
 
       final indexStr = File(indexPath).readAsStringSync();
       final Map indexJson = json.decode(indexStr);

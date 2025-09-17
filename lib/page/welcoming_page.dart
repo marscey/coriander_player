@@ -4,10 +4,12 @@ import 'package:coriander_player/component/build_index_state_view.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:filepicker_windows/filepicker_windows.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:window_manager/window_manager.dart';
+import 'dart:io';
 
 class WelcomingPage extends StatelessWidget {
   const WelcomingPage({super.key});
@@ -101,6 +103,24 @@ class _FolderSelectorViewState extends State<FolderSelectorView> {
     );
   }
 
+  // 平台特定的文件夹选择函数
+  Future<String?> pickSingleFolder() async {
+    if (Platform.isWindows) {
+      print("1. 准备调用DirectoryPicker");
+      final dirPicker = DirectoryPicker();
+      dirPicker.title = "选择文件夹";
+      print("2. 调用getDirectory()");
+      final dir = dirPicker.getDirectory();
+      return dir?.path;
+    } else {
+      // 非Windows平台使用file_picker
+      print("1. 准备调用FilePicker");
+      final result = await FilePicker.platform.getDirectoryPath();
+      print("2. 调用getDirectoryPath()");
+      return result;
+    }
+  }
+
   Widget folderSelector(ColorScheme scheme) {
     return Column(
       children: [
@@ -109,16 +129,12 @@ class _FolderSelectorViewState extends State<FolderSelectorView> {
           children: [
             FilledButton(
               onPressed: () async {
-                // final path = await pickSingleFolder();
-                // if (path == null) return;
-                final dirPicker = DirectoryPicker();
-                dirPicker.title = "选择文件夹";
-
-                final dir = dirPicker.getDirectory();
-                if (dir == null) return;
+                print("开始点击添加文件夹按钮");
+                final path = await pickSingleFolder();
+                if (path == null) return;
 
                 setState(() {
-                  folders.add(dir.path);
+                  folders.add(path);
                 });
               },
               child: const Text("添加文件夹"),

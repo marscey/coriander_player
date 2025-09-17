@@ -508,14 +508,18 @@ fn _get_picture_by_lofty(path: &String) -> Option<Vec<u8>> {
 /// for Flutter  
 /// 如果无法通过 Lofty 获取则通过 Windows 获取
 pub fn get_picture_from_path(path: String, width: u32, height: u32) -> Option<Vec<u8>> {
-    let pic_option =
-        _get_picture_by_lofty(&path).or_else(|| match _get_picture_by_windows(&path) {
+    let mut pic_option = _get_picture_by_lofty(&path);
+    
+    #[cfg(target_os = "windows")]
+    if pic_option.is_none() {
+        pic_option = match _get_picture_by_windows(&path) {
             Ok(val) => Some(val),
             Err(err) => {
-                log_to_dart(format!("fail to get pic: {}", err));
+                log_to_dart(format!("fail to get pic: {{}}", err));
                 None
             }
-        });
+        };
+    }
 
     if let Some(pic) = &pic_option {
         if let Ok(loaded_pic) = image::load_from_memory(pic) {
