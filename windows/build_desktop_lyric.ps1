@@ -9,8 +9,10 @@ param(
 )
 
 # Define constants
-# Get parent directory of windows folder (the actual project root)
-$PROJECT_ROOT = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Definition)
+# Get the script directory
+$SCRIPT_DIR = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
+# Get project root directory (parent of windows folder)
+$PROJECT_ROOT = Split-Path -Path $SCRIPT_DIR -Parent
 $PUB_CACHE_GIT_WIN = Join-Path -Path $env:USERPROFILE -ChildPath "AppData\Local\Pub\Cache\git"
 
 # Define new temporary build directory within project (instead of using Pub cache directly)
