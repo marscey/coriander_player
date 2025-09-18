@@ -36,7 +36,7 @@ enum PlayerState {
 }
 
 List<String> get _bassPlugins {
-  if (Platform.isMacOS) {
+  if (PlatformHelper.isMacOS) {
     return [
       "BASS/bassape.dylib",
       "BASS/bassdsd.dylib",
@@ -45,14 +45,23 @@ List<String> get _bassPlugins {
       "BASS/bassopus.dylib",
       "BASS/basswv.dylib"
     ];
+  } else if (PlatformHelper.isWindows) {
+    return [
+      "BASS/bassape.dll",
+      "BASS/bassdsd.dll",
+      "BASS/bassflac.dll",
+      "BASS/bassmidi.dll",
+      "BASS/bassopus.dll",
+      "BASS/basswv.dll"
+    ];
   } else {
     return [
-      "BASS\\bassape.dll",
-      "BASS\\bassdsd.dll",
-      "BASS\\bassflac.dll",
-      "BASS\\bassmidi.dll",
-      "BASS\\bassopus.dll",
-      "BASS\\basswv.dll"
+      "BASS/libbassape.so",
+      "BASS/libbassdsd.so",
+      "BASS/libbassflac.so",
+      "BASS/libbassmidi.so",
+      "BASS/libbassopus.so",
+      "BASS/libbasswv.so"
     ];
   }
 }
@@ -149,7 +158,7 @@ class BassPlayer {
     // 使用已定义的初始化标志
     int initFlags = BASS.BASS_DEVICE_REINIT;
     
-    if (Platform.isMacOS) {
+    if (PlatformHelper.isMacOS) {
       LOGGER.i("[bassInit] macOS platform detected, using default flags");
     }
     
@@ -309,7 +318,7 @@ class BassPlayer {
   /// true: 操作成功；false: 操作失败
   bool useExclusiveMode(bool exclusive) {
     // WASAPI exclusive mode is only supported on Windows
-    if (Platform.isMacOS) {
+    if (PlatformHelper.isMacOS) {
       if (exclusive) {
         showTextOnSnackBar("WASAPI独占模式仅在Windows平台可用");
       }
@@ -368,7 +377,7 @@ class BassPlayer {
     const exclusiveFlags = flags | BASS.BASS_STREAM_DECODE;
     
     try {
-      if (Platform.isMacOS) {
+      if (PlatformHelper.isMacOS) {
         // 在macOS平台上，尝试多种路径编码和打开方式
         LOGGER.i("[setSource] macOS path handling");
         

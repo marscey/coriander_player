@@ -28,7 +28,7 @@ class DesktopLyricService extends ChangeNotifier {
 
   Future<void> startDesktopLyric() async {
     // 在macOS上，可能没有桌面歌词功能或实现方式不同
-    if (Platform.isMacOS) {
+    if (PlatformHelper.isMacOS) {
       // 显示提示信息，说明macOS平台暂不支持桌面歌词
       showTextOnSnackBar("macOS平台暂不支持桌面歌词功能");
       return;

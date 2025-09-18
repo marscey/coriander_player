@@ -44,5 +44,9 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+    # 设置所有pod的部署目标为10.13或更高版本，以符合Flutter要求
+    target.build_configurations.each do |config|
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '10.13'
+    end
   end
 end

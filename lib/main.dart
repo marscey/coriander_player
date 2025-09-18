@@ -24,7 +24,7 @@ Future<void> initWindow() async {
     backgroundColor: Colors.transparent,
     skipTaskbar: false,
     titleBarStyle:
-        Platform.isMacOS ? TitleBarStyle.normal : TitleBarStyle.hidden,
+        PlatformHelper.isMacOS ? TitleBarStyle.normal : TitleBarStyle.hidden,
   );
 
   windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -32,7 +32,7 @@ Future<void> initWindow() async {
     await windowManager.focus();
 
     // macOS平台特有的设置
-    if (Platform.isMacOS) {
+    if (PlatformHelper.isMacOS) {
       // 启用macOS上的窗口全尺寸内容视图
       // 注释掉不存在的方法调用
       // await windowManager.setFullSizeContentView(true);

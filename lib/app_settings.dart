@@ -74,7 +74,7 @@ class AppSettings {
   static AppSettings get instance => _instance;
 
   static ThemeMode getWindowsThemeMode() {
-    if (Platform.isMacOS) {
+    if (PlatformHelper.isMacOS) {
       // macOS平台使用平台助手提供的方法获取系统主题模式
       return PlatformHelper.getSystemThemeMode();
     }
@@ -89,7 +89,7 @@ class AppSettings {
   }
 
   static int getWindowsTheme() {
-    if (Platform.isMacOS) {
+    if (PlatformHelper.isMacOS) {
       // macOS平台使用平台助手提供的默认主题色
       return PlatformHelper.getDefaultSystemThemeColor();
     }

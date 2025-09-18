@@ -5,6 +5,17 @@ import 'package:flutter/material.dart';
 
 /// 跨平台工具类，提供平台特定的功能实现
 class PlatformHelper {
+  /// 判断当前平台是否为macOS
+  static bool get isMacOS => Platform.isMacOS;
+  
+  /// 判断当前平台是否为Windows
+  static bool get isWindows => Platform.isWindows;
+  
+  /// 判断当前平台是否为Linux
+  static bool get isLinux => Platform.isLinux;
+  
+  /// 判断当前平台是否为桌面平台
+  static bool get isDesktop => Platform.isMacOS || Platform.isWindows || Platform.isLinux;
   /// 根据当前平台获取BASS库的文件扩展名
   static String get bassLibraryExtension {
     if (Platform.isWindows) return 'dll';
@@ -110,7 +121,7 @@ class PlatformHelper {
     return path.joinAll(paths);
   }
 
-  /// 获取适合当前平台的文件路径分隔符
+  /// 平台相关路径分隔符
   static String get pathSeparator => path.separator;
 
   /// 获取系统主题信息

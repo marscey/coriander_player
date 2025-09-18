@@ -7,6 +7,8 @@ import 'package:coriander_player/src/bass/bass_player.dart';
 import 'package:coriander_player/src/rust/api/smtc_flutter.dart';
 import 'package:coriander_player/theme_provider.dart';
 import 'package:coriander_player/utils.dart';
+import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/play_service/macos_media_control_service.dart';
 import 'package:flutter/foundation.dart';
 
 enum PlayMode {
@@ -33,6 +35,9 @@ class PlaybackService extends ChangeNotifier {
 
   late StreamSubscription _playerStateStreamSub;
   late StreamSubscription _smtcEventStreamSub;
+
+  late final MacosMediaControlService _macosMediaControlService;
+  late StreamSubscription? _positionStreamForMacosMediaControl;
 
   PlaybackService(this.playService) {
     _playerStateStreamSub = playerStateStream.listen((event) {
@@ -62,6 +67,44 @@ class PlaybackService extends ChangeNotifier {
     positionStream.listen((progress) {
       _smtc.updateTimeProperties(progress: (progress * 1000).floor());
     });
+
+    // 初始化macOS平台特定的媒体控制服务
+    if (PlatformHelper.isMacOS) {
+      _initMacosMediaControlService();
+    }
+  }
+
+  Future<void> _initMacosMediaControlService() async {
+    try {
+      _macosMediaControlService = await MacosMediaControlService.init();
+      _macosMediaControlService.setPlaybackService(this);
+      
+      // 设置回调函数
+      _macosMediaControlService.setCallbacks(
+        onPlay: start,
+        onPause: pause,
+        onStop: () {
+          pause();
+        },
+        onNext: nextAudio,
+        onPrevious: lastAudio,
+        onSeek: (duration) {
+          seek(duration.inMilliseconds / 1000);
+        },
+      );
+      
+      // 监听播放位置变化，更新系统通知栏
+      _positionStreamForMacosMediaControl = positionStream.listen((progress) {
+        if (_macosMediaControlService != null && nowPlaying != null) {
+          _macosMediaControlService.updatePlaybackState(
+            playing: playerState == PlayerState.playing,
+            position: Duration(milliseconds: (progress * 1000).toInt()),
+          );
+        }
+      });
+    } catch (e) {
+      LOGGER.e("Failed to initialize macOS media control service: $e");
+    }
   }
 
   final _player = BassPlayer();
@@ -143,6 +186,15 @@ class PlaybackService extends ChangeNotifier {
         duration: (length * 1000).floor(),
         path: nowPlaying!.path,
       );
+
+      // 在macOS平台上更新系统通知栏媒体控件
+      if (PlatformHelper.isMacOS && nowPlaying != null) {
+        _macosMediaControlService.updateCurrentMediaItem(nowPlaying!);
+        _macosMediaControlService.updatePlaybackState(
+          playing: true,
+          position: Duration.zero,
+        );
+      }
 
       playService.desktopLyricService.canSendMessage.then((canSend) {
         if (!canSend) return;
@@ -272,6 +324,15 @@ class PlaybackService extends ChangeNotifier {
     try {
       _player.pause();
       _smtc.updateState(state: SMTCState.paused);
+      
+      // 在macOS平台上更新系统通知栏媒体控件
+      if (PlatformHelper.isMacOS && nowPlaying != null) {
+        _macosMediaControlService.updatePlaybackState(
+          playing: false,
+          position: Duration(milliseconds: (position * 1000).toInt()),
+        );
+      }
+      
       playService.desktopLyricService.canSendMessage.then((canSend) {
         if (!canSend) return;
 
@@ -288,6 +349,15 @@ class PlaybackService extends ChangeNotifier {
     try {
       _player.start();
       _smtc.updateState(state: SMTCState.playing);
+      
+      // 在macOS平台上更新系统通知栏媒体控件
+      if (PlatformHelper.isMacOS && nowPlaying != null) {
+        _macosMediaControlService.updatePlaybackState(
+          playing: true,
+          position: Duration(milliseconds: (position * 1000).toInt()),
+        );
+      }
+      
       playService.desktopLyricService.canSendMessage.then((canSend) {
         if (!canSend) return;
 
@@ -306,11 +376,26 @@ class PlaybackService extends ChangeNotifier {
   void seek(double position) {
     _player.seek(position);
     playService.lyricService.findCurrLyricLine();
+    
+    // 在macOS平台上更新系统通知栏媒体控件的播放进度
+    if (PlatformHelper.isMacOS && nowPlaying != null) {
+      _macosMediaControlService.updatePlaybackState(
+        playing: playerState == PlayerState.playing,
+        position: Duration(milliseconds: (position * 1000).toInt()),
+      );
+    }
   }
 
   void close() {
     _playerStateStreamSub.cancel();
     _smtcEventStreamSub.cancel();
+    
+    // 释放macOS平台特定的媒体控制服务资源
+    if (PlatformHelper.isMacOS) {
+      _positionStreamForMacosMediaControl?.cancel();
+      _macosMediaControlService.dispose();
+    }
+    
     _player.free();
     _smtc.close();
   }
