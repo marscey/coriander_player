@@ -1,6 +1,6 @@
 # Coriander Player：一款使用 Material You 配色的跨平台音乐播放器
 
-**本项目是基于 [Ferry-200](https://github.com/Ferry-200/coriander_player) 的开源项目 fork 而来，目标是开发一款跨平台的本地及网盘音乐播放器，目前已新增对 WebDAV 私有云 的支持。**
+**本项目是基于 [Ferry-200](https://github.com/Ferry-200/coriander_player) 的开源项目 fork 而来，目标是开发一款跨平台的本地及网盘音乐播放器，目前已新增对 WebDAV 私有云 和 macOS平台 的支持。**
 
 **项目使用 [GPL-3.0 开源协议](https://www.gnu.org/licenses/gpl-3.0.html)。**
 
@@ -25,12 +25,24 @@
 - 支持WebDAV目录结构的解析与展示
 - 私有云音乐文件下载播放
 
+#### macOS平台适配
+- 适配核心播放器功能
+- 文件选择器适配 macOS 平台
+- 支持 macOS 平台的全局快捷键控制
+- 支持状态栏媒体键控制（播放/暂停、上一曲、下一曲）
+
 ### TO DO LIST
 
-1. macOS平台适配
-2. WebDAV增强功能实现
+1. WebDAV增强功能实现
    - 音频文件流式播放功能
    - 边缓存边播放功能
+   - WebDAV文件元数据直接读取
+2. 实现缓存管理系统
+3. 集成音频信息自动刮削功能
+4. 增强歌词搜索与匹配能力
+5. 提升跨平台兼容性与稳定性
+6. 优化大文件处理性能
+7. 完善错误处理与用户反馈机制
    - WebDAV文件元数据直接读取
 3. 实现缓存管理系统
 4. 集成音频信息自动刮削功能
@@ -40,7 +52,6 @@
 8. 完善错误处理与用户反馈机制
 ...
 
-##
 ![音乐页](软件截图/音乐页.png)
 
 ## [更多软件截图在下面（点我滚动到下面）](#软件截图)
@@ -48,6 +59,7 @@
 **该播放器发行版已经附带桌面歌词组件。项目仓库请见 [desktop_lyric](https://github.com/Ferry-200/desktop_lyric.git)**
 
 ## 安装
+### Windows平台
 1. 下载 [Release](https://github.com/Ferry-200/coriander_player/releases/latest) 里文件安装
 2. **（已过时，现在的体验版已经落后于正式版）** 你也可以到 [Action 构建版本（体验版）介绍](https://github.com/Ferry-200/coriander_player/issues/49) 下载体验版 :)
 3. 通过 scoop 安装，使用此 [bucket](https://github.com/jinzhongjia/scoop-bucket)
@@ -57,6 +69,10 @@ scoop bucket add jin https://github.com/jinzhongjia/scoop-bucket
 # 安装
 scoop install jin/coriander_player
 ```
+
+### macOS平台
+1. 从本仓库的 Release 页面下载 macOS 版本安装包
+2. 或者从源码构建（详见编译部分）
 
 ## 软件内快捷键
 页面中有文本框且处于输入状态时会自动忽略快捷键操作。如果要使用快捷键，可以点击输入框以外的地方，然后再次使用。
@@ -115,20 +131,31 @@ scoop install jin/coriander_player
 1. 开发 flutter 需要的环境
 2. 需要编译 Coriander Player（本仓库） 软件本体和 desktop_lyric。[desktop_lyric](https://github.com/marscey/desktop_lyric.git) 也是 Flutter 应用，直接编译即可
 3. **构建desktop_lyric组件**：
-   - windows目录下提供了 `build_desktop_lyric.ps1` 辅助脚本和 `build_desktop_lyric.bat` 批处理文件，用于构建desktop_lyric组件
-   - 方式1：直接双击 windows目录下的 `build_desktop_lyric.bat` 文件运行，脚本会提示选择构建模式（Release/Debug，默认Release）
-   - 方式2：在应用构建完成后，执行PowerShell命令：
-     - 默认Release模式：`powershell -ExecutionPolicy Bypass -File .\windows\build_desktop_lyric.ps1`
-     - 指定Debug模式：`powershell -ExecutionPolicy Bypass -File .\windows\build_desktop_lyric.ps1 -BuildMode Debug`
-   - 脚本会自动将Pub缓存中的本地desktop_lyric仓库复制到项目内临时目录（build/desktop_lyric）进行构建，构建产物会自动复制到软件对应目录下
-   - **手动构建方式（可选）**：
-      - 要把得到的 desktop_lyric 产物放在软件目录的 `desktop_lyric/` 目录下
-5. 获取 BASS 库文件：
-   - CMake 构建系统会自动将 windows/bass 目录下的 BASS 库文件复制到软件目录的 BASS 文件夹中
-   - 请确保 windows/bass 目录下包含所需的 64 位 BASS 库文件：`bass.dll`, `bassape.dll`, `bassdsd.dll`, `bassflac.dll`, `bassmidi.dll`, `bassopus.dll`, `basswv.dll`, `basswasapi.dll`
-   - 可以从 [官方网站](https://www.un4seen.com/bass.html) 下载最新版本的 BASS 库
-   - Windows 平台需要下载 Windows 版本的 BASS 库
-   - macOS 平台需要下载 macOS 版本的 BASS 库
+   - **Windows平台**：
+      - windows目录下提供了 `build_desktop_lyric.ps1` 辅助脚本和 `build_desktop_lyric.bat` 批处理文件，用于构建 desktop_lyric 组件
+      - 方式1：直接双击 windows目录下的 `build_desktop_lyric.bat` 文件运行，脚本会提示选择构建模式（Release/Debug，默认Release）
+      - 方式2：在应用构建完成后，执行PowerShell命令：
+      - 默认Release模式：`powershell -ExecutionPolicy Bypass -File .\windows\build_desktop_lyric.ps1`
+      - 指定Debug模式：`powershell -ExecutionPolicy Bypass -File .\windows\build_desktop_lyric.ps1 -BuildMode Debug`
+      - 脚本会自动将 Pub 缓存中的本地 desktop_lyric 仓库复制到项目内临时目录（build/desktop_lyric）进行构建，构建产物会自动复制到软件对应目录下
+      - **手动构建方式（可选）**：手动编译，把得到的 desktop_lyric 产物放在软件目录的 `desktop_lyric/` 目录下
+   - **macOS平台**：
+      **暂未实现**
+4. BASS 库文件配置：
+桌面端播放引擎基于 BASS 库实现，因此需要配置 BASS 库文件。
+   - **Windows平台**：
+      - 从源码构建时，CMake 构建系统会自动将 `windows/bass` 目录下的 BASS 库文件复制到软件目录的 BASS 文件夹中，无需手动复制
+      - 请确保 `windows/bass` 目录下包含所需的 64 位 BASS 库文件： `bass.dll`, `bassape.dll`, `bassdsd.dll`, `bassflac.dll`, `bassmidi.dll`, `bassopus.dll`, `basswv.dll`, `basswasapi.dll`
+   - **macOS平台**：
+      - 从源码构建时，macOS 平台的 BASS 库文件会自动从 `macos/bass` 目录复制到应用程序包的 `Contents/Frameworks/BASS` 目录下并完成签名，无需手动操作
+      - 请确保 `macos/bass` 目录下包含所需的 macOS 版本 BASS 库文件： `libbass.dylib`, `libbassape.dylib`, `libbassdsd.dylib`, `libbassflac.dylib`, `libbassmidi.dylib`, `libbassopus.dylib`, `libbasswv.dylib`
+
+      > 注意：WASAPI 是 Windows 特有的 API，macOS 平台不需要 `basswasapi.dll`/`libbasswasapi.dylib` 文件
+
+   - 获取 BASS 库文件：
+      - 可以从 [官方网站](https://www.un4seen.com/bass.html) 下载最新版本的 BASS 库
+      - Windows 平台需要下载 Windows 版本的 BASS 库
+      - macOS 平台需要下载 macOS 版本的 BASS 库
 
 ## 歌词特性解释
 1. lrc歌词的间奏识别   
@@ -158,6 +185,7 @@ scoop install jin/coriander_player
 - [BASS](https://www.un4seen.com/bass.html)：播放乐曲
 - [flutter_rust_bridge](https://pub.dev/packages/flutter_rust_bridge)：实现许多 Windows 原生交互
 - [Silicon7921](https://github.com/Silicon7921)：绘制了新图标
+- [Ferry-200](https://github.com/Ferry-200/coriander_player)：创建了原始的 Coriander Player 项目
 
 ## 软件截图
 ![音乐页](软件截图/音乐页.png)

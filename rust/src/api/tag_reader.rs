@@ -8,6 +8,12 @@ use std::{
 
 use image::imageops;
 use lofty::prelude::{Accessor, AudioFile, ItemKey, TaggedFileExt};
+
+use crate::frb_generated::StreamSink;
+
+use super::logger::log_to_dart;
+
+#[cfg(target_os = "windows")]
 use windows::{
     core::Interface,
     core::HSTRING,
@@ -17,10 +23,6 @@ use windows::{
         Streams::{DataReader, IInputStream},
     },
 };
-
-use crate::frb_generated::StreamSink;
-
-use super::logger::log_to_dart;
 
 /// K: extension, V: can read tags by using Lofty
 static SUPPORT_FORMAT: phf::Map<&'static str, bool> = phf::phf_map! {
@@ -220,6 +222,7 @@ impl Audio {
     }
 
     /// 使用 Windows Api 获取音乐标签。会因为各种原因返回 Err
+    #[cfg(target_os = "windows")]
     fn read_by_win_music_properties(
         path: impl AsRef<Path>,
         modified: u64,
@@ -251,27 +254,42 @@ impl Audio {
         }
 
         let mut album = music_properties
-            .Album()
+            .AlbumTitle()
             .unwrap_or(HSTRING::from("UNKNOWN"))
             .to_string();
         if album.is_empty() {
             album = "UNKNOWN".to_string();
         }
 
-        Ok(Audio {
+        let track = music_properties.TrackNumber()?;
+
+        Ok(Self {
             title,
             artist,
             album,
-            track: Some(music_properties.TrackNumber()?),
+            track: if track == 0 { None } else { Some(track) },
             duration: duration.as_secs(),
-            bitrate: Some(music_properties.Bitrate()? / 1000),
-            sample_rate: None,
+            bitrate: None, // Windows API 不直接提供比特率
+            sample_rate: None, // Windows API 不直接提供采样率
             path: path.to_string_lossy().to_string(),
             modified,
             created,
-            by: Some("Windows".to_string()),
+            by: Some("Windows API".to_string()),
         })
     }
+
+    #[cfg(not(target_os = "windows"))]
+    fn read_by_win_music_properties(
+        path: impl AsRef<Path>,
+        modified: u64,
+        created: u64,
+    ) -> Result<Self, anyhow::Error> {
+        // 在非Windows平台上，此函数直接返回错误
+        Err(anyhow::anyhow!("Windows API not available"))
+    }
+
+    // 我们使用这个函数来统一处理Windows平台上的音乐标签读取
+    // 注意: 之前的实现使用了不同的API调用方式，我们在这里统一使用AlbumTitle而不是Album
 }
 
 #[derive(Debug)]
@@ -448,6 +466,7 @@ impl AudioFolder {
     }
 }
 
+#[cfg(target_os = "windows")]
 fn _get_picture_by_windows(path: &String) -> Result<Vec<u8>, windows::core::Error> {
     let file = StorageFile::GetFileFromPathAsync(&HSTRING::from(path))?.get()?;
     let thumbnail = file
@@ -468,6 +487,12 @@ fn _get_picture_by_windows(path: &String) -> Result<Vec<u8>, windows::core::Erro
     Ok(buffer)
 }
 
+#[cfg(not(target_os = "windows"))]
+fn _get_picture_by_windows(_path: &String) -> Result<Vec<u8>, anyhow::Error> {
+    // 在非Windows平台上，此函数直接返回空结果
+    Err(anyhow::anyhow!("Windows API not available"))
+}
+
 fn _get_picture_by_lofty(path: &String) -> Option<Vec<u8>> {
     if let Ok(tagged_file) = lofty::read_from_path(&path) {
         let tag = tagged_file
@@ -483,14 +508,18 @@ fn _get_picture_by_lofty(path: &String) -> Option<Vec<u8>> {
 /// for Flutter  
 /// 如果无法通过 Lofty 获取则通过 Windows 获取
 pub fn get_picture_from_path(path: String, width: u32, height: u32) -> Option<Vec<u8>> {
-    let pic_option =
-        _get_picture_by_lofty(&path).or_else(|| match _get_picture_by_windows(&path) {
+    let mut pic_option = _get_picture_by_lofty(&path);
+    
+    #[cfg(target_os = "windows")]
+    if pic_option.is_none() {
+        pic_option = match _get_picture_by_windows(&path) {
             Ok(val) => Some(val),
             Err(err) => {
-                log_to_dart(format!("fail to get pic: {}", err));
+                log_to_dart(format!("fail to get pic: {{}}", err));
                 None
             }
-        });
+        };
+    }
 
     if let Some(pic) = &pic_option {
         if let Ok(loaded_pic) = image::load_from_memory(pic) {

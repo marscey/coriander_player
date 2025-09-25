@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/src/bass/bass_wasapi.dart' as BASS;
 import 'package:coriander_player/utils.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:ffi/ffi.dart' as ffi;
 import 'package:path/path.dart' as path;
 import 'package:coriander_player/src/bass/bass.dart' as BASS;
@@ -34,14 +35,36 @@ enum PlayerState {
   unknown,
 }
 
-const BASS_PLUGINS = [
-  "BASS\\bassape.dll",
-  "BASS\\bassdsd.dll",
-  "BASS\\bassflac.dll",
-  "BASS\\bassmidi.dll",
-  "BASS\\bassopus.dll",
-  "BASS\\basswv.dll"
-];
+List<String> get _bassPlugins {
+  if (PlatformHelper.isMacOS) {
+    return [
+      "BASS/bassape.dylib",
+      "BASS/bassdsd.dylib",
+      "BASS/bassflac.dylib",
+      "BASS/bassmidi.dylib",
+      "BASS/bassopus.dylib",
+      "BASS/basswv.dylib"
+    ];
+  } else if (PlatformHelper.isWindows) {
+    return [
+      "BASS/bassape.dll",
+      "BASS/bassdsd.dll",
+      "BASS/bassflac.dll",
+      "BASS/bassmidi.dll",
+      "BASS/bassopus.dll",
+      "BASS/basswv.dll"
+    ];
+  } else {
+    return [
+      "BASS/libbassape.so",
+      "BASS/libbassdsd.so",
+      "BASS/libbassflac.so",
+      "BASS/libbassmidi.so",
+      "BASS/libbassopus.so",
+      "BASS/libbasswv.so"
+    ];
+  }
+}
 
 class BassPlayer {
   late final ffi.DynamicLibrary _bassLib;
@@ -51,6 +74,7 @@ class BassPlayer {
 
   String? _fPath;
   int? _fstream;
+  ffi.Pointer<ffi.Uint8>? _fileData; // 用于跟踪从内存加载时分配的内存
 
   /// 是否启用 wasapi 独占模式
   bool wasapiExclusive = false;
@@ -131,33 +155,70 @@ class BassPlayer {
   }
 
   void _bassInit() {
-    if (_bass.BASS_Init(
-            1, 48000, BASS.BASS_DEVICE_REINIT, ffi.nullptr, ffi.nullptr) ==
-        0) {
-      switch (_bass.BASS_ErrorGetCode()) {
-        case BASS.BASS_ERROR_DEVICE:
-          throw const FormatException("device is invalid.");
-        case BASS.BASS_ERROR_NOTAVAIL:
-          throw const FormatException(
-              "The BASS_DEVICE_REINIT flag cannot be used when device is -1. Use the real device number instead.");
-        case BASS.BASS_ERROR_ALREADY:
-          throw const FormatException(
-              "The device has already been initialized. The BASS_DEVICE_REINIT flag can be used to request reinitialization.");
-        case BASS.BASS_ERROR_ILLPARAM:
-          throw const FormatException("win is not a valid window handle.");
-        case BASS.BASS_ERROR_DRIVER:
-          throw const FormatException("There is no available device driver.");
-        case BASS.BASS_ERROR_BUSY:
-          throw const FormatException(
-              "Something else has exclusive use of the device.");
-        case BASS.BASS_ERROR_FORMAT:
-          throw const FormatException(
-              "The specified format is not supported by the device. Try changing the freq parameter.");
-        case BASS.BASS_ERROR_MEM:
-          throw const FormatException("There is insufficient memory.");
-        case BASS.BASS_ERROR_UNKNOWN:
-          throw const FormatException(
-              "Some other mystery problem! Maybe Something else has exclusive use of the device.");
+    // 使用已定义的初始化标志
+    int initFlags = BASS.BASS_DEVICE_REINIT;
+    
+    if (PlatformHelper.isMacOS) {
+      LOGGER.i("[bassInit] macOS platform detected, using default flags");
+    }
+    
+    // 尝试不同的设备ID和采样率组合
+    List<int> deviceIds = [1]; // 默认设备
+    List<int> sampleRates = [48000, 44100, 96000]; // 常见采样率
+    
+    bool initialized = false;
+    
+    for (int deviceId in deviceIds) {
+      for (int sampleRate in sampleRates) {
+        LOGGER.i("[bassInit] Trying to initialize device $deviceId at $sampleRate Hz");
+        
+        if (_bass.BASS_Init(
+                deviceId, sampleRate, initFlags, ffi.nullptr, ffi.nullptr) != 0) {
+          LOGGER.i("[bassInit] Success! Initialized device $deviceId at $sampleRate Hz");
+          initialized = true;
+          break;
+        }
+        
+        int errorCode = _bass.BASS_ErrorGetCode();
+        LOGGER.w("[bassInit] Failed with error code: $errorCode");
+      }
+      
+      if (initialized) break;
+    }
+    
+    if (!initialized) {
+      // 如果所有尝试都失败，使用原始的初始化方式并抛出错误
+      LOGGER.e("[bassInit] All initialization attempts failed, using fallback");
+      if (_bass.BASS_Init(
+              1, 48000, BASS.BASS_DEVICE_REINIT, ffi.nullptr, ffi.nullptr) == 0) {
+        int errorCode = _bass.BASS_ErrorGetCode();
+        LOGGER.e("[bassInit] Final initialization failed with error code: $errorCode");
+        
+        switch (errorCode) {
+          case BASS.BASS_ERROR_DEVICE:
+            throw const FormatException("device is invalid.");
+          case BASS.BASS_ERROR_NOTAVAIL:
+            throw const FormatException(
+                "The BASS_DEVICE_REINIT flag cannot be used when device is -1. Use the real device number instead.");
+          case BASS.BASS_ERROR_ALREADY:
+            throw const FormatException(
+                "The device has already been initialized. The BASS_DEVICE_REINIT flag can be used to request reinitialization.");
+          case BASS.BASS_ERROR_ILLPARAM:
+            throw const FormatException("win is not a valid window handle.");
+          case BASS.BASS_ERROR_DRIVER:
+            throw const FormatException("There is no available device driver.");
+          case BASS.BASS_ERROR_BUSY:
+            throw const FormatException(
+                "Something else has exclusive use of the device.");
+          case BASS.BASS_ERROR_FORMAT:
+            throw const FormatException(
+                "The specified format is not supported by the device. Try changing the freq parameter.");
+          case BASS.BASS_ERROR_MEM:
+            throw const FormatException("There is insufficient memory.");
+          case BASS.BASS_ERROR_UNKNOWN:
+            throw const FormatException(
+                "Some other mystery problem! Maybe Something else has exclusive use of the device.");
+        }
       }
     }
   }
@@ -182,55 +243,93 @@ class BassPlayer {
     }
   }
 
-  /// load bass.dll from the exe's path\\BASS
-  /// ensure that there's bass.dll at path of .exe\\BASS
-  /// leave the device's output freq as it is
+  /// load BASS library based on platform
   BassPlayer() {
-    final bassLibPath = path.join(
-      path.dirname(Platform.resolvedExecutable),
-      "BASS",
-      "bass.dll",
-    );
-    _bassLib = ffi.DynamicLibrary.open(bassLibPath);
-    _bass = BASS.Bass(_bassLib);
+    try {
+      final libPath = PlatformHelper.bassLibraryPath;
+      _bassLib = ffi.DynamicLibrary.open(libPath);
+      _bass = BASS.Bass(_bassLib);
 
-    final bassWasapiLibPath = path.join(
-      path.dirname(Platform.resolvedExecutable),
-      "BASS",
-      "basswasapi.dll",
-    );
-    _bassWasapiLib = ffi.DynamicLibrary.open(bassWasapiLibPath);
-    _bassWasapi = BASS.BassWasapi(_bassWasapiLib);
-
-    // load add-ons to avoid using os codec or support more format
-    for (final plugin in BASS_PLUGINS) {
-      final pluginPathP = plugin.toNativeUtf16() as ffi.Pointer<ffi.Char>;
-      final hplugin = _bass.BASS_PluginLoad(pluginPathP, BASS.BASS_UNICODE);
-
-      if (hplugin == 0) {
-        switch (_bass.BASS_ErrorGetCode()) {
-          case BASS.BASS_ERROR_FILEOPEN:
-            throw const FormatException("The file could not be opened.");
-          case BASS.BASS_ERROR_FILEFORM:
-            throw const FormatException("The file is not a plugin.");
-          case BASS.BASS_ERROR_VERSION:
-            throw const FormatException(
-                "The plugin requires a different BASS version.");
-          case BASS.BASS_ERROR_ALREADY:
-            throw const FormatException("The plugin is already loaded.");
+      // WASAPI is Windows-only
+      if (PlatformHelper.supportsWasapi()) {
+        final wasapiLibPath = PlatformHelper.bassWasapiLibraryPath;
+        if (wasapiLibPath.isNotEmpty) {
+          try {
+            _bassWasapiLib = ffi.DynamicLibrary.open(wasapiLibPath);
+            _bassWasapi = BASS.BassWasapi(_bassWasapiLib);
+          } catch (e) {
+            LOGGER.w("Failed to load BASS WASAPI library: $e");
+          }
         }
       }
-    }
 
-    try {
-      _bassInit();
-    } catch (err) {
-      LOGGER.e("[bass init] $err");
+      // load add-ons to avoid using os codec or support more format
+      // Use PlatformHelper.bassPluginPaths to get the correct plugin paths for the current platform
+      for (final pluginPath in PlatformHelper.bassPluginPaths) {
+        try {
+          final pluginPathP =
+              pluginPath.toNativeUtf16() as ffi.Pointer<ffi.Char>;
+          final hplugin = _bass.BASS_PluginLoad(pluginPathP, BASS.BASS_UNICODE);
+
+          if (hplugin == 0) {
+            switch (_bass.BASS_ErrorGetCode()) {
+              case BASS.BASS_ERROR_FILEOPEN:
+                LOGGER.w("[BASS Plugin] Could not open plugin: $pluginPath");
+                break;
+              case BASS.BASS_ERROR_FILEFORM:
+                LOGGER.w("[BASS Plugin] $pluginPath is not a valid plugin");
+                break;
+              case BASS.BASS_ERROR_VERSION:
+                LOGGER.w(
+                    "[BASS Plugin] $pluginPath requires a different BASS version");
+                break;
+              case BASS.BASS_ERROR_ALREADY:
+                // Plugin already loaded, continue
+                break;
+              default:
+                LOGGER.w("[BASS Plugin] Failed to load $pluginPath");
+            }
+          }
+        } catch (e) {
+          LOGGER.w("[BASS Plugin] Exception loading $pluginPath: $e");
+        }
+      }
+
+      try {
+        _bassInit();
+      } catch (err) {
+        LOGGER.e("[bass init] $err");
+      }
+    } catch (e) {
+      LOGGER.e("Failed to initialize BASS library: $e");
+      // 创建一个模拟的Bass实例，避免应用程序崩溃
+      _createMockBassInstance();
     }
+  }
+
+  /// 创建一个模拟的Bass实例，当无法加载真实的BASS库时使用
+  void _createMockBassInstance() {
+    // 使用正确类型的泛型函数创建模拟的Bass实例
+    _bass = BASS.Bass.fromLookup(<T extends ffi.NativeType>(String symbolName) {
+      throw UnsupportedError('BASS library is not available');
+    });
   }
 
   /// true: 操作成功；false: 操作失败
   bool useExclusiveMode(bool exclusive) {
+    // WASAPI exclusive mode is only supported on Windows
+    if (PlatformHelper.isMacOS) {
+      if (exclusive) {
+        showTextOnSnackBar("WASAPI独占模式仅在Windows平台可用");
+      }
+      return !exclusive; // Always return false if trying to enable, true if disabling
+    }
+
+    // Original Windows implementation
+    if (!PlatformHelper.supportsWasapi()) {
+      return false;
+    }
+
     final prevState = wasapiExclusive;
     try {
       final lastPos = position;
@@ -256,35 +355,165 @@ class BassPlayer {
 
   /// if setSource has been called once,
   /// it will pause current channel and free current stream.
-  void setSource(String path) {
+  void setSource(String filePath) {
     if (_fstream != null) {
       _positionUpdater?.cancel();
       freeFStream();
     }
-    final pathPointer = path.toNativeUtf16() as ffi.Pointer<ffi.Void>;
-
-    /// 设置 flags 为 BASS_UNICODE 才可以找到文件。
-    const flags =
+    // Ensure path uses platform-appropriate separators
+    final normalizedPath = PlatformHelper.normalizePath(filePath);
+    
+    // 添加详细日志进行调试
+    LOGGER.i("[setSource] Original path: $filePath");
+    LOGGER.i("[setSource] Normalized path: $normalizedPath");
+    
+    // 检查文件是否存在
+    final file = File(normalizedPath);
+    LOGGER.i("[setSource] File exists: ${file.existsSync()}");
+    
+    int handle = 0;
+    const flags = 
         BASS.BASS_UNICODE | BASS.BASS_SAMPLE_FLOAT | BASS.BASS_ASYNCFILE;
     const exclusiveFlags = flags | BASS.BASS_STREAM_DECODE;
-    final handle = _bass.BASS_StreamCreateFile(
-      BASS.FALSE,
-      pathPointer,
-      0,
-      0,
-      wasapiExclusive ? exclusiveFlags : flags,
-    );
+    
+    try {
+      if (PlatformHelper.isMacOS) {
+        // 在macOS平台上，尝试多种路径编码和打开方式
+        LOGGER.i("[setSource] macOS path handling");
+        
+        // 首先尝试使用UTF16编码的路径（标准方法）
+        final pathUtf16 = normalizedPath.toNativeUtf16() as ffi.Pointer<ffi.Void>;
+        handle = _bass.BASS_StreamCreateFile(
+          BASS.FALSE,  // FALSE表示使用文件路径
+          pathUtf16,
+          0,
+          0,
+          wasapiExclusive ? exclusiveFlags : flags,
+        );
+        
+        if (handle == 0) {
+          // 如果UTF16路径失败，尝试使用UTF8编码的路径
+          LOGGER.i("[setSource] Trying UTF8 path on macOS");
+          final pathUtf8 = normalizedPath.toNativeUtf8() as ffi.Pointer<ffi.Void>;
+          handle = _bass.BASS_StreamCreateFile(
+            BASS.FALSE,
+            pathUtf8,
+            0,
+            0,
+            wasapiExclusive ? (exclusiveFlags & ~BASS.BASS_UNICODE) : (flags & ~BASS.BASS_UNICODE),
+          );
+        }
+        
+        // 如果仍然失败，尝试不使用ASYNCFILE标志
+        if (handle == 0) {
+          LOGGER.i("[setSource] Trying without ASYNCFILE flag");
+          final pathUtf16NoAsync = normalizedPath.toNativeUtf16() as ffi.Pointer<ffi.Void>;
+          const noAsyncFlags = BASS.BASS_UNICODE | BASS.BASS_SAMPLE_FLOAT;
+          const noAsyncExclusiveFlags = noAsyncFlags | BASS.BASS_STREAM_DECODE;
+          
+          handle = _bass.BASS_StreamCreateFile(
+            BASS.FALSE,
+            pathUtf16NoAsync,
+            0,
+            0,
+            wasapiExclusive ? noAsyncExclusiveFlags : noAsyncFlags,
+          );
+        }
+        
+        // 如果仍然失败，尝试从内存加载文件（绕过路径问题）
+        if (handle == 0) {
+          LOGGER.i("[setSource] Trying memory-based loading on macOS");
+          try {
+            // 读取文件内容到内存
+            final fileBytes = file.readAsBytesSync();
+            LOGGER.i("[setSource] File size: ${fileBytes.length} bytes");
+            
+            // 将Dart的Uint8List转换为ffi.Pointer<ffi.Uint8>
+            _fileData = ffi.malloc.allocate(fileBytes.length);
+            // 优化内存复制方式，减少循环开销
+            final fileDataAsTypedList = _fileData!.asTypedList(fileBytes.length);
+            fileDataAsTypedList.setAll(0, fileBytes);
+            
+            // 从内存创建流 - 尝试多种标志组合
+            int memoryFlags = wasapiExclusive 
+                ? (exclusiveFlags & ~BASS.BASS_ASYNCFILE) // 从内存加载时不需要ASYNCFILE
+                : (flags & ~BASS.BASS_ASYNCFILE);
+            
+            // 第一次尝试
+            handle = _bass.BASS_StreamCreateFile(
+              BASS.TRUE,  // TRUE表示使用内存
+              _fileData!.cast(),
+              0,
+              fileBytes.length,
+              memoryFlags,
+            );
+            
+            LOGGER.i("[setSource] First memory loading attempt: handle = $handle");
+            
+            // 如果第一次尝试失败，尝试使用基础标志
+            if (handle == 0) {
+              LOGGER.w("[setSource] First memory load attempt failed, trying with basic flags");
+              handle = _bass.BASS_StreamCreateFile(
+                BASS.TRUE,
+                _fileData!.cast(),
+                0,
+                fileBytes.length,
+                0, // 基础标志
+              );
+              
+              LOGGER.i("[setSource] Basic memory loading attempt: handle = $handle");
+              if (handle == 0) {
+                final basicErrorCode = _bass.BASS_ErrorGetCode();
+                LOGGER.e("[setSource] BASS error code from basic memory loading: $basicErrorCode");
+              }
+            }
+            
+            // 注意：这里不释放fileData，因为BASS需要它来播放
+            // 应该在freeFStream方法中释放
+          } catch (e) {
+            LOGGER.e("[setSource] Exception during memory loading: $e");
+            // 确保在异常情况下也释放内存
+            if (_fileData != null) {
+              try {
+                ffi.malloc.free(_fileData!);
+              } catch (freeError) {
+                LOGGER.e("[setSource] Exception during memory free: $freeError");
+              }
+              _fileData = null;
+            }
+          }
+        }
+        
+        // 如果仍然失败，获取BASS错误码用于调试
+        if (handle == 0) {
+          final errorCode = _bass.BASS_ErrorGetCode();
+          LOGGER.e("[setSource] BASS error code: $errorCode");
+        }
+      } else {
+        // 其他平台使用原方法
+        final pathPointer = normalizedPath.toNativeUtf16() as ffi.Pointer<ffi.Void>;
+        handle = _bass.BASS_StreamCreateFile(
+          BASS.FALSE,
+          pathPointer,
+          0,
+          0,
+          wasapiExclusive ? exclusiveFlags : flags,
+        );
+      }
+    } catch (e) {
+      LOGGER.e("[setSource] Exception: $e");
+    }
 
     if (handle != 0) {
       _fstream = handle;
-      _fPath = path;
+      _fPath = normalizedPath;
     } else {
       _fstream = null;
       _fPath = null;
       switch (_bass.BASS_ErrorGetCode()) {
         case BASS.BASS_ERROR_INIT:
           _bassInit();
-          setSource(path);
+          setSource(normalizedPath);
           break;
         case BASS.BASS_ERROR_NOTAVAIL:
           throw const FormatException(
@@ -517,6 +746,20 @@ class BassPlayer {
               "Device streams (STREAMPROC_DEVICE) cannot be freed.");
       }
     }
+    
+    _fstream = null;
+    _fPath = null;
+    
+    // Release memory allocated for file data if it exists
+    if (_fileData != null) {
+      ffi.malloc.free(_fileData!);
+      _fileData = null;
+    }
+    
+    if (_positionUpdater != null) {
+      _positionUpdater!.cancel();
+      _positionUpdater = null;
+    }
   }
 
   /// Frees all resources used by the output device,
@@ -524,7 +767,8 @@ class BassPlayer {
   ///
   /// Also free the bass.dll.
   void free() {
-    if (wasapiExclusive) {
+    // 仅在wasapiExclusive为true且_bassWasapi已初始化时调用BASS_WASAPI_Free
+    if (wasapiExclusive && PlatformHelper.supportsWasapi()) {
       _bassWasapi.BASS_WASAPI_Free();
     }
 
@@ -539,7 +783,10 @@ class BassPlayer {
       }
     }
 
-    _bassWasapiLib.close();
+    // 仅在Windows平台上关闭_bassWasapiLib（因为它只在Windows上初始化）
+    if (PlatformHelper.supportsWasapi()) {
+      _bassWasapiLib.close();
+    }
     _bassLib.close();
 
     _positionUpdater?.cancel();

@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/src/rust/api/tag_reader.dart';
 import 'package:coriander_player/utils.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:flutter/painting.dart';
 
 /// from index.json
@@ -21,7 +22,7 @@ class AudioLibrary {
 
   /// must call [initFromIndex]
   static AudioLibrary get instance {
-    _instance ?? AudioLibrary._([]);
+    _instance ??= AudioLibrary._([]);
     return _instance!;
   }
 
@@ -46,7 +47,8 @@ class AudioLibrary {
   static Future<void> initFromIndex() async {
     try {
       final supportPath = (await getAppDataDir()).path;
-      final indexPath = "$supportPath\\index.json";
+      // 使用path包构建跨平台兼容的路径
+      final indexPath = '$supportPath${PlatformHelper.pathSeparator}index.json';
 
       final indexStr = File(indexPath).readAsStringSync();
       final Map indexJson = json.decode(indexStr);

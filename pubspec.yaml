@@ -21,11 +21,14 @@ dependencies:
     sdk: flutter
   ffi: ^2.1.0
   path: ^1.8.3
+  audio_service: ^0.18.18
+  just_audio: ^0.9.35
   material_symbols_icons: ^4.2719.1
   github: ^9.24.0
   flutter_markdown: ^0.7.1
   flex_color_picker: ^3.5.0
   filepicker_windows: ^2.1.4
+  file_picker: ^10.2.0
   desktop_lyric:
     git:
       url: https://github.com/marscey/desktop_lyric.git
