@@ -30,7 +30,8 @@ class PlatformHelper {
     final libDir = Platform.isMacOS
         ? path.join(exeDir, '..', 'Frameworks', 'BASS')
         : path.join(exeDir, 'BASS');
-    return path.join(libDir, 'libbass.${bassLibraryExtension}');
+    final prefix = Platform.isWindows ? '' : 'lib';
+    return path.join(libDir, '${prefix}bass.${bassLibraryExtension}');
   }
 
   /// 根据当前平台获取BASS WASAPI库的加载路径

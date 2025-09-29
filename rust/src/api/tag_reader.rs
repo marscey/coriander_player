@@ -254,7 +254,7 @@ impl Audio {
         }
 
         let mut album = music_properties
-            .AlbumTitle()
+            .Album()
             .unwrap_or(HSTRING::from("UNKNOWN"))
             .to_string();
         if album.is_empty() {
@@ -515,7 +515,7 @@ pub fn get_picture_from_path(path: String, width: u32, height: u32) -> Option<Ve
         pic_option = match _get_picture_by_windows(&path) {
             Ok(val) => Some(val),
             Err(err) => {
-                log_to_dart(format!("fail to get pic: {{}}", err));
+                log_to_dart(format!("fail to get pic: {}", err));
                 None
             }
         };

@@ -5,6 +5,7 @@ import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/entry.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
 import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/rust/api/logger.dart';
 import 'package:coriander_player/src/rust/frb_generated.dart';
 import 'package:coriander_player/theme_provider.dart';
@@ -88,6 +89,17 @@ Future<void> main() async {
       !File(PlatformHelper.joinPaths([supportPath, "index.json"])).existsSync();
 
   await initWindow();
+
+  // 启动桌面歌词服务（仅在Windows平台）
+  // if (Platform.isWindows) {
+  //   try {
+  //     LOGGER.d("Starting desktop lyric service...");
+  //     await PlayService.instance.desktopLyricService.startDesktopLyric();
+  //     LOGGER.d("Desktop lyric service started successfully.");
+  //   } catch (err, trace) {
+  //     LOGGER.e("Failed to start desktop lyric service: $err", stackTrace: trace);
+  //   }
+  // }
 
   runApp(Entry(welcome: welcome));
 }

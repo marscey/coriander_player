@@ -1,6 +1,6 @@
 use std::sync::RwLock;
 
-use flutter_rust_bridge::frb;
+
 
 use crate::frb_generated::StreamSink;
 
@@ -16,7 +16,6 @@ pub fn init_rust_logger(sink: StreamSink<String>) {
     *logger = Some(sink);
 }
 
-#[frb(ignore)]
 pub fn log_to_dart(msg: String) {
     let logger = match LOGGER.read() {
         Ok(val) => val,

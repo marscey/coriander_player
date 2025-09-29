@@ -12,7 +12,7 @@ mod windows_impl {
         Win32::UI::{Shell::IInitializeWithWindow, WindowsAndMessaging::GetForegroundWindow},
     };
 
-    use super::logger::log_to_dart;
+    use crate::api::logger::log_to_dart;
 
     /// path: 文件或文件夹的绝对路径。
     /// 会打开父级目录并选择路径指向的项。

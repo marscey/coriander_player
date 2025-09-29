@@ -1,15 +1,8 @@
-use std::time::Duration;
-
-use flutter_rust_bridge::frb;
-use crate::frb_generated::StreamSink;
-
-use super::logger::log_to_dart;
-
 #[cfg(target_os = "windows")]
-mod windows_impl {
-    use std::time::Duration;
-    
-    use windows::{
+  mod windows_impl {
+      use flutter_rust_bridge::frb;
+      use std::time::Duration;
+      use windows::{
         core::HSTRING,
         Foundation::{TimeSpan, TypedEventHandler},
         Media::{
@@ -22,8 +15,7 @@ mod windows_impl {
     };
 
     use crate::frb_generated::StreamSink;
-
-    // 从父模块导入log_to_dart函数
+      use super::super::logger::log_to_dart;
 
     pub struct SMTCFlutter {
         _smtc: SystemMediaTransportControls,

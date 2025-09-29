@@ -34,7 +34,7 @@ class DesktopLyricService extends ChangeNotifier {
       return;
     }
 
-    final desktopLyricPath = PlatformHelper.getDesktopLyricPath();
+    final desktopLyricPath = PlatformHelper.desktopLyricExecutablePath;
 
     final nowPlaying = _playbackService.nowPlaying;
     final currScheme = ThemeProvider.instance.currScheme;
@@ -59,15 +59,60 @@ class DesktopLyricService extends ChangeNotifier {
       LOGGER.e("[desktop lyric] $event");
     });
 
-    _desktopLyricSubscription = process?.stdout.transform(utf8.decoder).listen(
+    // 使用更强大的StreamTransformer来过滤和验证消息
+    final streamTransformer = StreamTransformer<String, String>.fromHandlers(
+      handleData: (data, sink) {
+        LOGGER.d("[desktop lyric] Raw data received: $data");
+        
+        // 分割消息行
+        final lines = data.split('\n');
+        for (final line in lines) {
+          final trimmedLine = line.trim();
+          
+          // 严格过滤逻辑
+          if (trimmedLine.isEmpty) {
+            LOGGER.d("[desktop lyric] Filtered out empty line");
+            continue;
+          }
+          
+          if (trimmedLine.startsWith('^')) {
+            LOGGER.d("[desktop lyric] Filtered out command prompt: $trimmedLine");
+            continue;
+          }
+          
+          // 尝试提前验证JSON格式
+          try {
+            // 检查是否以{开头并以}结尾
+            if (trimmedLine.startsWith('{') && trimmedLine.endsWith('}')) {
+              // 尝试解析JSON以确认有效性
+              json.decode(trimmedLine);
+              sink.add(trimmedLine);
+              LOGGER.d("[desktop lyric] Valid JSON message added to stream");
+            } else {
+              LOGGER.d("[desktop lyric] Filtered out non-JSON format: $trimmedLine");
+            }
+          } catch (e) {
+            LOGGER.d("[desktop lyric] Filtered out invalid JSON: $trimmedLine. Error: $e");
+          }
+        }
+      },
+    );
+
+    _desktopLyricSubscription = process?.stdout
+        .transform(utf8.decoder)
+        .transform(streamTransformer)
+        .listen(
       (event) {
         try {
+          // 添加日志以查看经过严格过滤后的消息
+          LOGGER.d("[desktop lyric] Processing validated JSON message: $event");
+          
           final Map messageMap = json.decode(event);
           final String messageType = messageMap["type"];
           final messageContent = messageMap["message"] as Map<String, dynamic>;
           if (messageType ==
               msg.getMessageTypeName<msg.ControlEventMessage>()) {
-            final controlEvent =
+            final controlEvent = 
                 msg.ControlEventMessage.fromJson(messageContent);
             switch (controlEvent.event) {
               case msg.ControlEvent.pause:
@@ -92,7 +137,7 @@ class DesktopLyricService extends ChangeNotifier {
             }
           }
         } catch (err) {
-          LOGGER.e("[desktop lyric] $err");
+          LOGGER.e("[desktop lyric] Error parsing message: $err\nOriginal message: $event");
         }
       },
     );
