@@ -140,7 +140,13 @@ scoop install jin/coriander_player
       - 脚本会自动将 Pub 缓存中的本地 desktop_lyric 仓库复制到项目内临时目录（build/desktop_lyric）进行构建，构建产物会自动复制到软件对应目录下
       - **手动构建方式（可选）**：手动编译，把得到的 desktop_lyric 产物放在软件目录的 `desktop_lyric/` 目录下
    - **macOS平台**：
-      **暂未实现**
+      - macos目录下提供了 `build_desktop_lyric.sh` 辅助脚本，用于构建 desktop_lyric 组件
+      - 在应用构建完成后，执行命令：
+      - 默认Debug模式：`chmod +x ./macos/build_desktop_lyric.sh && ./macos/build_desktop_lyric.sh`
+      - 指定Release模式：`./macos/build_desktop_lyric.sh --build-mode release`
+      - 构建并安装到应用包：`./macos/build_desktop_lyric.sh --build-mode debug --install-to-app`
+      - 指定源码来源（pub_cache/test_dir/auto）：`./macos/build_desktop_lyric.sh --source test_dir`
+      - 脚本会自动将源码复制到项目内临时目录（build/desktop_lyric）进行构建，中间产物存储在（build/desktop_lyric_build）目录，避免构建产物被提交到git仓库
 4. BASS 库文件配置：
 桌面端播放引擎基于 BASS 库实现，因此需要配置 BASS 库文件。
    - **Windows平台**：

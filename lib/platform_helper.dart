@@ -7,15 +7,17 @@ import 'package:flutter/material.dart';
 class PlatformHelper {
   /// 判断当前平台是否为macOS
   static bool get isMacOS => Platform.isMacOS;
-  
+
   /// 判断当前平台是否为Windows
   static bool get isWindows => Platform.isWindows;
-  
+
   /// 判断当前平台是否为Linux
   static bool get isLinux => Platform.isLinux;
-  
+
   /// 判断当前平台是否为桌面平台
-  static bool get isDesktop => Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+  static bool get isDesktop =>
+      Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+
   /// 根据当前平台获取BASS库的文件扩展名
   static String get bassLibraryExtension {
     if (Platform.isWindows) return 'dll';
@@ -104,15 +106,20 @@ class PlatformHelper {
   /// 根据当前平台获取桌面歌词可执行文件路径
   static String get desktopLyricExecutablePath {
     final exeDir = path.dirname(Platform.resolvedExecutable);
-    final lyricDir = path.join(exeDir, 'desktop_lyric');
 
     if (Platform.isWindows) {
+      final lyricDir = path.join(exeDir, 'desktop_lyric');
       return path.join(lyricDir, 'desktop_lyric.exe');
     } else if (Platform.isMacOS) {
-      // 在macOS上，桌面歌词可能是一个.app包或者可执行文件
-      // 这里假设是一个名为desktop_lyric的可执行文件
-      return path.join(lyricDir, 'desktop_lyric');
+      // 在macOS上，桌面歌词是一个.app包
+      // 正确的路径解析：从MacOS目录向上两层到达应用根目录
+      final appBundlePath =
+          path.join(exeDir, '..', 'Frameworks', 'desktop_lyric');
+      final lyricAppPath = path.join(appBundlePath, 'desktop_lyric.app',
+          'Contents', 'MacOS', 'desktop_lyric');
+      return lyricAppPath;
     } else {
+      final lyricDir = path.join(exeDir, 'desktop_lyric');
       return path.join(lyricDir, 'desktop_lyric');
     }
   }

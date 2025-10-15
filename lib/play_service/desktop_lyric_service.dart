@@ -27,13 +27,8 @@ class DesktopLyricService extends ChangeNotifier {
   bool isLocked = false;
 
   Future<void> startDesktopLyric() async {
-    // 在macOS上，可能没有桌面歌词功能或实现方式不同
-    if (PlatformHelper.isMacOS) {
-      // 显示提示信息，说明macOS平台暂不支持桌面歌词
-      showTextOnSnackBar("macOS平台暂不支持桌面歌词功能");
-      return;
-    }
-
+    // 移除macOS平台的限制，允许在所有桌面平台上启动桌面歌词
+    
     final desktopLyricPath = PlatformHelper.desktopLyricExecutablePath;
 
     final nowPlaying = _playbackService.nowPlaying;

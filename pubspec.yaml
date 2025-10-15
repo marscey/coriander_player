@@ -32,7 +32,6 @@ dependencies:
   desktop_lyric:
     git:
       url: https://github.com/marscey/desktop_lyric.git
-      ref: fe84f66ba0b0e304b05c558483b37552c906cc06
   music_api:
     git:
       url: https://github.com/marscey/music_api_dart.git
