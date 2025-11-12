@@ -123,8 +123,8 @@ class SongSearchResult {
   }
 }
 
-Future<List<SongSearchResult>> uniSearch(Audio audio) async {
-  final query = audio.title;
+Future<List<SongSearchResult>> uniSearch(Audio audio, {String? customQuery}) async {
+  final query = customQuery ?? audio.title;
   try {
     List<SongSearchResult> result = [];
 

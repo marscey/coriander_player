@@ -165,8 +165,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: HEAD
-      resolved-ref: "04e1cfda290497488be1f37877a270dc9cf902bd"
+      ref: "6db3158f2cccba61d2970c881737e33b5bf09259"
+      resolved-ref: "6db3158f2cccba61d2970c881737e33b5bf09259"
       url: "https://github.com/marscey/desktop_lyric.git"
     source: git
     version: "0.1.0"
