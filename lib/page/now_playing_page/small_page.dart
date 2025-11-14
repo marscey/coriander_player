@@ -100,15 +100,16 @@ class _NowPlayingPage_SmallState extends State<_NowPlayingPage_Small> {
           const SizedBox(height: 8.0),
           const Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NowPlayingShuffleSwitch(),
-              _NowPlayingPlayModeSwitch(),
-              _NowPlayingVolDspSlider(),
-              _ExclusiveModeSwitch(),
-              _DesktopLyricSwitch(),
-              _NowPlayingMoreAction(),
-            ],
-          )
+              children: [
+                _NowPlayingShuffleSwitch(),
+                _NowPlayingPlayModeSwitch(),
+                _NowPlayingVolDspSlider(),
+                _ExclusiveModeSwitch(),
+                _DesktopLyricSwitch(),
+                _NowPlayingMoreAction(),
+                PlayerEngineIndicator(),
+              ],
+            )
         ],
       ),
     );

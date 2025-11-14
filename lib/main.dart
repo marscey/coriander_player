@@ -4,6 +4,7 @@ import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/entry.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
+import 'package:coriander_player/platform_dependency_manager.dart';
 import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/rust/api/logger.dart';
@@ -12,6 +13,7 @@ import 'package:coriander_player/theme_provider.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 
 Future<void> initWindow() async {
@@ -63,6 +65,9 @@ Future<void> loadPrefFont() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 初始化MediaKit播放器
+  MediaKit.ensureInitialized();
+
   await RustLib.init();
 
   initRustLogger().listen((msg) {
@@ -79,6 +84,19 @@ Future<void> main() async {
   if (File(PlatformHelper.joinPaths([supportPath, "settings.json"]))
       .existsSync()) {
     await AppSettings.readFromJson();
+    
+    // 初始化平台特定依赖管理
+    await PlatformDependencyManager.instance.initialize();
+    
+    // 确保设置的播放器引擎受当前平台支持
+    final dependencyManager = PlatformDependencyManager.instance;
+    if (AppSettings.instance.playerEngineType != null &&
+        !dependencyManager.isPlayerEngineSupported(AppSettings.instance.playerEngineType!)) {
+      // 如果当前设置的引擎不支持，则使用推荐的引擎
+      AppSettings.instance.playerEngineType = dependencyManager.getRecommendedPlayerEngine();
+      await AppSettings.instance.saveSettings();
+    }
+    
     await loadPrefFont();
   }
   if (File(PlatformHelper.joinPaths([supportPath, "app_preference.json"]))

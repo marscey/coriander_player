@@ -1,0 +1,4 @@
+enum PlayerEngineType {
+  bass,
+  mediaKit,
+}

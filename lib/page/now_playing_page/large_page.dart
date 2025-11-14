@@ -52,6 +52,8 @@ class _NowPlayingPage_Large extends StatelessWidget {
                       _NowPlayingVolDspSlider(),
                       spacer,
                       _ExclusiveModeSwitch(),
+                      spacer,
+                      PlayerEngineIndicator(),
                     ],
                   ),
                 ),

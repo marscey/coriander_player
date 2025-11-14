@@ -3,7 +3,6 @@ import 'package:path/path.dart' as path;
 import 'package:coriander_player/cloud_service/webdav_service.dart' as webdav;
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/play_service/play_service.dart';
-import 'package:coriander_player/app_settings.dart';
 import 'package:flutter/material.dart';
 
 class CloudAudioPlayer {
@@ -40,7 +39,7 @@ class CloudAudioPlayer {
         );
         
         // 播放音频
-        PlayService.instance.playbackService.play(0, [audio]);
+      PlayService.instance.playbackService.play(0, [audio]);
         
         // 清理临时文件（延迟清理，给播放留出时间）
         Future.delayed(const Duration(minutes: 5), () {

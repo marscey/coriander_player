@@ -3,6 +3,8 @@
 import 'dart:ui';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/play_service/engine/player_engine_type.dart';
 import 'package:coriander_player/component/title_bar.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/library/audio_library.dart';
@@ -22,6 +24,7 @@ import 'package:window_manager/window_manager.dart';
 
 part 'small_page.dart';
 part 'large_page.dart';
+part 'player_engine_indicator.dart';
 
 enum NowPlayingViewMode {
   onlyMain,

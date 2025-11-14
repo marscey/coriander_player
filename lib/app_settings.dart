@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:coriander_player/src/rust/api/system_theme.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/play_service/engine/player_engine_type.dart';
 import 'package:flutter/material.dart';
 import 'package:github/github.dart';
 import 'package:path/path.dart' as path;
@@ -66,6 +67,9 @@ class AppSettings {
 
   String? fontFamily;
   String? fontPath;
+
+  // 播放器引擎类型
+  PlayerEngineType? playerEngineType;
 
   late String artistSplitPattern = artistSeparator.join("|");
 
@@ -202,6 +206,16 @@ class AppSettings {
         _instance.fontFamily = ff;
         _instance.fontPath = fp;
       }
+
+      // 读取播放器引擎类型配置
+      final pet = settingsMap["PlayerEngineType"];
+      if (pet != null) {
+        try {
+          _instance.playerEngineType = PlayerEngineType.values.byName(pet);
+        } catch (e) {
+          // 如果配置的值无效，保持默认值
+        }
+      }
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -223,6 +237,7 @@ class AppSettings {
             "${currSize.width.toStringAsFixed(1)},${currSize.height.toStringAsFixed(1)}",
         "FontFamily": fontFamily,
         "FontPath": fontPath,
+        "PlayerEngineType": playerEngineType?.name,
       };
 
       final settingsStr = json.encode(settingsMap);

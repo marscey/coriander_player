@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/bass/bass_player.dart';
@@ -9,6 +10,11 @@ import 'package:coriander_player/theme_provider.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/play_service/macos_media_control_service.dart';
+import 'package:coriander_player/play_service/engine/player_engine.dart';
+import 'package:coriander_player/play_service/engine/player_engine_factory.dart';
+import 'package:coriander_player/play_service/engine/player_engine_type.dart';
+import 'package:coriander_player/play_service/engine/platform_specific_initialization.dart';
+import 'package:coriander_player/play_service/engine/bass_player_engine.dart';
 import 'package:flutter/foundation.dart';
 
 enum PlayMode {
@@ -39,7 +45,16 @@ class PlaybackService extends ChangeNotifier {
   late final MacosMediaControlService _macosMediaControlService;
   late StreamSubscription? _positionStreamForMacosMediaControl;
 
+  late PlayerEngine _player;
+
   PlaybackService(this.playService) {
+    // 立即初始化播放器引擎（同步）
+    _player = PlayerEngineFactory.getDefaultEngine();
+    _player.initialize();
+    
+    // 在构造函数完成后异步执行其他初始化
+    _asyncInit();
+    
     _playerStateStreamSub = playerStateStream.listen((event) {
       if (event == PlayerState.completed) {
         _autoNextAudio();
@@ -74,6 +89,11 @@ class PlaybackService extends ChangeNotifier {
     }
   }
 
+  void _asyncInit() async {
+    // 执行平台特定初始化
+    await PlatformSpecificInitialization.initializeForPlatform();
+  }
+
   Future<void> _initMacosMediaControlService() async {
     try {
       _macosMediaControlService = await MacosMediaControlService.init();
@@ -95,7 +115,7 @@ class PlaybackService extends ChangeNotifier {
       
       // 监听播放位置变化，更新系统通知栏
       _positionStreamForMacosMediaControl = positionStream.listen((progress) {
-        if (_macosMediaControlService != null && nowPlaying != null) {
+        if (nowPlaying != null) {
           _macosMediaControlService.updatePlaybackState(
             playing: playerState == PlayerState.playing,
             position: Duration(milliseconds: (progress * 1000).toInt()),
@@ -107,18 +127,16 @@ class PlaybackService extends ChangeNotifier {
     }
   }
 
-  final _player = BassPlayer();
   final _smtc = SmtcFlutter();
   final _pref = AppPreference.instance.playbackPref;
 
-  late final _wasapiExclusive = ValueNotifier(_player.wasapiExclusive);
+  // 独占模式，仅对BASS引擎有效
+  late final _wasapiExclusive = ValueNotifier(false);
   ValueNotifier<bool> get wasapiExclusive => _wasapiExclusive;
 
   /// 独占模式
   void useExclusiveMode(bool exclusive) {
-    if (_player.useExclusiveMode(exclusive)) {
-      _wasapiExclusive.value = exclusive;
-    }
+    _wasapiExclusive.value = exclusive;
   }
 
   Audio? nowPlaying;
@@ -140,21 +158,28 @@ class PlaybackService extends ChangeNotifier {
   late final _shuffle = ValueNotifier(false);
   ValueNotifier<bool> get shuffle => _shuffle;
 
-  double get length => _player.length;
+  double get length => _player.duration.inSeconds.toDouble();
 
-  double get position => _player.position;
+  double get position => _player.position.inSeconds.toDouble();
 
-  PlayerState get playerState => _player.playerState;
+  PlayerState get playerState => _player.state;
 
-  double get volumeDsp => _player.volumeDsp;
+  // 兼容旧代码的volumeDsp属性
+  double get volumeDsp => AppPreference.instance.playbackPref.volumeDsp;
 
   /// 修改解码时的音量（不影响 Windows 系统音量）
   void setVolumeDsp(double volume) {
-    _player.setVolumeDsp(volume);
-    _pref.volumeDsp = volume;
+    try {
+      _player.setVolume(volume);
+      _pref.volumeDsp = volume;
+    } catch (e) {
+      LOGGER.e("Failed to set volume DSP: $e");
+    }
   }
 
-  Stream<double> get positionStream => _player.positionStream;
+  // 适配Stream<Duration>到Stream<double>
+  Stream<double> get positionStream => 
+      _player.positionStream.map((duration) => duration.inSeconds.toDouble());
 
   Stream<PlayerState> get playerStateStream => _player.playerStateStream;
 
@@ -169,12 +194,36 @@ class PlaybackService extends ChangeNotifier {
     try {
       _playlistIndex = audioIndex;
       nowPlaying = playlist[audioIndex];
+      
+      // 根据当前配置的播放器引擎类型，确保使用正确的引擎
+      final engineType = AppSettings.instance.playerEngineType;
+      if (engineType != null &&
+          !(_player is BassPlayerEngine && engineType == PlayerEngineType.bass)) {
+        // 如果当前引擎与配置的引擎不同，释放当前引擎并创建新引擎
+        _player.dispose();
+        _player = PlayerEngineFactory.createEngine(engineType);
+        _player.initialize();
+        
+        // 重新设置播放状态监听
+        _playerStateStreamSub.cancel();
+        _playerStateStreamSub = playerStateStream.listen((event) {
+          if (event == PlayerState.completed) {
+            _autoNextAudio();
+          }
+        });
+        
+        // 重新设置播放位置监听
+        positionStream.listen((progress) {
+          _smtc.updateTimeProperties(progress: (progress * 1000).floor());
+        });
+      }
+      
       _player.setSource(nowPlaying!.path);
       setVolumeDsp(AppPreference.instance.playbackPref.volumeDsp);
 
       playService.lyricService.updateLyric();
 
-      _player.start();
+      _player.play();
       notifyListeners();
       ThemeProvider.instance.applyThemeFromAudio(nowPlaying!);
 
@@ -329,7 +378,7 @@ class PlaybackService extends ChangeNotifier {
       if (PlatformHelper.isMacOS && nowPlaying != null) {
         _macosMediaControlService.updatePlaybackState(
           playing: false,
-          position: Duration(milliseconds: (position * 1000).toInt()),
+          position: _player.position,
         );
       }
       
@@ -347,14 +396,14 @@ class PlaybackService extends ChangeNotifier {
   /// 恢复播放
   void start() {
     try {
-      _player.start();
+      _player.play();
       _smtc.updateState(state: SMTCState.playing);
       
       // 在macOS平台上更新系统通知栏媒体控件
       if (PlatformHelper.isMacOS && nowPlaying != null) {
         _macosMediaControlService.updatePlaybackState(
           playing: true,
-          position: Duration(milliseconds: (position * 1000).toInt()),
+          position: _player.position,
         );
       }
       
@@ -374,14 +423,14 @@ class PlaybackService extends ChangeNotifier {
   void playAgain() => _nextAudio_singleLoop();
 
   void seek(double position) {
-    _player.seek(position);
+    _player.seek(Duration(seconds: position.floor()));
     playService.lyricService.findCurrLyricLine();
     
     // 在macOS平台上更新系统通知栏媒体控件的播放进度
     if (PlatformHelper.isMacOS && nowPlaying != null) {
       _macosMediaControlService.updatePlaybackState(
         playing: playerState == PlayerState.playing,
-        position: Duration(milliseconds: (position * 1000).toInt()),
+        position: _player.position,
       );
     }
   }
@@ -396,7 +445,64 @@ class PlaybackService extends ChangeNotifier {
       _macosMediaControlService.dispose();
     }
     
-    _player.free();
+    // 释放播放器引擎资源
+    try {
+      _player.dispose();
+    } catch (e) {
+      LOGGER.e("Failed to free player engine: $e");
+    }
+    
     _smtc.close();
+  }
+  
+  /// 切换播放器引擎
+  Future<void> switchEngine(PlayerEngineType type) async {
+    try {
+      // 保存当前播放状态
+      final currentPosition = _player.position;
+      final currentAudio = nowPlaying;
+      final isPlaying = playerState == PlayerState.playing;
+      
+      // 释放旧引擎资源
+      try {
+        await _player.dispose();
+        _playerStateStreamSub.cancel();
+      } catch (e) {
+        LOGGER.e("Failed to dispose old player engine: $e");
+      }
+      
+      // 创建新引擎
+      _player = PlayerEngineFactory.createEngine(type);
+      await _player.initialize();
+      
+      // 重新设置播放状态监听
+      _playerStateStreamSub = playerStateStream.listen((event) {
+        if (event == PlayerState.completed) {
+          _autoNextAudio();
+        }
+      });
+      
+      // 重新设置播放位置监听
+      positionStream.listen((progress) {
+        _smtc.updateTimeProperties(progress: (progress * 1000).floor());
+      });
+      
+      // 恢复播放状态
+      if (currentAudio != null) {
+        await _player.setSource(currentAudio.path);
+        await _player.seek(currentPosition);
+        if (isPlaying) {
+          await _player.play();
+        }
+      }
+      
+      // 更新配置
+      AppSettings.instance.playerEngineType = type;
+      await AppSettings.instance.saveSettings();
+      
+    } catch (e) {
+      LOGGER.e("Failed to switch player engine: $e");
+      rethrow;
+    }
   }
 }

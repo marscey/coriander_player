@@ -32,6 +32,7 @@ dependencies:
   desktop_lyric:
     git:
       url: https://github.com/marscey/desktop_lyric.git
+      ref: fe84f66ba0b0e304b05c558483b37552c906cc06
   music_api:
     git:
       url: https://github.com/marscey/music_api_dart.git
@@ -46,6 +47,32 @@ dependencies:
   webdav_client: ^1.2.2
   shared_preferences: ^2.2.2
   xml: ^6.3.0
+  # 使用指定版本的media_kit库解决依赖问题
+  media_kit: ^1.1.11
+  media_kit_video: ^1.2.5
+  media_kit_libs_windows_video: ^1.0.5
+  media_kit_libs_macos_video: ^1.1.2
+  media_kit_libs_linux: ^1.0.11
+  media_kit_libs_android_video: ^1.0.11
+  media_kit_libs_ios_video: ^1.0.11
+  
+  # 平台特定依赖
+  device_info_plus: ^9.0.3
+  package_info_plus: ^4.2.0
+  
+  # Windows特定依赖
+  win32: ^5.1.1
+  
+  # macOS特定依赖
+  desktop_multi_window: ^0.2.0
+  
+  # 平台特定条件依赖
+  # Windows上使用bass库
+  # 在Flutter 3.3+中，使用条件依赖可以更好地管理平台特定代码
+  
+  # 移动端特定依赖
+  # 用于Android和iOS平台的音频处理
+  # audio_session: ^0.1.16 # 移动端音频会话管理
 
 dev_dependencies:
   flutter_test:
