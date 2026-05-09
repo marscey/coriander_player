@@ -1,8 +1,8 @@
 #[cfg(target_os = "windows")]
-  mod windows_impl {
-      use flutter_rust_bridge::frb;
-      use std::time::Duration;
-      use windows::{
+mod windows_impl {
+    use flutter_rust_bridge::frb;
+    use std::time::Duration;
+    use windows::{
         core::HSTRING,
         Foundation::{TimeSpan, TypedEventHandler},
         Media::{
@@ -11,11 +11,16 @@
             SystemMediaTransportControlsButtonPressedEventArgs,
             SystemMediaTransportControlsTimelineProperties,
         },
-        Storage::{FileProperties::ThumbnailMode, StorageFile, Streams::RandomAccessStreamReference},
+        Storage::{
+            FileProperties::ThumbnailMode,
+            StorageFile,
+            Streams::{DataWriter, InMemoryRandomAccessStream, RandomAccessStreamReference},
+        },
     };
 
     use crate::frb_generated::StreamSink;
-      use super::super::logger::log_to_dart;
+
+    use super::super::{logger::log_to_dart, tag_reader};
 
     pub struct SMTCFlutter {
         _smtc: SystemMediaTransportControls,
@@ -76,7 +81,14 @@
             }
         }
 
-        pub fn update_display(&self, title: String, artist: String, album: String, duration: u32, path: String) {
+        pub fn update_display(
+            &self,
+            title: String,
+            artist: String,
+            album: String,
+            duration: u32,
+            path: String,
+        ) {
             if let Err(err) = self._update_display(
                 HSTRING::from(title),
                 HSTRING::from(artist),
@@ -159,11 +171,18 @@
             music_properties.SetArtist(&artist)?;
             music_properties.SetAlbumTitle(&album)?;
 
-            let file = StorageFile::GetFileFromPathAsync(&path)?.get()?;
-            let thumbnail = file
-                .GetThumbnailAsyncOverloadDefaultSizeDefaultOptions(ThumbnailMode::MusicView)?
-                .get()?;
-            updater.SetThumbnail(&RandomAccessStreamReference::CreateFromStream(&thumbnail)?)?;
+            let pic_stream_ref =
+                if let Some(pic_data) = tag_reader::get_picture_from_path(path.to_string(), 256, 256) {
+                    Self::_create_thumbnail_from_picture_data(&pic_data)?
+                } else {
+                    let file = StorageFile::GetFileFromPathAsync(&path)?.get()?;
+                    let thumbnail = file
+                        .GetThumbnailAsyncOverloadDefaultSizeDefaultOptions(ThumbnailMode::MusicView)?
+                        .get()?;
+                    RandomAccessStreamReference::CreateFromStream(&thumbnail)?
+                };
+
+            updater.SetThumbnail(&pic_stream_ref)?;
 
             updater.Update()?;
 
@@ -172,6 +191,22 @@
             }
 
             Ok(())
+        }
+
+        fn _create_thumbnail_from_picture_data(
+            picture_data: &[u8],
+        ) -> Result<RandomAccessStreamReference, windows::core::Error> {
+            let stream = InMemoryRandomAccessStream::new()?;
+
+            let writer = DataWriter::CreateDataWriter(&stream)?;
+            writer.WriteBytes(picture_data)?;
+            writer.StoreAsync()?.get()?;
+
+            writer.DetachStream()?;
+
+            stream.Seek(0)?;
+
+            Ok(RandomAccessStreamReference::CreateFromStream(&stream)?)
         }
     }
 }
