@@ -48,4 +48,4 @@ app.*.map.json
 lib/page/settings_page/cpfeedback_key.dart
 
 # 测试相关
-test/
+test/CODE_WIKI.md
