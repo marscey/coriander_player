@@ -30,7 +30,8 @@ class _RectangleProgressIndicatorState
     super.initState();
     subscription =
         PlayService.instance.playbackService.positionStream.listen((event) {
-      progress.value = event / PlayService.instance.playbackService.length;
+      final len = PlayService.instance.playbackService.length;
+      progress.value = len > 0 ? (event / len).clamp(0.0, 1.0) : 0.0;
     });
   }
 

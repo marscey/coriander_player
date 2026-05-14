@@ -247,6 +247,9 @@ class Audio {
     required int width,
     required int height,
   }) async {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return null;
+    }
     final ratio = PlatformDispatcher.instance.views.first.devicePixelRatio;
     return getPictureFromPath(
       path: path,
@@ -273,6 +276,10 @@ class Audio {
       });
     }
     return Future.value(_cover);
+  }
+
+  void setCover(ImageProvider cover) {
+    _cover = cover;
   }
 
   /// audio detail page 不需要频繁调用，所以不缓存图片

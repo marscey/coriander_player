@@ -65,7 +65,8 @@ class _PlayerEngineSelectorState extends State<PlayerEngineSelector> {
         onSelectionChanged: (newSelection) async {
           if (newSelection.first == settings.playerEngineType) return;
 
-          // 显示加载提示
+          LOGGER.i("[EngineSelector] User selected: ${newSelection.first}");
+
           if (context.mounted) {
             showDialog(
               context: context,
@@ -83,18 +84,16 @@ class _PlayerEngineSelectorState extends State<PlayerEngineSelector> {
           }
 
           try {
-            // 切换引擎
+            LOGGER.i("[EngineSelector] Calling switchEngine...");
             await PlayService.instance.playbackService.switchEngine(newSelection.first);
+            LOGGER.i("[EngineSelector] switchEngine returned successfully");
             
-            // 更新UI状态
-            setState(() {
-              // 这里不需要手动设置settings.playerEngineType，因为switchEngine方法已经更新了
-            });
+            setState(() {});
           } catch (e) {
-            // 如果切换失败，恢复到之前的设置
+            LOGGER.e("[EngineSelector] switchEngine failed: $e");
             showTextOnSnackBar('切换播放器引擎失败: $e');
           } finally {
-            // 关闭加载提示
+            LOGGER.i("[EngineSelector] Closing dialog, context.mounted=${context.mounted}");
             if (context.mounted) {
               Navigator.of(context).pop();
             }

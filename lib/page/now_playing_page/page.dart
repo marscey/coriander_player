@@ -496,17 +496,20 @@ class _NowPlayingSliderState extends State<_NowPlayingSlider> {
               builder: (context, _) => StreamBuilder(
                 stream: playbackService.positionStream,
                 initialData: playbackService.position,
-                builder: (context, positionSnapshot) => Slider(
+                builder: (context, positionSnapshot) {
+                  final sliderMax = nowPlayingLength > 0 ? nowPlayingLength : 1.0;
+                  final sliderValue = isDragging
+                      ? dragPosition.value
+                      : (positionSnapshot.data! > sliderMax
+                          ? sliderMax
+                          : positionSnapshot.data!).clamp(0.0, sliderMax);
+                  return Slider(
                   thumbColor: scheme.primary,
                   activeColor: scheme.primary,
                   inactiveColor: scheme.outline,
                   min: 0.0,
-                  max: nowPlayingLength,
-                  value: isDragging
-                      ? dragPosition.value
-                      : positionSnapshot.data! > nowPlayingLength
-                          ? nowPlayingLength
-                          : positionSnapshot.data!,
+                  max: sliderMax,
+                  value: sliderValue,
                   label: Duration(
                     milliseconds: (dragPosition.value * 1000).toInt(),
                   ).toStringHMMSS(),
@@ -521,7 +524,8 @@ class _NowPlayingSliderState extends State<_NowPlayingSlider> {
                     isDragging = false;
                     playbackService.seek(value);
                   },
-                ),
+                );
+                },
                 // builder: (context, positionSnapshot) => SquigglySlider(
                 //   thumbColor: scheme.primary,
                 //   activeColor: scheme.primary,

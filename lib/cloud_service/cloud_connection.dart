@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 enum CloudServiceType {
   webdav,
   // 未来可扩展：s3, ftp, onedrive, googledrive等

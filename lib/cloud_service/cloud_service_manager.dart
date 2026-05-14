@@ -1,11 +1,15 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'cloud_connection.dart';
 import 'webdav_service.dart';
 
 class CloudServiceManager extends ChangeNotifier {
   static const String _storageKey = 'cloud_connections';
+  static const _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
   final List<CloudConnection> _connections = [];
   final Map<String, WebDavService> _services = {};
 
@@ -18,12 +22,29 @@ class CloudServiceManager extends ChangeNotifier {
   Future<void> _loadConnections() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = prefs.getString(_storageKey);
-    
+
     if (jsonString != null) {
       final List<dynamic> jsonList = jsonDecode(jsonString);
       _connections.clear();
-      _connections.addAll(
-        jsonList.map((json) => CloudConnection(
+
+      for (var json in jsonList) {
+        String password = '';
+
+        final securePassword = await _secureStorage.read(
+          key: 'cloud_password_${json['id']}',
+        );
+        if (securePassword != null) {
+          password = securePassword;
+        } else if (json['password'] != null &&
+            (json['password'] as String).isNotEmpty) {
+          password = json['password'];
+          await _secureStorage.write(
+            key: 'cloud_password_${json['id']}',
+            value: password,
+          );
+        }
+
+        _connections.add(CloudConnection(
           id: json['id'],
           name: json['name'],
           type: CloudServiceType.values.firstWhere(
@@ -31,12 +52,14 @@ class CloudServiceManager extends ChangeNotifier {
           ),
           serverUrl: json['serverUrl'],
           username: json['username'],
-          password: json['password'],
+          password: password,
           displayName: json['displayName'],
           lastSync: DateTime.parse(json['lastSync']),
           isActive: json['isActive'] ?? true,
-        )),
-      );
+        ));
+      }
+
+      await _saveConnections();
       notifyListeners();
     }
   }
@@ -49,13 +72,19 @@ class CloudServiceManager extends ChangeNotifier {
       'type': conn.type.toString().split('.').last,
       'serverUrl': conn.serverUrl,
       'username': conn.username,
-      'password': conn.password,
       'displayName': conn.displayName,
       'lastSync': conn.lastSync.toIso8601String(),
       'isActive': conn.isActive,
     }).toList();
-    
+
     await prefs.setString(_storageKey, jsonEncode(jsonList));
+
+    for (final conn in _connections) {
+      await _secureStorage.write(
+        key: 'cloud_password_${conn.id}',
+        value: conn.password,
+      );
+    }
   }
 
   Future<void> addConnection(CloudConnection connection) async {
@@ -77,6 +106,7 @@ class CloudServiceManager extends ChangeNotifier {
   Future<void> removeConnection(String id) async {
     _connections.removeWhere((c) => c.id == id);
     _services.remove(id);
+    await _secureStorage.delete(key: 'cloud_password_$id');
     await _saveConnections();
     notifyListeners();
   }
@@ -90,6 +120,9 @@ class CloudServiceManager extends ChangeNotifier {
   }
 
   Future<void> clearAllConnections() async {
+    for (final conn in _connections) {
+      await _secureStorage.delete(key: 'cloud_password_${conn.id}');
+    }
     _connections.clear();
     _services.clear();
     await _saveConnections();
@@ -104,17 +137,9 @@ class CloudServiceManager extends ChangeNotifier {
     final connection = _connections.firstWhere(
       (c) => c.id == connectionId,
     );
-    
+
     if (connection.type != CloudServiceType.webdav) return null;
-    
-    // 调试输出连接信息
-    debugPrint('=== WebDAV Connection Debug ===');
-    debugPrint('Connection ID: ${connection.id}');
-    debugPrint('Server URL: ${connection.serverUrl}');
-    debugPrint('Username: ${connection.username}');
-    debugPrint('Password: ${connection.password.isEmpty ? "[EMPTY]" : "[PROVIDED]"}');
-    debugPrint('============================');
-    
+
     return _services.putIfAbsent(connectionId, () => WebDavService(
       serverUrl: connection.serverUrl,
       username: connection.username,

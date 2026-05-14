@@ -50,10 +50,14 @@ class Rustup {
 
   Rustup() : _installedToolchains = _getInstalledToolchains();
 
-  List<String>? _installedTargets(String toolchain) => _installedToolchains
-      .firstWhereOrNull(
-          (e) => e.name == toolchain || e.name.startsWith('$toolchain-'))
-      ?.targets;
+  List<String>? _installedTargets(String toolchain) {
+    final exact = _installedToolchains
+        .firstWhereOrNull((e) => e.name == toolchain);
+    if (exact != null) return exact.targets;
+    final prefix = _installedToolchains
+        .firstWhereOrNull((e) => e.name.startsWith('$toolchain-'));
+    return prefix?.targets;
+  }
 
   static List<_Toolchain> _getInstalledToolchains() {
     String extractToolchainName(String line) {
@@ -75,12 +79,17 @@ class Rustup {
         .toList(growable: true);
 
     return lines
-        .map(
-          (name) => _Toolchain(
-            name,
-            _getInstalledTargets(name),
-          ),
-        )
+        .map((name) {
+      try {
+        return _Toolchain(
+          name,
+          _getInstalledTargets(name),
+        );
+      } catch (_) {
+        return null;
+      }
+    })
+        .whereType<_Toolchain>()
         .toList(growable: true);
   }
 

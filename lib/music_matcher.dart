@@ -128,34 +128,73 @@ Future<List<SongSearchResult>> uniSearch(Audio audio) async {
   try {
     List<SongSearchResult> result = [];
 
-    final Map kugouAnswer = (await KuGou.searchSong(keyword: query)).data;
-    final List kugouResultList = kugouAnswer["data"]["info"];
-    for (int j = 0; j < kugouResultList.length; j++) {
-      if (j >= 5) break;
-      result.add(SongSearchResult.fromKugouSearchResult(
-        kugouResultList[j],
-        audio,
-      ));
+    try {
+      final kugouAnswer = (await KuGou.searchSong(keyword: query)).data;
+      if (kugouAnswer != null) {
+        final kugouData = kugouAnswer["data"];
+        if (kugouData != null) {
+          final List? kugouResultList = kugouData["info"];
+          if (kugouResultList != null) {
+            for (int j = 0; j < kugouResultList.length; j++) {
+              if (j >= 5) break;
+              result.add(SongSearchResult.fromKugouSearchResult(
+                kugouResultList[j],
+                audio,
+              ));
+            }
+          }
+        }
+      }
+    } catch (e) {
+      LOGGER.e("[uniSearch] kugou search failed: $e");
     }
 
-    final Map neteaseAnswer = (await Netease.search(keyWord: query)).data;
-    final List neteaseResultList = neteaseAnswer["result"]["songs"];
-    for (int k = 0; k < neteaseResultList.length; k++) {
-      if (k >= 5) break;
-      result.add(SongSearchResult.fromNeteaseSearchResult(
-        neteaseResultList[k],
-        audio,
-      ));
+    try {
+      final neteaseAnswer = (await Netease.search(keyWord: query)).data;
+      if (neteaseAnswer != null) {
+        final neteaseResult = neteaseAnswer["result"];
+        if (neteaseResult != null) {
+          final List? neteaseResultList = neteaseResult["songs"];
+          if (neteaseResultList != null) {
+            for (int k = 0; k < neteaseResultList.length; k++) {
+              if (k >= 5) break;
+              result.add(SongSearchResult.fromNeteaseSearchResult(
+                neteaseResultList[k],
+                audio,
+              ));
+            }
+          }
+        }
+      }
+    } catch (e) {
+      LOGGER.e("[uniSearch] netease search failed: $e");
     }
 
-    final Map qqAnswer = (await QQ.search(keyWord: query)).data;
-    final List qqResultList = qqAnswer["req"]["data"]["body"]["item_song"];
-    for (int i = 0; i < qqResultList.length; i++) {
-      if (i >= 5) break;
-      result.add(SongSearchResult.fromQQSearchResult(
-        qqResultList[i],
-        audio,
-      ));
+    try {
+      final qqAnswer = (await QQ.search(keyWord: query)).data;
+      if (qqAnswer != null) {
+        final qqReq = qqAnswer["req"];
+        if (qqReq != null) {
+          final qqReqData = qqReq["data"];
+          if (qqReqData != null) {
+            final qqBody = qqReqData["body"];
+            if (qqBody != null) {
+              final List? qqResultList = qqBody["item_song"];
+              if (qqResultList != null) {
+                for (int i = 0; i < qqResultList.length; i++) {
+                  if (i >= 5) break;
+                  result.add(SongSearchResult.fromQQSearchResult(
+                    qqResultList[i],
+                    audio,
+                  ));
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      LOGGER.e("[uniSearch] qq search failed: $e");
     }
 
     result.sort((a, b) => b.score.compareTo(a.score));
@@ -170,11 +209,13 @@ Future<List<SongSearchResult>> uniSearch(Audio audio) async {
 Future<Lrc?> _getNeteaseUnsyncLyric(String neteaseSongId) async {
   try {
     final answer = await Netease.lyric(id: neteaseSongId);
-    final lrcText = answer.data["lrc"]["lyric"];
+    final lrcObj = answer.data?["lrc"];
+    if (lrcObj == null) return null;
+    final lrcText = lrcObj["lyric"];
     if (lrcText is String) {
-      final lrcTrans = answer.data["tlyric"]["lyric"];
+      final lrcTrans = answer.data?["tlyric"]?["lyric"];
       return Lrc.fromLrcText(
-        lrcText + lrcTrans,
+        lrcText + (lrcTrans ?? ''),
         LrcSource.web,
         separator: "┃",
       );
@@ -189,9 +230,9 @@ Future<Lrc?> _getNeteaseUnsyncLyric(String neteaseSongId) async {
 Future<Qrc?> _getQQSyncLyric(int qqSongId) async {
   try {
     final answer = await QQ.songLyric3(songId: qqSongId);
-    final qrcText = answer.data["lyric"];
+    final qrcText = answer.data?["lyric"];
     if (qrcText is String) {
-      final qrcTransRawStr = answer.data["trans"];
+      final qrcTransRawStr = answer.data?["trans"];
       if (qrcTransRawStr is String) {
         return Qrc.fromQrcText(qrcText, qrcTransRawStr);
       }
@@ -207,7 +248,7 @@ Future<Qrc?> _getQQSyncLyric(int qqSongId) async {
 Future<Krc?> _getKugouSyncLyric(String kugouSongHash) async {
   try {
     final answer = await KuGou.krc(hash: kugouSongHash);
-    final krcText = answer.data["lyric"];
+    final krcText = answer.data?["lyric"];
     if (krcText is String) {
       return Krc.fromKrcText(krcText);
     }

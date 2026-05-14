@@ -46,6 +46,7 @@ dependencies:
   http: ^1.2.0
   webdav_client: ^1.2.2
   shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.0.0
   xml: ^6.3.0
   # 使用指定版本的media_kit库解决依赖问题
   media_kit: ^1.1.11

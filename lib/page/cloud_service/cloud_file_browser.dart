@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../cloud_service/cloud_connection.dart';
+import 'package:path/path.dart' as path;
 import '../../cloud_service/cloud_service_manager.dart';
 import '../../cloud_service/webdav_service.dart' as webdav;
+import '../../cloud_service/cloud_utils.dart' as cloud_utils;
 import 'dart:io';
 import 'dart:async';
 import '../../cloud_service/cloud_audio_player.dart';
 import '../../cloud_service/cloud_scanner.dart';
-import '../folder_detail_page.dart';
+import '../../utils.dart';
 
 class CloudFileBrowser extends StatefulWidget {
   final String connectionId;
@@ -242,7 +243,7 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
           fileName: file.name,
           onPlayStarted: () {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('开始播放: ${file.name}')),
+              SnackBar(content: Text('开始流式播放: ${file.name}')),
             );
           },
         );
@@ -416,7 +417,7 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
       }
 
       final downloadDir = await getDownloadDir();
-      final localPath = '$downloadDir\\${file.name}';
+      final localPath = path.join(downloadDir, file.name);
       final bytes = await service.downloadFile(file.path);
       final localFile = File(localPath);
       await localFile.writeAsBytes(bytes);
@@ -490,13 +491,13 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
       int downloadedCount = 0;
       for (final file in files) {
         try {
-          final localPath = '$downloadDir/${file.name}';
+          final localPath = path.join(downloadDir, file.name);
           final bytes = await service.downloadFile(file.path);
           final localFile = File(localPath);
           await localFile.writeAsBytes(bytes);
           downloadedCount++;
         } catch (e) {
-          debugPrint('下载失败: ${file.name} - $e');
+          LOGGER.e('[CloudFileBrowser] 下载失败: ${file.name} - $e');
         }
       }
       ScaffoldMessenger.of(context).showSnackBar(
@@ -510,7 +511,6 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
   }
 
   Future<String> getDownloadDir() async {
-    // 实际项目中替换为真实下载目录
-    return 'downloads';
+    return cloud_utils.getDownloadDir();
   }
 }

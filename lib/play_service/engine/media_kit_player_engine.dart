@@ -1,156 +1,237 @@
 import 'dart:async';
 import 'package:coriander_player/play_service/engine/player_engine.dart';
 import 'package:coriander_player/src/bass/bass_player.dart' as bass_player;
-
-// 导入media_kit库
+import 'package:coriander_player/utils.dart';
 import 'package:media_kit/media_kit.dart';
 
 class MediaKitPlayerEngine implements PlayerEngine {
-  late final Player _player;
-  late final StreamController<bass_player.PlayerState> _playerStateStreamController;
-  late final StreamController<Duration> _positionStreamController;
-  late Duration _duration;
+  Player? _player;
+  StreamController<bass_player.PlayerState>? _playerStateStreamController;
+  StreamController<Duration>? _positionStreamController;
   Timer? _positionTimer;
-  // 用于缓存最后知道的媒体源路径，避免直接访问_player.currentMedia
   String? _currentMediaPath;
+  bass_player.PlayerState _currentState = bass_player.PlayerState.stopped;
+  Duration _currentPosition = Duration.zero;
+  Duration _currentDuration = Duration.zero;
+  bool _isDisposed = false;
+
+  List<StreamSubscription> _playerSubscriptions = [];
 
   @override
   Future<void> initialize() async {
-    // 初始化Player实例
-    _player = Player();
-    _playerStateStreamController = StreamController<bass_player.PlayerState>.broadcast();
+    LOGGER.i("[MediaKit] initialize START");
+    _player = Player(
+      configuration: const PlayerConfiguration(
+        logLevel: MPVLogLevel.info,
+      ),
+    );
+    _playerStateStreamController =
+        StreamController<bass_player.PlayerState>.broadcast();
     _positionStreamController = StreamController<Duration>.broadcast();
-    _duration = Duration.zero;
 
-    // 监听播放状态变化
-    _player.stream.playing.listen((playing) {
-      bass_player.PlayerState playerState;
-      if (playing) {
-        playerState = bass_player.PlayerState.playing;
-      } else {
-        // 通过是否有当前媒体路径来区分暂停和停止状态
-        bool isStopped = _currentMediaPath == null;
-        playerState = isStopped ? bass_player.PlayerState.stopped : bass_player.PlayerState.paused;
-      }
-      _playerStateStreamController.add(playerState);
-    });
+    _playerSubscriptions = [
+      _player!.stream.playing.listen(_onPlayingChanged),
+      _player!.stream.completed.listen(_onCompleted),
+      _player!.stream.duration.listen(_onDurationChanged),
+      _player!.stream.position.listen(_onPositionChanged),
+      _player!.stream.error.listen((error) {
+        LOGGER.e("[MediaKit] error: $error");
+      }),
+      _player!.stream.log.listen((log) {
+        if (log.level == 'error' || log.level == 'warn') {
+          LOGGER.w("[MediaKit] log[${log.level}][${log.prefix}]: ${log.text}");
+        }
+      }),
+    ];
 
-    // 监听播放完成事件
-    _player.stream.completed.listen((completed) {
-      if (completed) {
-        _playerStateStreamController.add(bass_player.PlayerState.stopped);
-      }
-    });
-
-    // 监听位置变化
-    _positionTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+    _positionTimer =
+        Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (_isDisposed || _player == null) return;
       try {
-        final position = _player.state.position;
-        _positionStreamController.add(position);
-      } catch (e) {
-        // 忽略获取位置失败的情况
-      }
+        final pos = _player!.state.position;
+        if (pos.inMilliseconds >= 0) {
+          _currentPosition = pos;
+          _positionStreamController?.add(_currentPosition);
+        }
+      } catch (_) {}
     });
+    LOGGER.i("[MediaKit] initialize DONE");
   }
 
-  @override
-  Future<void> setSource(String path, {bool isAsset = false, bool isNetwork = false}) async {
-    try {
-      // 停止当前播放
-      await stop();
+  void _onPlayingChanged(bool playing) {
+    if (_isDisposed) return;
+    LOGGER.i("[MediaKit] playing changed: $playing (currentMediaPath=$_currentMediaPath)");
+    if (playing) {
+      _currentState = bass_player.PlayerState.playing;
+    } else {
+      _currentState = _currentMediaPath == null
+          ? bass_player.PlayerState.stopped
+          : bass_player.PlayerState.paused;
+    }
+    _playerStateStreamController?.add(_currentState);
+  }
 
-      // 创建媒体路径
-      String mediaPath;
-      if (isNetwork) {
-        mediaPath = path;
-      } else if (isAsset) {
-        mediaPath = 'asset:///$path';
-      } else {
-        mediaPath = path;
-      }
+  void _onCompleted(bool completed) {
+    if (_isDisposed) return;
+    LOGGER.i("[MediaKit] completed: $completed");
+    if (completed) {
+      _currentState = bass_player.PlayerState.completed;
+      _playerStateStreamController?.add(bass_player.PlayerState.completed);
+    }
+  }
 
-      // 设置媒体源
-      await _player.open(Media(mediaPath));
-      _currentMediaPath = mediaPath;
+  void _onDurationChanged(Duration duration) {
+    if (_isDisposed) return;
+    if (duration.inMilliseconds > 0) {
+      _currentDuration = duration;
+      LOGGER.i("[MediaKit] duration updated: ${duration.inMilliseconds}ms");
+    }
+  }
 
-      // 尝试获取时长
-      try {
-          await Future.delayed(const Duration(milliseconds: 100));
-          final duration = _player.state.duration;
-          _duration = duration;
-        } catch (e) {
-          // 在生产环境中应使用日志系统
-          // logger.e('Failed to get duration immediately: $e');
-        }
-    } catch (e) {
-      // 在生产环境中应使用日志系统
-      // logger.e('Failed to set source: $e');
-      _currentMediaPath = null;
-      rethrow;
+  void _onPositionChanged(Duration position) {
+    if (_isDisposed) return;
+    if (position.inMilliseconds >= 0) {
+      _currentPosition = position;
     }
   }
 
   @override
-  Future<void> play() {
-    return _player.play();
+  Future<void> setSource(String path,
+      {bool isAsset = false,
+      bool isNetwork = false,
+      Map<String, String>? httpHeaders}) async {
+    if (_isDisposed || _player == null) return;
+
+    LOGGER.i("[MediaKit] setSource START: path=$path, isNetwork=$isNetwork, hasHeaders=${httpHeaders != null}");
+
+    _currentMediaPath = null;
+    _currentDuration = Duration.zero;
+    _currentPosition = Duration.zero;
+    _currentState = bass_player.PlayerState.stopped;
+    _playerStateStreamController?.add(_currentState);
+
+    Media media;
+    if (isNetwork) {
+      media = Media(path, httpHeaders: httpHeaders);
+    } else if (isAsset) {
+      media = Media('asset:///$path');
+    } else {
+      media = Media(path);
+    }
+
+    LOGGER.i("[MediaKit] calling player.open with play=false...");
+    await _player!.open(media, play: false);
+    LOGGER.i("[MediaKit] player.open completed");
+
+    _currentMediaPath = path;
+    _currentState = bass_player.PlayerState.paused;
+    _playerStateStreamController?.add(_currentState);
+
+    _currentDuration = _player!.state.duration;
+    LOGGER.i("[MediaKit] duration after open: ${_currentDuration.inMilliseconds}ms");
+    LOGGER.i("[MediaKit] setSource DONE");
   }
 
   @override
-  Future<void> pause() {
-    return _player.pause();
+  Future<void> play() async {
+    if (_isDisposed || _player == null) return;
+    LOGGER.i("[MediaKit] play");
+    await _player!.play();
+    _currentState = bass_player.PlayerState.playing;
+    _playerStateStreamController?.add(_currentState);
   }
 
   @override
-  Future<void> stop() {
-    return _player.stop();
+  Future<void> pause() async {
+    if (_isDisposed || _player == null) return;
+    LOGGER.i("[MediaKit] pause");
+    await _player!.pause();
+    _currentState = bass_player.PlayerState.paused;
+    _playerStateStreamController?.add(_currentState);
   }
 
   @override
-  Future<void> seek(Duration position) {
-    return _player.seek(position);
+  Future<void> stop() async {
+    if (_isDisposed || _player == null) return;
+    LOGGER.i("[MediaKit] stop");
+    try {
+      await _player!.stop();
+    } catch (_) {}
+    _currentMediaPath = null;
+    _currentState = bass_player.PlayerState.stopped;
+    _currentPosition = Duration.zero;
+    _playerStateStreamController?.add(_currentState);
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    if (_isDisposed || _player == null) return;
+    await _player!.seek(position);
   }
 
   @override
   void setVolume(double volume) {
-    _player.setVolume(volume);
+    if (_isDisposed || _player == null) return;
+    _player!.setVolume(volume * 100);
   }
 
   @override
   void setSpeed(double speed) {
-    _player.setRate(speed);
+    if (_isDisposed || _player == null) return;
+    _player!.setRate(speed);
   }
 
   @override
-  bass_player.PlayerState get state {
-    // 在media_kit中，我们通过streams获取最新状态，而不是直接访问属性
-    // 这里返回一个默认值，实际应用中应该通过playerStateStream获取
-    // 或者在内部维护一个最新的状态值
-    return bass_player.PlayerState.stopped;
-  }
+  bass_player.PlayerState get state => _currentState;
 
   @override
   Duration get position {
-    // 由于我们无法直接同步获取位置，我们需要在内部维护一个最新的位置值
-    // 在实际应用中，调用者应该通过positionStream获取最新位置
-    return Duration.zero;
+    if (_isDisposed || _player == null) return Duration.zero;
+    final pos = _currentPosition;
+    return pos.inMilliseconds >= 0 ? pos : Duration.zero;
   }
 
   @override
   Duration get duration {
-    return _duration;
+    if (_isDisposed || _player == null) return Duration.zero;
+    final d = _currentDuration;
+    return d.inMilliseconds > 0 ? d : Duration.zero;
   }
 
   @override
-  Stream<bass_player.PlayerState> get playerStateStream => _playerStateStreamController.stream;
+  Stream<bass_player.PlayerState> get playerStateStream =>
+      _playerStateStreamController?.stream ?? const Stream.empty();
 
   @override
-  Stream<Duration> get positionStream => _positionStreamController.stream;
+  Stream<Duration> get positionStream =>
+      _positionStreamController?.stream ?? const Stream.empty();
 
   @override
   Future<void> dispose() async {
+    if (_isDisposed) return;
+    _isDisposed = true;
+    LOGGER.i("[MediaKit] dispose START");
+
     _positionTimer?.cancel();
-    await _playerStateStreamController.close();
-    await _positionStreamController.close();
-    await _player.dispose();
+    _positionTimer = null;
+
+    for (final sub in _playerSubscriptions) {
+      await sub.cancel();
+    }
+    _playerSubscriptions = [];
+
+    await _playerStateStreamController?.close();
+    _playerStateStreamController = null;
+
+    await _positionStreamController?.close();
+    _positionStreamController = null;
+
+    try {
+      await _player?.stop();
+    } catch (_) {}
+
+    await _player?.dispose();
+    _player = null;
+    LOGGER.i("[MediaKit] dispose DONE");
   }
 }
