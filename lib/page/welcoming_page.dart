@@ -1,7 +1,12 @@
 import 'dart:async';
+import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/build_index_state_view.dart';
+import 'package:coriander_player/hotkeys_helper.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/library/playlist.dart';
+import 'package:coriander_player/lyric/lyric_source.dart';
+import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/platform_helper.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
@@ -272,8 +277,23 @@ class __WindowControllsState extends State<_WindowControlls>
           },
         ),
         IconButton(
-          tooltip: "退出",
-          onPressed: windowManager.close,
+          tooltip: "关闭",
+          onPressed: () async {
+            // 保存状态
+            await savePlaylists();
+            await saveLyricSources();
+            await AppSettings.instance.saveSettings();
+            await AppPreference.instance.save();
+
+            // 清理资源
+            PlayService.instance.close();
+            await HotkeysHelper.unregisterAll();
+
+            // 完全退出
+            await windowManager.setPreventClose(false);
+            await windowManager.close();
+            exit(0);
+          },
           icon: const Icon(Symbols.close),
         ),
       ],
