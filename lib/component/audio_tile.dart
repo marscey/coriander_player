@@ -202,15 +202,30 @@ class AudioTile extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        audio.title,
-                        style: TextStyle(color: textColor, fontSize: 16),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              audio.title,
+                              style: TextStyle(color: textColor, fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (audio.isCloudAudio)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4.0),
+                              child: Icon(
+                                Symbols.cloud,
+                                size: 14,
+                                color: scheme.outline,
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(width: 4.0),
                       Text(
-                        "${audio.artist} - ${audio.album}",
+                        audio.subtitleText,
                         style: TextStyle(color: textColor),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

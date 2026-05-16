@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
 import 'package:coriander_player/entry.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
 import 'package:coriander_player/platform_dependency_manager.dart';
@@ -84,6 +85,8 @@ Future<void> main() async {
   if (File(PlatformHelper.joinPaths([supportPath, "settings.json"]))
       .existsSync()) {
     await AppSettings.readFromJson();
+
+    await CloudCacheManager.init();
     
     // 初始化平台特定依赖管理
     await PlatformDependencyManager.instance.initialize();

@@ -8,11 +8,14 @@ class MediaKitPlayerEngine implements PlayerEngine {
   Player? _player;
   StreamController<bass_player.PlayerState>? _playerStateStreamController;
   StreamController<Duration>? _positionStreamController;
+  StreamController<Duration>? _bufferStreamController;
+  StreamController<Duration>? _durationStreamController;
   Timer? _positionTimer;
   String? _currentMediaPath;
   bass_player.PlayerState _currentState = bass_player.PlayerState.stopped;
   Duration _currentPosition = Duration.zero;
   Duration _currentDuration = Duration.zero;
+  Duration _currentBuffer = Duration.zero;
   bool _isDisposed = false;
 
   List<StreamSubscription> _playerSubscriptions = [];
@@ -28,12 +31,15 @@ class MediaKitPlayerEngine implements PlayerEngine {
     _playerStateStreamController =
         StreamController<bass_player.PlayerState>.broadcast();
     _positionStreamController = StreamController<Duration>.broadcast();
+    _bufferStreamController = StreamController<Duration>.broadcast();
+    _durationStreamController = StreamController<Duration>.broadcast();
 
     _playerSubscriptions = [
       _player!.stream.playing.listen(_onPlayingChanged),
       _player!.stream.completed.listen(_onCompleted),
       _player!.stream.duration.listen(_onDurationChanged),
       _player!.stream.position.listen(_onPositionChanged),
+      _player!.stream.buffer.listen(_onBufferChanged),
       _player!.stream.error.listen((error) {
         LOGGER.e("[MediaKit] error: $error");
       }),
@@ -84,6 +90,7 @@ class MediaKitPlayerEngine implements PlayerEngine {
     if (_isDisposed) return;
     if (duration.inMilliseconds > 0) {
       _currentDuration = duration;
+      _durationStreamController?.add(_currentDuration);
       LOGGER.i("[MediaKit] duration updated: ${duration.inMilliseconds}ms");
     }
   }
@@ -92,6 +99,14 @@ class MediaKitPlayerEngine implements PlayerEngine {
     if (_isDisposed) return;
     if (position.inMilliseconds >= 0) {
       _currentPosition = position;
+    }
+  }
+
+  void _onBufferChanged(Duration buffer) {
+    if (_isDisposed) return;
+    if (buffer.inMilliseconds >= 0) {
+      _currentBuffer = buffer;
+      _bufferStreamController?.add(_currentBuffer);
     }
   }
 
@@ -107,6 +122,7 @@ class MediaKitPlayerEngine implements PlayerEngine {
     _currentMediaPath = null;
     _currentDuration = Duration.zero;
     _currentPosition = Duration.zero;
+    _currentBuffer = Duration.zero;
     _currentState = bass_player.PlayerState.stopped;
     _playerStateStreamController?.add(_currentState);
 
@@ -128,6 +144,7 @@ class MediaKitPlayerEngine implements PlayerEngine {
     _playerStateStreamController?.add(_currentState);
 
     _currentDuration = _player!.state.duration;
+    _currentBuffer = _player!.state.buffer;
     LOGGER.i("[MediaKit] duration after open: ${_currentDuration.inMilliseconds}ms");
     LOGGER.i("[MediaKit] setSource DONE");
   }
@@ -160,6 +177,7 @@ class MediaKitPlayerEngine implements PlayerEngine {
     _currentMediaPath = null;
     _currentState = bass_player.PlayerState.stopped;
     _currentPosition = Duration.zero;
+    _currentBuffer = Duration.zero;
     _playerStateStreamController?.add(_currentState);
   }
 
@@ -199,12 +217,27 @@ class MediaKitPlayerEngine implements PlayerEngine {
   }
 
   @override
+  Duration get buffer {
+    if (_isDisposed || _player == null) return Duration.zero;
+    final b = _currentBuffer;
+    return b.inMilliseconds >= 0 ? b : Duration.zero;
+  }
+
+  @override
   Stream<bass_player.PlayerState> get playerStateStream =>
       _playerStateStreamController?.stream ?? const Stream.empty();
 
   @override
   Stream<Duration> get positionStream =>
       _positionStreamController?.stream ?? const Stream.empty();
+
+  @override
+  Stream<Duration> get bufferStream =>
+      _bufferStreamController?.stream ?? const Stream.empty();
+
+  @override
+  Stream<Duration> get durationStream =>
+      _durationStreamController?.stream ?? const Stream.empty();
 
   @override
   Future<void> dispose() async {
@@ -225,6 +258,12 @@ class MediaKitPlayerEngine implements PlayerEngine {
 
     await _positionStreamController?.close();
     _positionStreamController = null;
+
+    await _bufferStreamController?.close();
+    _bufferStreamController = null;
+
+    await _durationStreamController?.close();
+    _durationStreamController = null;
 
     try {
       await _player?.stop();

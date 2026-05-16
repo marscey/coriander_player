@@ -260,7 +260,10 @@ class _LyricSourceTileState extends State<_LyricSourceTile> {
             overflow: TextOverflow.ellipsis,
           ),
           Text(
-            "${searchResult.artists} - ${searchResult.album}",
+            [
+              if (searchResult.artists.isNotEmpty) searchResult.artists,
+              if (searchResult.album.isNotEmpty) searchResult.album,
+            ].join(' - '),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),

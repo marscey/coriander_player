@@ -81,29 +81,18 @@ class AudioLibrary {
 
     for (Audio audio in audioCollection) {
       for (String artistName in audio.splitedArtists) {
-        /// 如果artistCollection中有artistName指向的artist，putIfAbsent会返回该artist。
-        /// 随后往这个artist里添加该audio。
-        ///
-        /// 如果没有，创建一个名字为artistName的空艺术家，并将artistName与之相连。
-        /// 随后往这个artist里添加该audio。
         artistCollection
             .putIfAbsent(artistName, () => Artist(name: artistName))
             .works
             .add(audio);
       }
 
-      /// 如果albumCollection中有audio.album指向的album，putIfAbsent会返回该album。
-      /// 随后往这个album里添加该audio。
-      ///
-      /// 如果没有，创建一个名字为audio.album的空艺术家，并将audio.album与之相连。
-      /// 随后往这个album里添加该audio。
       albumCollection
           .putIfAbsent(audio.album, () => Album(name: audio.album))
           .works
           .add(audio);
     }
 
-    /// 将艺术家和专辑链接起来
     for (Artist artist in artistCollection.values) {
       for (Audio audio in artist.works) {
         artist.albumsMap.putIfAbsent(
@@ -113,7 +102,48 @@ class AudioLibrary {
       }
     }
 
-    /// 将专辑和艺术家链接起来
+    for (Album album in albumCollection.values) {
+      for (Audio audio in album.works) {
+        for (String artistName in audio.splitedArtists) {
+          album.artistsMap.putIfAbsent(
+            artistName,
+            () => artistCollection[artistName]!,
+          );
+        }
+      }
+    }
+  }
+
+  void addCloudAudios(List<Audio> cloudAudios) {
+    final existingPaths = audioCollection.map((a) => a.path).toSet();
+    final newAudios = cloudAudios.where((a) => !existingPaths.contains(a.path)).toList();
+    if (newAudios.isEmpty) return;
+
+    audioCollection.addAll(newAudios);
+
+    for (Audio audio in newAudios) {
+      for (String artistName in audio.splitedArtists) {
+        artistCollection
+            .putIfAbsent(artistName, () => Artist(name: artistName))
+            .works
+            .add(audio);
+      }
+
+      albumCollection
+          .putIfAbsent(audio.album, () => Album(name: audio.album))
+          .works
+          .add(audio);
+    }
+
+    for (Artist artist in artistCollection.values) {
+      for (Audio audio in artist.works) {
+        artist.albumsMap.putIfAbsent(
+          audio.album,
+          () => albumCollection[audio.album]!,
+        );
+      }
+    }
+
     for (Album album in albumCollection.values) {
       for (Audio audio in album.works) {
         for (String artistName in audio.splitedArtists) {
@@ -247,7 +277,7 @@ class Audio {
     required int width,
     required int height,
   }) async {
-    if (path.startsWith('http://') || path.startsWith('https://')) {
+    if (isCloudAudio) {
       return null;
     }
     final ratio = PlatformDispatcher.instance.views.first.devicePixelRatio;
@@ -280,6 +310,16 @@ class Audio {
 
   void setCover(ImageProvider cover) {
     _cover = cover;
+  }
+
+  bool get isCloudAudio => by == 'Cloud';
+
+  String get subtitleText {
+    final parts = <String>[
+      if (artist.isNotEmpty) artist,
+      if (album.isNotEmpty) album,
+    ];
+    return parts.join(' - ');
   }
 
   /// audio detail page 不需要频繁调用，所以不缓存图片

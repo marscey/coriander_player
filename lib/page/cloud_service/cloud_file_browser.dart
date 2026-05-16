@@ -5,9 +5,7 @@ import '../../cloud_service/cloud_service_manager.dart';
 import '../../cloud_service/webdav_service.dart' as webdav;
 import '../../cloud_service/cloud_utils.dart' as cloud_utils;
 import 'dart:io';
-import 'dart:async';
 import '../../cloud_service/cloud_audio_player.dart';
-import '../../cloud_service/cloud_scanner.dart';
 import '../../utils.dart';
 
 class CloudFileBrowser extends StatefulWidget {
@@ -27,6 +25,7 @@ class CloudFileBrowser extends StatefulWidget {
 class _CloudFileBrowserState extends State<CloudFileBrowser> {
   late String _currentPath;
   late Future<List<webdav.WebDavFile>> _filesFuture;
+  List<webdav.WebDavFile> _currentFiles = [];
   final Set<String> _selectedFiles = {};
   bool _isSelectionMode = false;
 
@@ -75,12 +74,8 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
           PopupMenuButton(
             itemBuilder: (context) => [
               const PopupMenuItem(
-                value: 'scan',
-                child: Text('扫描文件夹'),
-              ),
-              const PopupMenuItem(
-                value: 'download',
-                child: Text('下载到本地'),
+                value: 'scan_to_library',
+                child: Text('扫描到音乐库'),
               ),
               const PopupMenuItem(
                 value: 'add_to_playlist',
@@ -103,6 +98,7 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
           }
 
           final files = snapshot.data ?? [];
+          _currentFiles = files;
           return _buildFileList(files);
         },
       ),
@@ -130,14 +126,14 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
               });
             },
           ),
-        ...directories.map((file) => _buildFileItem(file)),
-        ...audioFiles.map((file) => _buildFileItem(file)),
-        ...otherFiles.map((file) => _buildFileItem(file)),
+        ...directories.map((file) => _buildFileItem(file, audioFiles)),
+        ...audioFiles.map((file) => _buildFileItem(file, audioFiles)),
+        ...otherFiles.map((file) => _buildFileItem(file, audioFiles)),
       ],
     );
   }
 
-  Widget _buildFileItem(webdav.WebDavFile file) {
+  Widget _buildFileItem(webdav.WebDavFile file, List<webdav.WebDavFile> currentAudioFiles) {
     final isSelected = _selectedFiles.contains(file.path);
     
     return ListTile(
@@ -175,12 +171,8 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
               ],
               if (file.isDirectory) ...[
                 const PopupMenuItem(
-                  value: 'scan_folder',
-                  child: Text('扫描文件夹'),
-                ),
-                const PopupMenuItem(
-                  value: 'download_folder',
-                  child: Text('下载文件夹'),
+                  value: 'scan_folder_to_library',
+                  child: Text('扫描到音乐库'),
                 ),
               ],
               const PopupMenuItem(
@@ -188,7 +180,7 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
                 child: Text('下载'),
               ),
             ],
-            onSelected: (value) => _handleFileAction(file, value),
+            onSelected: (value) => _handleFileAction(file, value, currentAudioFiles),
           ),
       onTap: () {
         if (_isSelectionMode) {
@@ -205,7 +197,7 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
             _loadFiles();
           });
         } else if (file.isAudioFile) {
-          _playAudio(file);
+          _playAudio(file, currentAudioFiles);
         }
       },
       onLongPress: () {
@@ -232,7 +224,7 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
-  Future<void> _playAudio(webdav.WebDavFile file) async {
+  Future<void> _playAudio(webdav.WebDavFile file, List<webdav.WebDavFile> currentAudioFiles) async {
     final manager = context.read<CloudServiceManager>();
     final service = manager.getService(widget.connectionId);
     if (service != null) {
@@ -241,9 +233,10 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
           service: service,
           filePath: file.path,
           fileName: file.name,
+          folderFiles: currentAudioFiles,
           onPlayStarted: () {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('开始流式播放: ${file.name}')),
+              SnackBar(content: Text('开始播放: ${file.name}（共 ${currentAudioFiles.length} 首）')),
             );
           },
         );
@@ -255,16 +248,16 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
     }
   }
 
-  Future<void> _handleFileAction(webdav.WebDavFile file, String action) async {
+  Future<void> _handleFileAction(webdav.WebDavFile file, String action, List<webdav.WebDavFile> currentAudioFiles) async {
     switch (action) {
       case 'play':
-        _playAudio(file);
+        _playAudio(file, currentAudioFiles);
         break;
       case 'add_to_playlist':
         _addToPlaylist([file]);
         break;
-      case 'scan_folder':
-        _scanFolder(file);
+      case 'scan_folder_to_library':
+        _scanFolderToLibrary(file);
         break;
       case 'download':
         _downloadFile(file);
@@ -273,27 +266,22 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
   }
 
   void _handleMenuAction(String action) {
-    final files = _selectedFiles.isNotEmpty 
-        ? _getSelectedFiles()
-        : <webdav.WebDavFile>[];
-
     switch (action) {
-      case 'scan':
-        _scanSelectedFolders(files);
-        break;
-      case 'download':
-        _downloadSelectedFiles(files);
+      case 'scan_to_library':
+        _scanCurrentFolderToLibrary();
         break;
       case 'add_to_playlist':
-        _addToPlaylist(files);
+        final selectedFiles = _getSelectedFiles();
+        _addToPlaylist(selectedFiles);
         break;
     }
   }
 
   List<webdav.WebDavFile> _getSelectedFiles() {
-    // 从当前显示的文件中获取选中的文件
-    // 注意：这是一个同步实现，实际使用时可能需要从FutureBuilder中获取数据
-    return [];
+    if (_isSelectionMode && _selectedFiles.isNotEmpty) {
+      return _currentFiles.where((f) => _selectedFiles.contains(f.path)).toList();
+    }
+    return _currentFiles.where((f) => f.isAudioFile).toList();
   }
 
   Future<void> _addToPlaylist(List<webdav.WebDavFile> files) async {
@@ -333,76 +321,46 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
     }
   }
 
-  Future<void> _scanFolder(webdav.WebDavFile folder) async {
-    try {
-      final manager = context.read<CloudServiceManager>();
-      final service = manager.getService(widget.connectionId);
-      if (service == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法连接到云服务')),
-        );
-        return;
-      }
-
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text('扫描云文件夹'),
-          content: StreamBuilder<String>(
-            stream: _scanStream(service, folder.path),
-            builder: (context, snapshot) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text(snapshot.data ?? '正在扫描...'),
-                ],
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
+  Future<void> _scanFolderToLibrary(webdav.WebDavFile folder) async {
+    final manager = context.read<CloudServiceManager>();
+    final service = manager.getService(widget.connectionId);
+    if (service == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('扫描失败: ${e.toString()}')),
+        const SnackBar(content: Text('无法连接到云服务')),
       );
+      return;
     }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _ScanToLibraryDialog(
+        service: service,
+        folderPath: folder.path,
+        folderName: folder.name,
+      ),
+    );
   }
 
-  Stream<String> _scanStream(webdav.WebDavService service, String path) async* {
-    int processedCount = 0;
-    final statusController = StreamController<String>();
-    
-    try {
-      yield '开始扫描...';
-      
-      await CloudScanner.scanCloudFolder(
-        service: service,
-        folderPath: path,
-        onProgress: (count) {
-          processedCount = count;
-        },
-        onStatus: (status) {
-          statusController.add(status);
-        },
+  Future<void> _scanCurrentFolderToLibrary() async {
+    final manager = context.read<CloudServiceManager>();
+    final service = manager.getService(widget.connectionId);
+    if (service == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('无法连接到云服务')),
       );
-      
-      await for (final status in statusController.stream) {
-        yield status;
-      }
-      
-      yield '扫描完成，共处理 $processedCount 个文件';
-    } finally {
-      await statusController.close();
+      return;
     }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _ScanToLibraryDialog(
+        service: service,
+        folderPath: _currentPath,
+        folderName: _currentPath.isEmpty ? '根目录' : _currentPath.split('/').last,
+      ),
+    );
   }
 
   Future<void> _downloadFile(webdav.WebDavFile file) async {
@@ -431,86 +389,77 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
     }
   }
 
-  Future<void> _scanSelectedFolders(List<webdav.WebDavFile> files) async {
-    final folders = files.where((f) => f.isDirectory).toList();
-    if (folders.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请选择文件夹')),
-      );
-      return;
-    }
-
-    try {
-      final manager = context.read<CloudServiceManager>();
-      final service = manager.getService(widget.connectionId);
-      if (service == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法连接到云服务')),
-        );
-        return;
-      }
-
-      int totalProcessed = 0;
-      for (final folder in folders) {
-        await CloudScanner.scanCloudFolder(
-          service: service,
-          folderPath: folder.path,
-          onProgress: (count) => totalProcessed += count,
-          onStatus: (status) {},
-        );
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('扫描完成: $totalProcessed 个文件')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('批量扫描失败: ${e.toString()}')),
-      );
-    }
-  }
-
-  Future<void> _downloadSelectedFiles(List<webdav.WebDavFile> files) async {
-    if (files.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请选择文件')),
-      );
-      return;
-    }
-
-    try {
-      final manager = context.read<CloudServiceManager>();
-      final service = manager.getService(widget.connectionId);
-      if (service == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法连接到云服务')),
-        );
-        return;
-      }
-
-      final downloadDir = await getDownloadDir();
-      int downloadedCount = 0;
-      for (final file in files) {
-        try {
-          final localPath = path.join(downloadDir, file.name);
-          final bytes = await service.downloadFile(file.path);
-          final localFile = File(localPath);
-          await localFile.writeAsBytes(bytes);
-          downloadedCount++;
-        } catch (e) {
-          LOGGER.e('[CloudFileBrowser] 下载失败: ${file.name} - $e');
-        }
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('下载完成: $downloadedCount/${files.length} 个文件')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('批量下载失败: ${e.toString()}')),
-      );
-    }
-  }
-
   Future<String> getDownloadDir() async {
     return cloud_utils.getDownloadDir();
+  }
+}
+
+class _ScanToLibraryDialog extends StatefulWidget {
+  final webdav.WebDavService service;
+  final String folderPath;
+  final String folderName;
+
+  const _ScanToLibraryDialog({
+    required this.service,
+    required this.folderPath,
+    required this.folderName,
+  });
+
+  @override
+  State<_ScanToLibraryDialog> createState() => _ScanToLibraryDialogState();
+}
+
+class _ScanToLibraryDialogState extends State<_ScanToLibraryDialog> {
+  String _status = '准备扫描...';
+  int _count = 0;
+  bool _done = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startScan();
+  }
+
+  Future<void> _startScan() async {
+    try {
+      await CloudAudioPlayer.addCloudFolderToLibrary(
+        service: widget.service,
+        folderPath: widget.folderPath,
+        onProgress: (count) {
+          if (mounted) setState(() => _count = count);
+        },
+        onStatus: (status) {
+          if (mounted) setState(() => _status = status);
+        },
+      );
+      if (mounted) setState(() => _done = true);
+    } catch (e) {
+      if (mounted) setState(() {
+        _status = '扫描失败: $e';
+        _done = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('扫描: ${widget.folderName}'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!_done) const CircularProgressIndicator(),
+          if (!_done) const SizedBox(height: 16),
+          Text(_status),
+          if (_count > 0) Text('已发现 $_count 首音频'),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(_done ? '完成' : '取消'),
+        ),
+      ],
+    );
   }
 }

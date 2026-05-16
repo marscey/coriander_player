@@ -11,10 +11,39 @@ import 'package:coriander_player/theme_provider.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/utils.dart';
 
+class _ResolvedStreaming {
+  final String url;
+  final Map<String, String>? headers;
+  _ResolvedStreaming({required this.url, this.headers});
+}
+
 class CloudAudioPlayer {
   static bool get _supportsStreaming {
     final engineType = AppSettings.instance.playerEngineType;
     return engineType == PlayerEngineType.mediaKit;
+  }
+
+  static final Map<String, webdav.WebDavService> _pathToService = {};
+
+  static void registerPath(String webdavPath, webdav.WebDavService service) {
+    _pathToService[webdavPath] = service;
+  }
+
+  static Future<_ResolvedStreaming> resolveStreamingUrl(String webdavPath) async {
+    final service = _pathToService[webdavPath];
+    if (service == null) {
+      throw Exception('[CloudAudioPlayer] no service registered for path: $webdavPath');
+    }
+    final streamingUrl = await service.getStreamingUrl(webdavPath);
+    final isCdnUrl = streamingUrl.startsWith('https://') ||
+        streamingUrl.startsWith('http://');
+    final authHeaders = isCdnUrl &&
+            (streamingUrl.contains('X-Amz-Signature') ||
+                streamingUrl.contains('x-amz'))
+        ? null
+        : service.getAuthHeaders();
+    LOGGER.i('[CloudAudioPlayer] resolved: $webdavPath -> CDN=$isCdnUrl, hasHeaders=${authHeaders != null}');
+    return _ResolvedStreaming(url: streamingUrl, headers: authHeaders);
   }
 
   static String _titleFromFileName(String fileName) {
@@ -22,17 +51,18 @@ class CloudAudioPlayer {
     return fileName.replaceAll(ext, '');
   }
 
-  static Audio _createStreamingAudio(webdav.WebDavFile file, String streamingUrl) {
+  static Audio _createStreamingAudio(webdav.WebDavFile file, webdav.WebDavService service) {
+    registerPath(file.path, service);
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     return Audio(
       _titleFromFileName(file.name),
-      'Cloud Audio',
-      'Cloud',
+      '',
+      '',
       0,
       0,
       null,
       null,
-      streamingUrl,
+      file.path,
       now,
       now,
       'Cloud',
@@ -76,7 +106,7 @@ class CloudAudioPlayer {
           if (audiosJson.isNotEmpty) {
             final updatedAudio = Audio.fromMap(audiosJson[0]);
             final playbackService = PlayService.instance.playbackService;
-            if (playbackService.nowPlaying?.path.startsWith('http') == true) {
+            if (playbackService.nowPlaying?.isCloudAudio == true) {
               final np = playbackService.nowPlaying!;
               np.title = updatedAudio.title;
               np.artist = updatedAudio.artist;
@@ -148,8 +178,8 @@ class CloudAudioPlayer {
 
     return Audio(
       path.basename(downloadedFile.path),
-      'Unknown Artist',
-      'Unknown Album',
+      '',
+      '',
       0,
       0,
       null,
@@ -188,50 +218,71 @@ class CloudAudioPlayer {
     required webdav.WebDavService service,
     required String filePath,
     required String fileName,
+    required List<webdav.WebDavFile> folderFiles,
     void Function()? onPlayStarted,
   }) async {
     try {
-      LOGGER.i('[CloudAudioPlayer] playCloudFile: filePath=$filePath, _supportsStreaming=$_supportsStreaming');
+      LOGGER.i('[CloudAudioPlayer] playCloudFile: filePath=$filePath, folderFiles=${folderFiles.length}, _supportsStreaming=$_supportsStreaming');
+
+      final audioFiles = folderFiles.where((f) => f.isAudioFile).toList();
+      if (audioFiles.isEmpty) {
+        LOGGER.w('[CloudAudioPlayer] no audio files in folder');
+        return;
+      }
+
+      final startIndex = audioFiles.indexWhere((f) => f.path == filePath);
+      final playIndex = startIndex >= 0 ? startIndex : 0;
+
       if (_supportsStreaming) {
-        final streamingUrl = await service.getStreamingUrl(filePath);
-        final isCdnUrl = streamingUrl.startsWith('https://') ||
-            streamingUrl.startsWith('http://');
-        final authHeaders = isCdnUrl &&
-                (streamingUrl.contains('X-Amz-Signature') ||
-                    streamingUrl.contains('x-amz'))
-            ? null
-            : service.getAuthHeaders();
-        LOGGER.i('[CloudAudioPlayer] streamingUrl=$streamingUrl');
-        LOGGER.i('[CloudAudioPlayer] authHeaders=$authHeaders');
-        final file = webdav.WebDavFile(
-          path: filePath,
-          name: fileName,
-          isDirectory: false,
-          size: 0,
-          lastModified: DateTime.now(),
-        );
-        final audio = _createStreamingAudio(file, streamingUrl);
-        LOGGER.i('[CloudAudioPlayer] created streaming audio: title=${audio.title}, path=${audio.path}');
+        final playbackService = PlayService.instance.playbackService;
+        final audioList = <Audio>[];
+        int adjustedPlayIndex = -1;
+
+        for (int i = 0; i < audioFiles.length; i++) {
+          final audio = _createStreamingAudio(audioFiles[i], service);
+          if (i == playIndex) {
+            adjustedPlayIndex = audioList.length;
+            audioList.add(audio);
+          } else if (!playbackService.isInPlaylist(audio.path)) {
+            audioList.add(audio);
+          }
+        }
+
+        if (adjustedPlayIndex < 0) adjustedPlayIndex = 0;
 
         PlayService.instance.playbackService.play(
-          0,
-          [audio],
-          httpHeaders: authHeaders,
+          adjustedPlayIndex,
+          audioList,
         );
-        LOGGER.i('[CloudAudioPlayer] play() called with streaming audio');
+        LOGGER.i('[CloudAudioPlayer] play() called with ${audioList.length} cloud audios (skipped duplicates), starting at index $adjustedPlayIndex');
 
-        _updateMetadataAsync(service, file);
+        _updateMetadataAsync(service, audioFiles[playIndex]);
       } else {
-        LOGGER.i('[CloudAudioPlayer] Downloading file to temp dir...');
-        final downloadedFile = await _downloadToTempDir(service, filePath, fileName);
-        final audio = await _createAudioWithMetadata(downloadedFile);
-        LOGGER.i('[CloudAudioPlayer] Downloaded audio: title=${audio.title}, path=${audio.path}');
+        final firstFile = audioFiles[playIndex];
+        final downloadedFile = await _downloadToTempDir(service, firstFile.path, firstFile.name);
+        final firstAudio = await _createAudioWithMetadata(downloadedFile);
+        LOGGER.i('[CloudAudioPlayer] Downloaded first audio: title=${firstAudio.title}');
 
-        PlayService.instance.playbackService.play(0, [audio]);
+        PlayService.instance.playbackService.play(0, [firstAudio]);
 
         Future.delayed(const Duration(minutes: 5), () {
           downloadedFile.parent.delete(recursive: true).catchError((_) => downloadedFile.parent);
         });
+
+        for (int i = 0; i < audioFiles.length; i++) {
+          if (i == playIndex) continue;
+          try {
+            final dlFile = await _downloadToTempDir(service, audioFiles[i].path, audioFiles[i].name);
+            final audio = await _createAudioWithMetadata(dlFile);
+            PlayService.instance.playbackService.addToNext(audio);
+
+            Future.delayed(const Duration(minutes: 30), () {
+              dlFile.parent.delete(recursive: true).catchError((_) => dlFile.parent);
+            });
+          } catch (e) {
+            LOGGER.e('[CloudAudioPlayer] 添加文件失败: ${audioFiles[i].path} - $e');
+          }
+        }
       }
 
       onPlayStarted?.call();
@@ -253,8 +304,7 @@ class CloudAudioPlayer {
       for (final file in audioFiles) {
         try {
           if (_supportsStreaming) {
-            final streamingUrl = await service.getStreamingUrl(file.path);
-            final audio = _createStreamingAudio(file, streamingUrl);
+            final audio = _createStreamingAudio(file, service);
             PlayService.instance.playbackService.addToNext(audio);
           } else {
             final downloadedFile = await _downloadToTempDir(service, file.path, file.name);
@@ -292,8 +342,7 @@ class CloudAudioPlayer {
         if (!file.isAudioFile) continue;
 
         if (_supportsStreaming) {
-          final streamingUrl = await service.getStreamingUrl(file.path);
-          final audio = _createStreamingAudio(file, streamingUrl);
+          final audio = _createStreamingAudio(file, service);
           PlayService.instance.playbackService.addToNext(audio);
         } else {
           final downloadedFile = await _downloadToTempDir(service, file.path, file.name);
@@ -313,5 +362,57 @@ class CloudAudioPlayer {
     }
 
     onProgress?.call(addedCount);
+  }
+
+  static Future<void> addCloudFolderToLibrary({
+    required webdav.WebDavService service,
+    required String folderPath,
+    void Function(int addedCount)? onProgress,
+    void Function(String status)? onStatus,
+  }) async {
+    try {
+      onStatus?.call('正在扫描音频文件...');
+
+      final audioFiles = await service.scanAudioFiles(folderPath);
+      onStatus?.call('找到 ${audioFiles.length} 个音频文件');
+
+      final library = AudioLibrary.instance;
+      final cloudAudios = <Audio>[];
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+      for (final file in audioFiles) {
+        try {
+          registerPath(file.path, service);
+          final audio = Audio(
+            _titleFromFileName(file.name),
+            '',
+            '',
+            0,
+            0,
+            null,
+            null,
+            file.path,
+            now,
+            now,
+            'Cloud',
+          );
+          cloudAudios.add(audio);
+          onProgress?.call(cloudAudios.length);
+        } catch (e) {
+          LOGGER.e('[CloudAudioPlayer] 添加文件到库失败: ${file.path} - $e');
+        }
+      }
+
+      if (cloudAudios.isNotEmpty) {
+        library.addCloudAudios(cloudAudios);
+        onStatus?.call('已添加 ${cloudAudios.length} 首到音乐库');
+      } else {
+        onStatus?.call('未找到音频文件');
+      }
+    } catch (e) {
+      LOGGER.e('[CloudAudioPlayer] 扫描云文件夹到库失败: $e');
+      onStatus?.call('扫描失败: $e');
+      rethrow;
+    }
   }
 }

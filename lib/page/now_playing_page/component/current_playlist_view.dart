@@ -105,7 +105,7 @@ class _PlaylistViewItem extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(item.title),
-              Text("${item.artist} - ${item.album}"),
+              Text(item.subtitleText),
             ],
           ),
         ),

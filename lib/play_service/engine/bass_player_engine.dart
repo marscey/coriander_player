@@ -4,6 +4,10 @@ import 'package:coriander_player/play_service/engine/player_engine.dart';
 
 class BassPlayerEngine implements PlayerEngine {
   late final BassPlayer _player;
+  final StreamController<Duration> _bufferStreamController =
+      StreamController<Duration>.broadcast();
+  final StreamController<Duration> _durationStreamController =
+      StreamController<Duration>.broadcast();
 
   @override
   Future<void> initialize() async {
@@ -16,6 +20,8 @@ class BassPlayerEngine implements PlayerEngine {
       bool isNetwork = false,
       Map<String, String>? httpHeaders}) async {
     _player.setSource(path);
+    _bufferStreamController.add(duration);
+    _durationStreamController.add(duration);
   }
 
   @override
@@ -57,6 +63,9 @@ class BassPlayerEngine implements PlayerEngine {
   Duration get duration => Duration(seconds: _player.length.toInt());
 
   @override
+  Duration get buffer => duration;
+
+  @override
   Stream<PlayerState> get playerStateStream => _player.playerStateStream;
 
   @override
@@ -64,7 +73,15 @@ class BassPlayerEngine implements PlayerEngine {
       _player.positionStream.map((seconds) => Duration(seconds: seconds.toInt()));
 
   @override
+  Stream<Duration> get bufferStream => _bufferStreamController.stream;
+
+  @override
+  Stream<Duration> get durationStream => _durationStreamController.stream;
+
+  @override
   Future<void> dispose() async {
+    await _bufferStreamController.close();
+    await _durationStreamController.close();
     _player.free();
   }
 }

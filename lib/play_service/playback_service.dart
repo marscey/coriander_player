@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
@@ -16,6 +17,9 @@ import 'package:coriander_player/play_service/engine/player_engine_type.dart';
 import 'package:coriander_player/play_service/engine/platform_specific_initialization.dart';
 import 'package:coriander_player/play_service/engine/bass_player_engine.dart';
 import 'package:flutter/foundation.dart';
+
+import 'package:coriander_player/cloud_service/cloud_audio_player.dart';
+import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
 
 enum PlayMode {
   forward,
@@ -149,6 +153,8 @@ class PlaybackService extends ChangeNotifier {
 
   double get position => _player.position.inSeconds.toDouble();
 
+  double get buffer => _player.buffer.inSeconds.toDouble();
+
   PlayerState get playerState => _player.state;
 
   double get volumeDsp => AppPreference.instance.playbackPref.volumeDsp;
@@ -165,6 +171,12 @@ class PlaybackService extends ChangeNotifier {
   Stream<double> get positionStream =>
       _player.positionStream.map((duration) => duration.inSeconds.toDouble());
 
+  Stream<double> get bufferStream =>
+      _player.bufferStream.map((duration) => duration.inSeconds.toDouble());
+
+  Stream<double> get durationStream =>
+      _player.durationStream.map((duration) => duration.inSeconds.toDouble());
+
   Stream<PlayerState> get playerStateStream => _player.playerStateStream;
 
   Future<void> _loadAndPlay(int audioIndex, List<Audio> playlist,
@@ -173,16 +185,41 @@ class PlaybackService extends ChangeNotifier {
       _playlistIndex = audioIndex;
       nowPlaying = playlist[audioIndex];
 
-      final isNetwork = nowPlaying!.path.startsWith('http://') ||
-          nowPlaying!.path.startsWith('https://');
+      final isCloud = nowPlaying!.isCloudAudio;
 
-      LOGGER.i("[_loadAndPlay] title=${nowPlaying!.title}, path=${nowPlaying!.path}, isNetwork=$isNetwork, hasHeaders=${httpHeaders != null}");
+      LOGGER.i("[_loadAndPlay] title=${nowPlaying!.title}, path=${nowPlaying!.path}, isCloud=$isCloud");
 
-      await _player.setSource(
-        nowPlaying!.path,
-        isNetwork: isNetwork,
-        httpHeaders: httpHeaders,
-      );
+      if (isCloud && _supportsStreamingForCloud()) {
+        final cachedPath = CloudCacheManager.instance.getCachedFilePath(nowPlaying!.path);
+        if (cachedPath != null) {
+          LOGGER.i("[_loadAndPlay] using cached file: $cachedPath");
+          await _player.setSource(cachedPath, isNetwork: false);
+        } else {
+          try {
+            final resolved = await CloudAudioPlayer.resolveStreamingUrl(nowPlaying!.path);
+            await _player.setSource(
+              resolved.url,
+              isNetwork: true,
+              httpHeaders: resolved.headers,
+            );
+            _cacheStreamInBackground(nowPlaying!.path, resolved.url, resolved.headers);
+          } catch (e) {
+            LOGGER.e("[_loadAndPlay] resolve streaming URL failed: $e");
+            showTextOnSnackBar('云音频播放失败: $e');
+            return;
+          }
+        }
+      } else if (isCloud) {
+        showTextOnSnackBar('当前引擎不支持云音频流式播放，请切换到 MediaKit 引擎');
+        return;
+      } else {
+        await _player.setSource(
+          nowPlaying!.path,
+          isNetwork: false,
+          httpHeaders: httpHeaders,
+        );
+      }
+
       setVolumeDsp(AppPreference.instance.playbackPref.volumeDsp);
 
       playService.lyricService.updateLyric();
@@ -194,9 +231,7 @@ class PlaybackService extends ChangeNotifier {
 
       _smtc.updateState(state: SMTCState.playing);
 
-      final isNetworkPath = nowPlaying!.path.startsWith('http://') ||
-          nowPlaying!.path.startsWith('https://');
-      if (!isNetworkPath) {
+      if (!isCloud) {
         _smtc.updateDisplay(
           title: nowPlaying!.title,
           artist: nowPlaying!.artist,
@@ -225,6 +260,43 @@ class PlaybackService extends ChangeNotifier {
       LOGGER.e("[_loadAndPlay] $err");
       showTextOnSnackBar(err.toString());
     }
+  }
+
+  bool _supportsStreamingForCloud() {
+    final engineType = AppSettings.instance.playerEngineType;
+    return engineType == PlayerEngineType.mediaKit;
+  }
+
+  void _cacheStreamInBackground(String webdavPath, String streamingUrl, Map<String, String>? headers) {
+    () async {
+      final client = HttpClient();
+      client.autoUncompress = false;
+      try {
+        LOGGER.i('[CloudCache] background caching: $webdavPath');
+        final request = await client.getUrl(Uri.parse(streamingUrl));
+        if (headers != null) {
+          headers.forEach((key, value) {
+            request.headers.set(key, value);
+          });
+        }
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          final originalName = webdavPath.split('/').last;
+          await CloudCacheManager.instance.saveStreamToCache(
+            webdavPath,
+            response,
+            originalName: originalName,
+          );
+        } else {
+          LOGGER.w('[CloudCache] background cache failed: HTTP ${response.statusCode}');
+          await response.drain<void>();
+        }
+      } catch (e) {
+        LOGGER.e('[CloudCache] background cache error: $e');
+      } finally {
+        client.close();
+      }
+    }();
   }
 
   void playIndexOfPlaylist(int audioIndex) {
@@ -259,9 +331,15 @@ class PlaybackService extends ChangeNotifier {
 
   void addToNext(Audio audio) {
     if (_playlistIndex != null) {
+      final exists = playlist.value.any((a) => a.path == audio.path);
+      if (exists) return;
       playlist.value.insert(_playlistIndex! + 1, audio);
       _playlistBackup = List.from(playlist.value);
     }
+  }
+
+  bool isInPlaylist(String audioPath) {
+    return playlist.value.any((a) => a.path == audioPath);
   }
 
   void refreshNowPlaying() {
@@ -454,25 +532,41 @@ class PlaybackService extends ChangeNotifier {
       });
 
       if (currentAudio != null) {
-        final isNetwork = currentAudio.path.startsWith('http://') ||
-            currentAudio.path.startsWith('https://');
-        LOGGER.i("[switchEngine] Restoring playback: path=${currentAudio.path}, isNetwork=$isNetwork");
-        try {
-          LOGGER.i("[switchEngine] Calling setSource...");
-          await _player
-              .setSource(currentAudio.path,
-                  isNetwork: isNetwork)
-              .timeout(const Duration(seconds: 10));
-          LOGGER.i("[switchEngine] setSource done, seeking to ${currentPosition.inSeconds}s...");
-          await _player.seek(currentPosition).timeout(const Duration(seconds: 5));
-          LOGGER.i("[switchEngine] seek done, isPlaying=$isPlaying");
-          if (isPlaying) {
-            LOGGER.i("[switchEngine] Calling play...");
-            await _player.play().timeout(const Duration(seconds: 5));
-            LOGGER.i("[switchEngine] play done");
+        final isCloud = currentAudio.isCloudAudio;
+        LOGGER.i("[switchEngine] Restoring playback: path=${currentAudio.path}, isCloud=$isCloud");
+        if (isCloud && type != PlayerEngineType.mediaKit) {
+          LOGGER.i("[switchEngine] Cloud audio not supported by BASS engine, skipping restore");
+        } else {
+          try {
+            LOGGER.i("[switchEngine] Calling setSource...");
+            if (isCloud) {
+              final cachedPath = CloudCacheManager.instance.getCachedFilePath(currentAudio.path);
+              if (cachedPath != null) {
+                await _player
+                    .setSource(cachedPath, isNetwork: false)
+                    .timeout(const Duration(seconds: 10));
+              } else {
+                final resolved = await CloudAudioPlayer.resolveStreamingUrl(currentAudio.path);
+                await _player
+                    .setSource(resolved.url, isNetwork: true, httpHeaders: resolved.headers)
+                    .timeout(const Duration(seconds: 10));
+              }
+            } else {
+              await _player
+                  .setSource(currentAudio.path, isNetwork: false)
+                  .timeout(const Duration(seconds: 10));
+            }
+            LOGGER.i("[switchEngine] setSource done, seeking to ${currentPosition.inSeconds}s...");
+            await _player.seek(currentPosition).timeout(const Duration(seconds: 5));
+            LOGGER.i("[switchEngine] seek done, isPlaying=$isPlaying");
+            if (isPlaying) {
+              LOGGER.i("[switchEngine] Calling play...");
+              await _player.play().timeout(const Duration(seconds: 5));
+              LOGGER.i("[switchEngine] play done");
+            }
+          } catch (e) {
+            LOGGER.e("[switchEngine] Failed to restore playback after engine switch: $e");
           }
-        } catch (e) {
-          LOGGER.e("[switchEngine] Failed to restore playback after engine switch: $e");
         }
       }
 

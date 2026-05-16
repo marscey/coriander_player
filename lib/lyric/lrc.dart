@@ -184,8 +184,7 @@ class Lrc extends Lyric {
     Audio belongTo, {
     String? separator = "┃",
   }) async {
-    if (belongTo.path.startsWith('http://') ||
-        belongTo.path.startsWith('https://')) {
+    if (belongTo.isCloudAudio) {
       return null;
     }
     Lrc? lyric = await getLyricFromPath(path: belongTo.path).then((value) {

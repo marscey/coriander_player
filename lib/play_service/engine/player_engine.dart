@@ -20,9 +20,12 @@ abstract class PlayerEngine {
   PlayerState get state;
   Duration get position;
   Duration get duration;
+  Duration get buffer;
 
   Stream<PlayerState> get playerStateStream;
   Stream<Duration> get positionStream;
+  Stream<Duration> get bufferStream;
+  Stream<Duration> get durationStream;
 
   Future<void> dispose();
 }

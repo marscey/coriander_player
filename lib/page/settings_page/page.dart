@@ -1,5 +1,6 @@
 import 'package:coriander_player/page/page_scaffold.dart';
 import 'package:coriander_player/page/settings_page/artist_separator_editor.dart';
+import 'package:coriander_player/page/settings_page/cache_settings.dart';
 import 'package:coriander_player/page/settings_page/check_update.dart';
 import 'package:coriander_player/page/settings_page/create_issue.dart';
 import 'package:coriander_player/page/settings_page/other_settings.dart';
@@ -19,6 +20,8 @@ class SettingsPage extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 96.0),
         children: const [
           AudioLibraryEditor(),
+          SizedBox(height: 16.0),
+          CloudCacheSettings(),
           SizedBox(height: 16.0),
           DefaultLyricSourceControl(),
           SizedBox(height: 16.0),

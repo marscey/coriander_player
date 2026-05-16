@@ -480,85 +480,68 @@ class _NowPlayingSliderState extends State<_NowPlayingSlider> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final playbackService = context.watch<PlaybackService>();
-    final nowPlayingLength = playbackService.length;
 
     return Column(
       children: [
         SliderTheme(
-          data: const SliderThemeData(
+          data: SliderThemeData(
             showValueIndicator: ShowValueIndicator.always,
+            secondaryActiveTrackColor: scheme.primary.withValues(alpha: 0.45),
+            inactiveTrackColor: scheme.onSurface.withValues(alpha: 0.12),
           ),
           child: StreamBuilder(
-            stream: playbackService.playerStateStream,
-            initialData: playbackService.playerState,
-            builder: (context, playerStateSnapshot) => ListenableBuilder(
-              listenable: dragPosition,
-              builder: (context, _) => StreamBuilder(
-                stream: playbackService.positionStream,
-                initialData: playbackService.position,
-                builder: (context, positionSnapshot) {
-                  final sliderMax = nowPlayingLength > 0 ? nowPlayingLength : 1.0;
-                  final sliderValue = isDragging
-                      ? dragPosition.value
-                      : (positionSnapshot.data! > sliderMax
-                          ? sliderMax
-                          : positionSnapshot.data!).clamp(0.0, sliderMax);
-                  return Slider(
-                  thumbColor: scheme.primary,
-                  activeColor: scheme.primary,
-                  inactiveColor: scheme.outline,
-                  min: 0.0,
-                  max: sliderMax,
-                  value: sliderValue,
-                  label: Duration(
-                    milliseconds: (dragPosition.value * 1000).toInt(),
-                  ).toStringHMMSS(),
-                  onChangeStart: (value) {
-                    isDragging = true;
-                    dragPosition.value = value;
-                  },
-                  onChanged: (value) {
-                    dragPosition.value = value;
-                  },
-                  onChangeEnd: (value) {
-                    isDragging = false;
-                    playbackService.seek(value);
-                  },
-                );
-                },
-                // builder: (context, positionSnapshot) => SquigglySlider(
-                //   thumbColor: scheme.primary,
-                //   activeColor: scheme.primary,
-                //   inactiveColor: scheme.outline,
-                //   useLineThumb: true,
-                //   squiggleAmplitude:
-                //       playerStateSnapshot.data == PlayerState.playing ? 6.0 : 0,
-                //   squiggleWavelength: 10.0,
-                //   squiggleSpeed: 0.08,
-                //   min: 0.0,
-                //   max: nowPlayingLength,
-                //   value: isDragging
-                //       ? dragPosition.value
-                //       : positionSnapshot.data! > nowPlayingLength
-                //           ? nowPlayingLength
-                //           : positionSnapshot.data!,
-                //   label: Duration(
-                //     milliseconds: (dragPosition.value * 1000).toInt(),
-                //   ).toStringHMMSS(),
-                //   onChangeStart: (value) {
-                //     isDragging = true;
-                //     dragPosition.value = value;
-                //   },
-                //   onChanged: (value) {
-                //     dragPosition.value = value;
-                //   },
-                //   onChangeEnd: (value) {
-                //     isDragging = false;
-                //     playbackService.seek(value);
-                //   },
-                // ),
-              ),
-            ),
+            stream: playbackService.durationStream,
+            initialData: playbackService.length,
+            builder: (context, durationSnapshot) {
+              final sliderMax = (durationSnapshot.data ?? 0.0) > 0
+                  ? (durationSnapshot.data ?? 0.0)
+                  : 1.0;
+              return StreamBuilder(
+                stream: playbackService.bufferStream,
+                initialData: playbackService.buffer,
+                builder: (context, bufferSnapshot) => StreamBuilder(
+                stream: playbackService.playerStateStream,
+                initialData: playbackService.playerState,
+                builder: (context, playerStateSnapshot) => ListenableBuilder(
+                  listenable: dragPosition,
+                  builder: (context, _) => StreamBuilder(
+                    stream: playbackService.positionStream,
+                    initialData: playbackService.position,
+                    builder: (context, positionSnapshot) {
+                      final sliderValue = isDragging
+                          ? dragPosition.value
+                          : (positionSnapshot.data! > sliderMax
+                              ? sliderMax
+                              : positionSnapshot.data!).clamp(0.0, sliderMax);
+                      final bufferValue = (bufferSnapshot.data ?? 0.0).clamp(0.0, sliderMax);
+                      return Slider(
+                      thumbColor: scheme.primary,
+                      activeColor: scheme.primary,
+                      min: 0.0,
+                      max: sliderMax,
+                      value: sliderValue,
+                      secondaryTrackValue: bufferValue,
+                      label: Duration(
+                        milliseconds: (dragPosition.value * 1000).toInt(),
+                      ).toStringHMMSS(),
+                      onChangeStart: (value) {
+                        isDragging = true;
+                        dragPosition.value = value;
+                      },
+                      onChanged: (value) {
+                        dragPosition.value = value;
+                      },
+                      onChangeEnd: (value) {
+                        isDragging = false;
+                        playbackService.seek(value);
+                      },
+                    );
+                    },
+                  ),
+                ),
+                ),
+              );
+            },
           ),
         ),
         Padding(
@@ -579,11 +562,18 @@ class _NowPlayingSliderState extends State<_NowPlayingSlider> {
                   );
                 },
               ),
-              Text(
-                Duration(
-                  milliseconds: (nowPlayingLength * 1000).toInt(),
-                ).toStringHMMSS(),
-                style: TextStyle(color: scheme.onSecondaryContainer),
+              StreamBuilder(
+                stream: playbackService.durationStream,
+                initialData: playbackService.length,
+                builder: (context, snapshot) {
+                  final dur = snapshot.data ?? 0.0;
+                  return Text(
+                    Duration(
+                      milliseconds: (dur * 1000).toInt(),
+                    ).toStringHMMSS(),
+                    style: TextStyle(color: scheme.onSecondaryContainer),
+                  );
+                },
               ),
             ],
           ),
@@ -658,7 +648,7 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
             Text(
               nowPlaying == null
                   ? "Enjoy Music"
-                  : "${nowPlaying.artist} - ${nowPlaying.album}",
+                  : nowPlaying.subtitleText,
               maxLines: 1,
               style: TextStyle(color: scheme.onSecondaryContainer),
             ),
