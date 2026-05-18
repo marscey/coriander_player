@@ -121,6 +121,39 @@ class AudioTile extends StatelessWidget {
           leadingIcon: const Icon(Symbols.info),
           child: const Text("详细信息"),
         ),
+
+        /// remove from library
+        if (audio.isCloudAudio)
+          MenuItemButton(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('确认移除'),
+                  content: Text('确定将"${audio.title}"从音乐库中移除吗？'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('取消'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        AudioLibrary.instance.removeAudio(audio);
+                        Navigator.pop(ctx);
+                        showTextOnSnackBar('已从音乐库移除"${audio.title}"');
+                      },
+                      child: Text(
+                        '移除',
+                        style: TextStyle(color: scheme.error),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+            leadingIcon: Icon(Symbols.delete, color: scheme.error),
+            child: Text('从音乐库移除', style: TextStyle(color: scheme.error)),
+          ),
       ],
       builder: (context, controller, _) {
         final textColor = focus ? scheme.primary : scheme.onSurface;

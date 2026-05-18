@@ -234,6 +234,7 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
           filePath: file.path,
           fileName: file.name,
           folderFiles: currentAudioFiles,
+          connectionId: widget.connectionId,
           onPlayStarted: () {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('开始播放: ${file.name}（共 ${currentAudioFiles.length} 首）')),
@@ -306,6 +307,7 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
       await CloudAudioPlayer.addCloudFilesToPlaylist(
         service: service,
         files: audioFiles,
+        connectionId: widget.connectionId,
         onProgress: (count) {
           if (count == audioFiles.length) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -338,6 +340,7 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
         service: service,
         folderPath: folder.path,
         folderName: folder.name,
+        connectionId: widget.connectionId,
       ),
     );
   }
@@ -359,6 +362,7 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
         service: service,
         folderPath: _currentPath,
         folderName: _currentPath.isEmpty ? '根目录' : _currentPath.split('/').last,
+        connectionId: widget.connectionId,
       ),
     );
   }
@@ -398,11 +402,13 @@ class _ScanToLibraryDialog extends StatefulWidget {
   final webdav.WebDavService service;
   final String folderPath;
   final String folderName;
+  final String? connectionId;
 
   const _ScanToLibraryDialog({
     required this.service,
     required this.folderPath,
     required this.folderName,
+    this.connectionId,
   });
 
   @override
@@ -425,6 +431,7 @@ class _ScanToLibraryDialogState extends State<_ScanToLibraryDialog> {
       await CloudAudioPlayer.addCloudFolderToLibrary(
         service: widget.service,
         folderPath: widget.folderPath,
+        connectionId: widget.connectionId,
         onProgress: (count) {
           if (mounted) setState(() => _count = count);
         },

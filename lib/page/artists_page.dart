@@ -11,8 +11,11 @@ class ArtistsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final contentList = AudioLibrary.instance.artistCollection.values.toList();
-    return UniPage<Artist>(
+    return ListenableBuilder(
+      listenable: AudioLibrary.instance,
+      builder: (context, _) {
+        final contentList = AudioLibrary.instance.artistCollection.values.toList();
+        return UniPage<Artist>(
       pref: AppPreference.instance.artistsPagePref,
       title: "艺术家",
       subtitle: "${contentList.length} 位艺术家",
@@ -53,6 +56,8 @@ class ArtistsPage extends StatelessWidget {
           },
         ),
       ],
+    );
+      },
     );
   }
 }

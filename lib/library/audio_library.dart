@@ -2,25 +2,26 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:ui';
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
 import 'package:coriander_player/src/rust/api/tag_reader.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/platform_helper.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+import 'package:path/path.dart' as p;
 
 /// from index.json
-class AudioLibrary {
+class AudioLibrary extends ChangeNotifier {
   List<AudioFolder> folders;
 
   AudioLibrary._(this.folders);
 
-  /// 所有音乐
   List<Audio> audioCollection = [];
 
   Map<String, Artist> artistCollection = {};
 
   Map<String, Album> albumCollection = {};
 
-  /// must call [initFromIndex]
   static AudioLibrary get instance {
     _instance ??= AudioLibrary._([]);
     return _instance!;
@@ -69,8 +70,80 @@ class AudioLibrary {
       instance.artistCollection.clear();
       instance.albumCollection.clear();
       instance._buildCollections();
+
+      await instance._loadCloudAudios();
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
+    }
+  }
+
+  static Future<String> _getCloudAudiosFilePath() async {
+    final supportPath = (await getAppDataDir()).path;
+    return p.join(supportPath, 'cloud_audios.json');
+  }
+
+  Future<void> _loadCloudAudios() async {
+    try {
+      final filePath = await _getCloudAudiosFilePath();
+      final file = File(filePath);
+      if (!await file.exists()) return;
+
+      final content = await file.readAsString();
+      final List<dynamic> jsonList = jsonDecode(content);
+      final cloudAudios = jsonList.map((m) => Audio.fromMap(m as Map)).toList();
+
+      if (cloudAudios.isNotEmpty) {
+        final existingPaths = audioCollection.map((a) => a.path).toSet();
+        final newAudios = cloudAudios.where((a) => !existingPaths.contains(a.path)).toList();
+        if (newAudios.isNotEmpty) {
+          audioCollection.addAll(newAudios);
+          for (Audio audio in newAudios) {
+            for (String artistName in audio.splitedArtists) {
+              artistCollection
+                  .putIfAbsent(artistName, () => Artist(name: artistName))
+                  .works
+                  .add(audio);
+            }
+            albumCollection
+                .putIfAbsent(audio.album, () => Album(name: audio.album))
+                .works
+                .add(audio);
+          }
+          for (Artist artist in artistCollection.values) {
+            for (Audio audio in artist.works) {
+              artist.albumsMap.putIfAbsent(
+                audio.album,
+                () => albumCollection[audio.album]!,
+              );
+            }
+          }
+          for (Album album in albumCollection.values) {
+            for (Audio audio in album.works) {
+              for (String artistName in audio.splitedArtists) {
+                album.artistsMap.putIfAbsent(
+                  artistName,
+                  () => artistCollection[artistName]!,
+                );
+              }
+            }
+          }
+          LOGGER.i('[AudioLibrary] loaded ${newAudios.length} cloud audios from persistence');
+        }
+      }
+    } catch (e) {
+      LOGGER.e('[AudioLibrary] failed to load cloud audios: $e');
+    }
+  }
+
+  Future<void> saveCloudAudios() async {
+    try {
+      final cloudAudios = audioCollection.where((a) => a.isCloudAudio).toList();
+      final filePath = await _getCloudAudiosFilePath();
+      final jsonList = cloudAudios.map((a) => a.toMap()).toList();
+      await File(filePath).writeAsString(jsonEncode(jsonList));
+      LOGGER.i('[AudioLibrary] saved ${cloudAudios.length} cloud audios to persistence');
+    } catch (e) {
+      LOGGER.e('[AudioLibrary] failed to save cloud audios: $e');
     }
   }
 
@@ -114,7 +187,7 @@ class AudioLibrary {
     }
   }
 
-  void addCloudAudios(List<Audio> cloudAudios) {
+  Future<void> addCloudAudios(List<Audio> cloudAudios) async {
     final existingPaths = audioCollection.map((a) => a.path).toSet();
     final newAudios = cloudAudios.where((a) => !existingPaths.contains(a.path)).toList();
     if (newAudios.isEmpty) return;
@@ -122,6 +195,89 @@ class AudioLibrary {
     audioCollection.addAll(newAudios);
 
     for (Audio audio in newAudios) {
+      for (String artistName in audio.splitedArtists) {
+        artistCollection
+            .putIfAbsent(artistName, () => Artist(name: artistName))
+            .works
+            .add(audio);
+      }
+
+      albumCollection
+          .putIfAbsent(audio.album, () => Album(name: audio.album))
+          .works
+          .add(audio);
+    }
+
+    for (Artist artist in artistCollection.values) {
+      for (Audio audio in artist.works) {
+        artist.albumsMap.putIfAbsent(
+          audio.album,
+          () => albumCollection[audio.album]!,
+        );
+      }
+    }
+
+    for (Album album in albumCollection.values) {
+      for (Audio audio in album.works) {
+        for (String artistName in audio.splitedArtists) {
+          album.artistsMap.putIfAbsent(
+            artistName,
+            () => artistCollection[artistName]!,
+          );
+        }
+      }
+    }
+
+    await saveCloudAudios();
+    notifyListeners();
+  }
+
+  Future<void> removeAudio(Audio audio) async {
+    audioCollection.remove(audio);
+
+    for (String artistName in audio.splitedArtists) {
+      final artist = artistCollection[artistName];
+      if (artist != null) {
+        artist.works.remove(audio);
+        if (artist.works.isEmpty) {
+          artistCollection.remove(artistName);
+        } else {
+          artist.albumsMap.remove(audio.album);
+        }
+      }
+    }
+
+    final album = albumCollection[audio.album];
+    if (album != null) {
+      album.works.remove(audio);
+      if (album.works.isEmpty) {
+        albumCollection.remove(audio.album);
+      } else {
+        for (String artistName in audio.splitedArtists) {
+          final stillHasArtist = album.works.any(
+            (a) => a.splitedArtists.contains(artistName),
+          );
+          if (!stillHasArtist) {
+            album.artistsMap.remove(artistName);
+          }
+        }
+      }
+    }
+
+    if (audio.isCloudAudio) {
+      await saveCloudAudios();
+    }
+    notifyListeners();
+  }
+
+  void notifyUpdated() {
+    notifyListeners();
+  }
+
+  void rebuildCollections() {
+    artistCollection.clear();
+    albumCollection.clear();
+    for (Audio audio in audioCollection) {
       for (String artistName in audio.splitedArtists) {
         artistCollection
             .putIfAbsent(artistName, () => Artist(name: artistName))
@@ -224,10 +380,12 @@ class Audio {
   /// 标签来源（Lofty、Windows、null）
   String? by;
 
+  String? connectionId;
+
   ImageProvider? _cover;
 
-  /// 以“、”和“/”分割艺术家，会把名称中带有这些符号的艺术家分割。
-  /// 暂时想不到别的方法。
+  ImageProvider? get coverImage => _cover;
+
   Audio(
     this.title,
     this.artist,
@@ -239,8 +397,9 @@ class Audio {
     this.path,
     this.modified,
     this.created,
-    this.by,
-  ) : splitedArtists = artist.split(
+    this.by, {
+    this.connectionId,
+  }) : splitedArtists = artist.split(
           RegExp(AppSettings.instance.artistSplitPattern),
         );
 
@@ -256,6 +415,7 @@ class Audio {
         map["modified"],
         map["created"],
         map["by"],
+        connectionId: map["connection_id"],
       );
 
   Map toMap() => {
@@ -269,7 +429,8 @@ class Audio {
         "path": path,
         "modified": modified,
         "created": created,
-        "by": by
+        "by": by,
+        "connection_id": connectionId,
       };
 
   /// 读取音乐文件的图片，自动适应缩放
@@ -277,7 +438,22 @@ class Audio {
     required int width,
     required int height,
   }) async {
+    if (_cover != null) return _cover;
+
     if (isCloudAudio) {
+      final cachedPath = CloudCacheManager.instance.getCachedFilePath(path);
+      if (cachedPath != null) {
+        final ratio = PlatformDispatcher.instance.views.first.devicePixelRatio;
+        return getPictureFromPath(
+          path: cachedPath,
+          width: (width * ratio).round(),
+          height: (height * ratio).round(),
+        ).then((pic) {
+          if (pic == null) return null;
+          _cover = MemoryImage(pic);
+          return _cover;
+        });
+      }
       return null;
     }
     final ratio = PlatformDispatcher.instance.views.first.devicePixelRatio;

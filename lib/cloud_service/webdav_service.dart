@@ -41,6 +41,11 @@ class WebDavService {
     required this.password,
   });
 
+  String get serverUrlPathPrefix {
+    final uri = Uri.parse(serverUrl);
+    return uri.path.replaceAll(RegExp(r'/+$'), '');
+  }
+
   String get _authHeader {
     final credentials = base64.encode(utf8.encode('$username:$password'));
     return 'Basic $credentials';
@@ -303,7 +308,23 @@ class WebDavService {
   }
 
   Future<List<WebDavFile>> scanAudioFiles(String directoryPath) async {
-    final allFiles = await listFiles(directoryPath);
-    return allFiles.where((file) => file.isAudioFile).toList();
+    final result = <WebDavFile>[];
+    await _scanAudioFilesRecursive(directoryPath, result);
+    return result;
+  }
+
+  Future<void> _scanAudioFilesRecursive(String directoryPath, List<WebDavFile> result) async {
+    final files = await listFiles(directoryPath);
+    for (final file in files) {
+      if (file.isAudioFile) {
+        result.add(file);
+      } else if (file.isDirectory) {
+        try {
+          await _scanAudioFilesRecursive(file.path, result);
+        } catch (e) {
+          LOGGER.w('[WebDAV] 递归扫描子文件夹失败: ${file.path} - $e');
+        }
+      }
+    }
   }
 }

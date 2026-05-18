@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
+import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
 import 'package:coriander_player/entry.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
 import 'package:coriander_player/platform_dependency_manager.dart';
@@ -32,6 +33,7 @@ Future<void> initWindow() async {
   );
 
   windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.setPreventClose(true);
     await windowManager.show();
     await windowManager.focus();
 
@@ -111,16 +113,7 @@ Future<void> main() async {
 
   await initWindow();
 
-  // 启动桌面歌词服务（仅在Windows平台）
-  // if (Platform.isWindows) {
-  //   try {
-  //     LOGGER.d("Starting desktop lyric service...");
-  //     await PlayService.instance.desktopLyricService.startDesktopLyric();
-  //     LOGGER.d("Desktop lyric service started successfully.");
-  //   } catch (err, trace) {
-  //     LOGGER.e("Failed to start desktop lyric service: $err", stackTrace: trace);
-  //   }
-  // }
+  final cloudServiceManager = CloudServiceManager();
 
-  runApp(Entry(welcome: welcome));
+  runApp(App(welcome: welcome, cloudServiceManager: cloudServiceManager));
 }

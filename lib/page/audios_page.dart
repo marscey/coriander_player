@@ -13,9 +13,12 @@ class AudiosPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final contentList = List<Audio>.from(AudioLibrary.instance.audioCollection);
-    final multiSelectController = MultiSelectController<Audio>();
-    return UniPage<Audio>(
+    return ListenableBuilder(
+      listenable: AudioLibrary.instance,
+      builder: (context, _) {
+        final contentList = List<Audio>.from(AudioLibrary.instance.audioCollection);
+        final multiSelectController = MultiSelectController<Audio>();
+        return UniPage<Audio>(
       pref: AppPreference.instance.audiosPagePref,
       title: "音乐",
       subtitle: "${contentList.length} 首乐曲",
@@ -34,6 +37,7 @@ class AudiosPage extends StatelessWidget {
       multiSelectController: multiSelectController,
       multiSelectViewActions: [
         AddAllToPlaylist(multiSelectController: multiSelectController),
+        RemoveFromLibrary(multiSelectController: multiSelectController),
         MultiSelectSelectOrClearAll(
           multiSelectController: multiSelectController,
           contentList: contentList,
@@ -112,6 +116,8 @@ class AudiosPage extends StatelessWidget {
           },
         ),
       ],
+    );
+      },
     );
   }
 }

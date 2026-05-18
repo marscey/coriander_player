@@ -25,6 +25,68 @@ class ShufflePlay<T> extends StatelessWidget {
   }
 }
 
+class RemoveFromLibrary extends StatelessWidget {
+  const RemoveFromLibrary({super.key, required this.multiSelectController});
+
+  final MultiSelectController<Audio> multiSelectController;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListenableBuilder(
+      listenable: multiSelectController,
+      builder: (context, _) {
+        final selected = multiSelectController.selected;
+        final cloudAudios = selected.where((a) => a.isCloudAudio).toList();
+        return FilledButton.tonalIcon(
+          onPressed: cloudAudios.isEmpty
+              ? null
+              : () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('确认移除'),
+                      content: Text('确定将 ${cloudAudios.length} 首云音频从音乐库中移除吗？'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('取消'),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            for (final audio in cloudAudios) {
+                              await AudioLibrary.instance.removeAudio(audio);
+                            }
+                            multiSelectController.clear();
+                            multiSelectController.useMultiSelectView(false);
+                            Navigator.pop(ctx);
+                            showTextOnSnackBar(
+                              '已从音乐库移除 ${cloudAudios.length} 首音频',
+                            );
+                          },
+                          child: Text(
+                            '移除',
+                            style: TextStyle(color: scheme.error),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+          icon: Icon(Symbols.delete, color: cloudAudios.isEmpty ? null : scheme.error),
+          label: Text(
+            '移除 (${cloudAudios.length})',
+            style: TextStyle(color: cloudAudios.isEmpty ? null : scheme.error),
+          ),
+          style: const ButtonStyle(
+            fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class SortMethodComboBox<T> extends StatelessWidget {
   final List<T> contentList;
   final List<SortMethodDesc<T>> sortMethods;

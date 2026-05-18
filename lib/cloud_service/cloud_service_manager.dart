@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -10,57 +11,73 @@ class CloudServiceManager extends ChangeNotifier {
   static const _secureStorage = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
+
+  static CloudServiceManager? _instance;
+  static CloudServiceManager get instance {
+    if (_instance == null) {
+      throw StateError('CloudServiceManager not initialized');
+    }
+    return _instance!;
+  }
+
   final List<CloudConnection> _connections = [];
   final Map<String, WebDavService> _services = {};
+  final Completer<void> _readyCompleter = Completer<void>();
+  Future<void> get ready => _readyCompleter.future;
 
   List<CloudConnection> get connections => List.unmodifiable(_connections);
 
   CloudServiceManager() {
+    _instance = this;
     _loadConnections();
   }
 
   Future<void> _loadConnections() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString(_storageKey);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = prefs.getString(_storageKey);
 
-    if (jsonString != null) {
-      final List<dynamic> jsonList = jsonDecode(jsonString);
-      _connections.clear();
+      if (jsonString != null) {
+        final List<dynamic> jsonList = jsonDecode(jsonString);
+        _connections.clear();
 
-      for (var json in jsonList) {
-        String password = '';
+        for (var json in jsonList) {
+          String password = '';
 
-        final securePassword = await _secureStorage.read(
-          key: 'cloud_password_${json['id']}',
-        );
-        if (securePassword != null) {
-          password = securePassword;
-        } else if (json['password'] != null &&
-            (json['password'] as String).isNotEmpty) {
-          password = json['password'];
-          await _secureStorage.write(
+          final securePassword = await _secureStorage.read(
             key: 'cloud_password_${json['id']}',
-            value: password,
           );
+          if (securePassword != null) {
+            password = securePassword;
+          } else if (json['password'] != null &&
+              (json['password'] as String).isNotEmpty) {
+            password = json['password'];
+            await _secureStorage.write(
+              key: 'cloud_password_${json['id']}',
+              value: password,
+            );
+          }
+
+          _connections.add(CloudConnection(
+            id: json['id'],
+            name: json['name'],
+            type: CloudServiceType.values.firstWhere(
+              (e) => e.toString() == 'CloudServiceType.${json['type']}',
+            ),
+            serverUrl: json['serverUrl'],
+            username: json['username'],
+            password: password,
+            displayName: json['displayName'],
+            lastSync: DateTime.parse(json['lastSync']),
+            isActive: json['isActive'] ?? true,
+          ));
         }
 
-        _connections.add(CloudConnection(
-          id: json['id'],
-          name: json['name'],
-          type: CloudServiceType.values.firstWhere(
-            (e) => e.toString() == 'CloudServiceType.${json['type']}',
-          ),
-          serverUrl: json['serverUrl'],
-          username: json['username'],
-          password: password,
-          displayName: json['displayName'],
-          lastSync: DateTime.parse(json['lastSync']),
-          isActive: json['isActive'] ?? true,
-        ));
+        await _saveConnections();
+        notifyListeners();
       }
-
-      await _saveConnections();
-      notifyListeners();
+    } finally {
+      if (!_readyCompleter.isCompleted) _readyCompleter.complete();
     }
   }
 

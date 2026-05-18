@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/component/app_shell.dart';
 import 'package:coriander_player/page/album_detail_page.dart';
@@ -27,8 +29,11 @@ import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:tray_manager/tray_manager.dart';
+import 'package:window_manager/window_manager.dart';
 
 class SlideTransitionPage<T> extends CustomTransitionPage<T> {
   const SlideTransitionPage({
@@ -64,8 +69,9 @@ class SlideTransitionPage<T> extends CustomTransitionPage<T> {
 }
 
 class Entry extends StatelessWidget {
-  Entry({super.key, required this.welcome});
+  Entry({super.key, required this.welcome, required this.cloudServiceManager});
   final bool welcome;
+  final CloudServiceManager cloudServiceManager;
 
   ThemeData fromSchemeAndFontFamily({
     required ColorScheme colorScheme,
@@ -100,7 +106,7 @@ class Entry extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: ThemeProvider.instance),
-        ChangeNotifierProvider(create: (context) => CloudServiceManager()),
+        ChangeNotifierProvider.value(value: cloudServiceManager),
       ],
       builder: (context, _) {
         final theme = Provider.of<ThemeProvider>(context);
@@ -330,4 +336,90 @@ class Entry extends StatelessWidget {
         languageCode: 'zh', scriptCode: 'Hant', countryCode: 'HK'),
     Locale("en", "US"),
   ];
+}
+
+class App extends StatefulWidget {
+  const App(
+      {super.key, required this.welcome, required this.cloudServiceManager});
+  final bool welcome;
+  final CloudServiceManager cloudServiceManager;
+
+  @override
+  State<App> createState() => _AppState();
+}
+
+class _AppState extends State<App> with WindowListener, TrayListener {
+  @override
+  void initState() {
+    super.initState();
+    windowManager.addListener(this);
+    trayManager.addListener(this);
+    _initSystemTray();
+  }
+
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    trayManager.removeListener(this);
+    trayManager.destroy();
+    super.dispose();
+  }
+
+  Future<void> _initSystemTray() async {
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    String iconPath;
+    if (Platform.isWindows) {
+      iconPath = p.join(exeDir, 'data', 'flutter_assets', 'app_icon.ico');
+    } else if (Platform.isMacOS) {
+      iconPath = p.join(exeDir, '..', 'Frameworks', 'App.framework',
+          'Resources', 'flutter_assets', 'app_icon.ico');
+    } else {
+      iconPath =
+          p.join(exeDir, 'data', 'flutter_assets', 'app_icon.ico');
+    }
+
+    await trayManager.setIcon(iconPath);
+    await trayManager.setToolTip('Coriander Player');
+
+    Menu menu = Menu(items: [
+      MenuItem(key: 'show_window', label: '显示主窗口'),
+      MenuItem.separator(),
+      MenuItem(key: 'exit_app', label: '退出'),
+    ]);
+    await trayManager.setContextMenu(menu);
+  }
+
+  @override
+  void onWindowClose() async {
+    await windowManager.hide();
+  }
+
+  @override
+  void onTrayIconMouseDown() {
+    windowManager.show();
+    windowManager.focus();
+  }
+
+  @override
+  void onTrayIconRightMouseDown() {
+    trayManager.popUpContextMenu();
+  }
+
+  @override
+  void onTrayMenuItemClick(MenuItem menuItem) {
+    if (menuItem.key == 'show_window') {
+      windowManager.show();
+      windowManager.focus();
+    } else if (menuItem.key == 'exit_app') {
+      windowManager.destroy();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Entry(
+      welcome: widget.welcome,
+      cloudServiceManager: widget.cloudServiceManager,
+    );
+  }
 }

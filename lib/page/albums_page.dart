@@ -11,8 +11,11 @@ class AlbumsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final contentList = AudioLibrary.instance.albumCollection.values.toList();
-    return UniPage<Album>(
+    return ListenableBuilder(
+      listenable: AudioLibrary.instance,
+      builder: (context, _) {
+        final contentList = AudioLibrary.instance.albumCollection.values.toList();
+        return UniPage<Album>(
       pref: AppPreference.instance.albumsPagePref,
       title: "专辑",
       subtitle: "${contentList.length} 张专辑",
@@ -53,6 +56,8 @@ class AlbumsPage extends StatelessWidget {
           },
         ),
       ],
+    );
+      },
     );
   }
 }

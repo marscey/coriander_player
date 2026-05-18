@@ -229,6 +229,10 @@ class PlaybackService extends ChangeNotifier {
       notifyListeners();
       ThemeProvider.instance.applyThemeFromAudio(nowPlaying!);
 
+      if (isCloud && nowPlaying!.artist.isEmpty) {
+        CloudAudioPlayer.updateMetadataFromCache(nowPlaying!);
+      }
+
       _smtc.updateState(state: SMTCState.playing);
 
       if (!isCloud) {
