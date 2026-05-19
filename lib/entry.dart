@@ -366,16 +366,15 @@ class _AppState extends State<App> with WindowListener, TrayListener {
   }
 
   Future<void> _initSystemTray() async {
-    final exeDir = File(Platform.resolvedExecutable).parent.path;
     String iconPath;
     if (Platform.isWindows) {
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
       iconPath = p.join(exeDir, 'data', 'flutter_assets', 'app_icon.ico');
     } else if (Platform.isMacOS) {
-      iconPath = p.join(exeDir, '..', 'Frameworks', 'App.framework',
-          'Resources', 'flutter_assets', 'app_icon.ico');
+      iconPath = 'app_icon.ico';
     } else {
-      iconPath =
-          p.join(exeDir, 'data', 'flutter_assets', 'app_icon.ico');
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      iconPath = p.join(exeDir, 'data', 'flutter_assets', 'app_icon.ico');
     }
 
     await trayManager.setIcon(iconPath);

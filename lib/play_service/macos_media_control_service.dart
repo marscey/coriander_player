@@ -6,7 +6,8 @@ import '../platform_helper.dart';
 import '../utils.dart';
 
 class MacosMediaControlService extends BaseAudioHandler {
-  static final MacosMediaControlService _instance = MacosMediaControlService._internal();
+  static final MacosMediaControlService _instance =
+      MacosMediaControlService._internal();
   final AudioPlayer _player = AudioPlayer();
   late PlaybackService _playbackService;
   Audio? _currentAudio;
@@ -26,14 +27,13 @@ class MacosMediaControlService extends BaseAudioHandler {
       // 监听播放状态变化，更新AudioService状态
       _player.playbackEventStream.listen((event) {
         final playing = event.processingState != ProcessingState.idle &&
-                       event.processingState != ProcessingState.completed &&
-                       _player.playing;
-                         
+            event.processingState != ProcessingState.completed &&
+            _player.playing;
+
         updatePlaybackState(
-          playing: playing,
-          position: event.updatePosition,
-          processingState: _mapProcessingState(event.processingState)
-        );
+            playing: playing,
+            position: event.updatePosition,
+            processingState: _mapProcessingState(event.processingState));
       });
     }
   }
@@ -55,12 +55,12 @@ class MacosMediaControlService extends BaseAudioHandler {
     }
     return _instance;
   }
-  
+
   // 设置PlaybackService引用
   void setPlaybackService(PlaybackService playbackService) {
     _playbackService = playbackService;
   }
-  
+
   // 将just_audio的ProcessingState映射到AudioService的AudioProcessingState
   AudioProcessingState _mapProcessingState(ProcessingState state) {
     switch (state) {
@@ -99,7 +99,7 @@ class MacosMediaControlService extends BaseAudioHandler {
   // 更新媒体项
   void updateCurrentMediaItem(Audio audio) {
     if (!PlatformHelper.isMacOS) return;
-    
+
     _currentAudio = audio;
     // 尝试获取专辑封面路径
     String? albumArtPath;
@@ -111,7 +111,7 @@ class MacosMediaControlService extends BaseAudioHandler {
     } catch (e) {
       LOGGER.e("Failed to get album art path: $e");
     }
-    
+
     mediaItem.add(
       MediaItem(
         id: audio.path, // 使用文件路径作为唯一标识符
@@ -131,7 +131,7 @@ class MacosMediaControlService extends BaseAudioHandler {
     AudioProcessingState? processingState,
   }) {
     if (!PlatformHelper.isMacOS) return;
-    
+
     playbackState.add(
       playbackState.value.copyWith(
         controls: [
