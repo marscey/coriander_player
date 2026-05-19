@@ -332,16 +332,18 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
           ),
         ),
         IconButton(
-          tooltip: "退出",
+          tooltip: "关闭",
           onPressed: () async {
-            PlayService.instance.close();
-
+            // 保存应用状态
             await savePlaylists();
             await saveLyricSources();
             await AppSettings.instance.saveSettings();
             await AppPreference.instance.save();
 
-            await HotkeysHelper.unregisterAll();
+            // 关闭桌面歌词（窗口隐藏时不需要显示）
+            PlayService.instance.desktopLyricService.killDesktopLyric();
+
+            // 关闭窗口，由windowManager.onWindowClose监听器处理隐藏逻辑
             windowManager.close();
           },
           icon: const Icon(Symbols.close),

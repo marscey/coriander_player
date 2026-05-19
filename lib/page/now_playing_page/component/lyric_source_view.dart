@@ -99,10 +99,33 @@ class _SetLyricSourceBtn extends StatelessWidget {
   }
 }
 
-class _SetLyricSourceDialog extends StatelessWidget {
+class _SetLyricSourceDialog extends StatefulWidget {
   const _SetLyricSourceDialog({required this.audio});
 
   final Audio audio;
+
+  @override
+  State<_SetLyricSourceDialog> createState() => _SetLyricSourceDialogState();
+}
+
+class _SetLyricSourceDialogState extends State<_SetLyricSourceDialog> {
+  final TextEditingController _searchController = TextEditingController();
+  String? _customQuery;
+  late Future<List<SongSearchResult>> _searchFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.text = widget.audio.title;
+    _searchFuture = uniSearch(widget.audio);
+  }
+
+  void _performSearch() {
+    setState(() {
+      _customQuery = _searchController.text.trim();
+      _searchFuture = uniSearch(widget.audio, customQuery: _customQuery);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -128,13 +151,29 @@ class _SetLyricSourceDialog extends StatelessWidget {
                   ),
                 ),
               ),
+              TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  labelText: "搜索关键词",
+                  hintText: "输入歌词搜索关键词",
+                  suffixIcon: IconButton(
+                    icon: const Icon(Symbols.search),
+                    onPressed: _performSearch,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                ),
+                onSubmitted: (_) => _performSearch(),
+              ),
+              const SizedBox(height: 16.0),
               ListTile(
                 title: const Text("使用本地歌词"),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8.0),
                 ),
                 onTap: () {
-                  LYRIC_SOURCES[audio.path] =
+                  LYRIC_SOURCES[widget.audio.path] = 
                       LyricSource(LyricSourceType.local);
                   PlayService.instance.lyricService.useLocalLyric();
                   Navigator.pop(context);
@@ -143,7 +182,7 @@ class _SetLyricSourceDialog extends StatelessWidget {
               const Divider(),
               Expanded(
                 child: FutureBuilder(
-                  future: uniSearch(audio),
+                  future: _searchFuture,
                   builder: (context, snapshot) {
                     if (snapshot.data == null) {
                       return const Center(
@@ -157,7 +196,7 @@ class _SetLyricSourceDialog extends StatelessWidget {
                     return ListView.builder(
                       itemCount: snapshot.data!.length,
                       itemBuilder: (context, i) => _LyricSourceTile(
-                        audio: audio,
+                        audio: widget.audio,
                         searchResult: snapshot.data![i],
                       ),
                     );

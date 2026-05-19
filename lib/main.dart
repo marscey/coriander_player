@@ -6,6 +6,8 @@ import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
 import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
 import 'package:coriander_player/entry.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
+import 'package:coriander_player/library/playlist.dart';
+import 'package:coriander_player/lyric/lyric_source.dart';
 import 'package:coriander_player/platform_dependency_manager.dart';
 import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/play_service/play_service.dart';
@@ -16,10 +18,32 @@ import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 Future<void> initWindow() async {
   await windowManager.ensureInitialized();
+
+  // 设置系统托盘图标
+  try {
+    await trayManager.setIcon('app_icon.ico');
+  } catch (e) {
+    LOGGER.e('Failed to set tray icon: $e');
+  }
+
+  // 设置系统托盘菜单项
+  await trayManager.setContextMenu(Menu(
+    items: [
+      MenuItem(
+        key: 'show_window',
+        label: '显示窗口',
+      ),
+      MenuItem(
+        key: 'exit_app',
+        label: '退出应用',
+      ),
+    ],
+  ));
 
   // macOS平台的窗口设置
   final windowOptions = WindowOptions(
@@ -44,6 +68,84 @@ Future<void> initWindow() async {
       // await windowManager.setFullSizeContentView(true);
     }
   });
+
+  // 监听窗口关闭事件
+  windowManager.addListener(MyWindowListener());
+
+  // 监听系统托盘点击事件
+  trayManager.addListener(_TrayManagerListener());
+}
+
+// 自定义窗口监听器
+class MyWindowListener extends WindowListener {
+  @override
+  void onWindowClose() async {
+    bool preventClose = await windowManager.isPreventClose();
+    if (preventClose) {
+      // 隐藏窗口而不是关闭
+      await windowManager.hide();
+    }
+  }
+
+  // 其他未使用的回调方法
+  @override
+  void onWindowFocus() {}
+  @override
+  void onWindowBlur() {}
+  @override
+  void onWindowMaximize() {}
+  @override
+  void onWindowUnmaximize() {}
+  @override
+  void onWindowMinimize() {}
+  @override
+  void onWindowRestore() {}
+  @override
+  void onWindowResize() {}
+  @override
+  void onWindowMove() {}
+  @override
+  void onWindowEnterFullScreen() {}
+  @override
+  void onWindowLeaveFullScreen() {}
+}
+
+// 系统托盘监听器
+class _TrayManagerListener implements TrayListener {
+  @override
+  void onTrayIconMouseDown() async {
+    // 点击托盘图标显示窗口
+    await windowManager.show();
+  }
+
+  @override
+  void onTrayMenuItemClick(MenuItem menuItem) async {
+    switch (menuItem.key) {
+      case 'show_window':
+        await windowManager.show();
+        break;
+      case 'exit_app':
+        // 退出应用前的清理工作
+        PlayService.instance.close();
+        await savePlaylists();
+        await saveLyricSources();
+        await AppSettings.instance.saveSettings();
+        await AppPreference.instance.save();
+        await HotkeysHelper.unregisterAll();
+        await windowManager.setPreventClose(false);
+        await windowManager.close();
+        exit(0);
+        break;
+    }
+  }
+
+  // 其他未使用的回调方法
+  @override
+  void onTrayIconMouseUp() {}
+  @override
+  void onTrayIconRightMouseDown() {}
+  @override
+  void onTrayIconRightMouseUp() {}
 }
 
 Future<void> loadPrefFont() async {
