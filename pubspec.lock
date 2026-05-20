@@ -165,8 +165,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: fe84f66ba0b0e304b05c558483b37552c906cc06
-      resolved-ref: fe84f66ba0b0e304b05c558483b37552c906cc06
+      ref: HEAD
+      resolved-ref: "6db3158f2cccba61d2970c881737e33b5bf09259"
       url: "https://github.com/marscey/desktop_lyric.git"
     source: git
     version: "0.1.0"
@@ -597,6 +597,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.3.0"
+  macos_window_utils:
+    dependency: transitive
+    description:
+      name: macos_window_utils
+      sha256: d4df3501fd32ac0d2d7590cb6a8e4758337d061c8fa0db816fdd636be63a8438
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.9.0"
   markdown:
     dependency: transitive
     description:
@@ -713,7 +721,7 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: c6f3e0abd9c6295b3678ce10d30bc09debda9abe
+      ref: HEAD
       resolved-ref: c6f3e0abd9c6295b3678ce10d30bc09debda9abe
       url: "https://github.com/marscey/music_api_dart.git"
     source: git

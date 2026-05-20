@@ -700,6 +700,46 @@ fn wire__crate__api__tag_reader__update_index_impl(
     )
 }
 
+fn wire__crate__api__tag_reader__read_metadata_from_bytes_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "read_metadata_from_bytes",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_head_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_tail_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_file_size = <u32>::sse_decode(&mut deserializer);
+            let api_file_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::tag_reader::read_metadata_from_bytes(
+                            api_head_bytes, api_tail_bytes, api_file_size, api_file_name,
+                        ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+
 // Section: related_funcs
 
 flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
@@ -1040,6 +1080,7 @@ fn pde_ffi_dispatcher_primary_impl(
         13 => wire__crate__api__utils__pick_single_folder_impl(port, ptr, rust_vec_len, data_len),
         14 => wire__crate__api__utils__show_in_explorer_impl(port, ptr, rust_vec_len, data_len),
         16 => wire__crate__api__tag_reader__update_index_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__tag_reader__read_metadata_from_bytes_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

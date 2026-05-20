@@ -57,6 +57,9 @@ class MultiSelectController<T> extends ChangeNotifier {
   final Set<T> selected = {};
   bool enableMultiSelectView = false;
 
+  /// 记录最后一次选择的索引，用于 Shift+点击范围选择
+  int lastSelectedIndex = -1;
+
   void useMultiSelectView(bool multiSelectView) {
     enableMultiSelectView = multiSelectView;
     notifyListeners();
@@ -67,6 +70,12 @@ class MultiSelectController<T> extends ChangeNotifier {
     notifyListeners();
   }
 
+  void selectAtIndex(T item, int index) {
+    selected.add(item);
+    lastSelectedIndex = index;
+    notifyListeners();
+  }
+
   void unselect(T item) {
     selected.remove(item);
     notifyListeners();
@@ -74,11 +83,23 @@ class MultiSelectController<T> extends ChangeNotifier {
 
   void clear() {
     selected.clear();
+    lastSelectedIndex = -1;
     notifyListeners();
   }
 
   void selectAll(Iterable<T> items) {
     selected.addAll(items);
+    notifyListeners();
+  }
+
+  /// 选择从 [fromIndex] 到 [toIndex] 范围内的所有项目
+  void selectRange(List<T> items, int fromIndex, int toIndex) {
+    final start = fromIndex < toIndex ? fromIndex : toIndex;
+    final end = fromIndex < toIndex ? toIndex : fromIndex;
+    for (int i = start; i <= end && i < items.length; i++) {
+      selected.add(items[i]);
+    }
+    lastSelectedIndex = toIndex;
     notifyListeners();
   }
 }

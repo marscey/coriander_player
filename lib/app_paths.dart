@@ -15,6 +15,8 @@ const String FOLDER_DETAIL_PAGE = "/folders/detail";
 const String PLAYLISTS_PAGE = "/playlists";
 const String PLAYLIST_DETAIL_PAGE = "/playlists/detail";
 
+const String RECENT_PLAYS_PAGE = "/recent";
+
 const String SEARCH_PAGE = "/search";
 const String SEARCH_RESULT_PAGE = "/search/result";
 
@@ -28,6 +30,7 @@ const String WELCOMING_PAGE = "/welcoming";
 const String UPDATING_DIALOG = "/updating";
 
 const String CLOUD_CONNECTIONS_PAGE = "/cloud";
+const String CLOUD_BROWSER_PAGE = "/cloud/browser"; // 实际路径: /cloud/browser/:connectionId
 
 /// 可以作为 start page 的 pages
 const List<String> START_PAGES = [
@@ -36,5 +39,6 @@ const List<String> START_PAGES = [
   ALBUMS_PAGE,
   FOLDERS_PAGE,
   CLOUD_CONNECTIONS_PAGE,
-  PLAYLISTS_PAGE
+  PLAYLISTS_PAGE,
+  RECENT_PLAYS_PAGE
 ];

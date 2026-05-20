@@ -11,6 +11,7 @@ import 'package:coriander_player/lyric/lyric_source.dart';
 import 'package:coriander_player/platform_dependency_manager.dart';
 import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/play_service/recent_play_service.dart';
 import 'package:coriander_player/src/rust/api/logger.dart';
 import 'package:coriander_player/src/rust/frb_generated.dart';
 import 'package:coriander_player/theme_provider.dart';
@@ -191,19 +192,21 @@ Future<void> main() async {
     await AppSettings.readFromJson();
 
     await CloudCacheManager.init();
-    
+
     // 初始化平台特定依赖管理
     await PlatformDependencyManager.instance.initialize();
-    
+
     // 确保设置的播放器引擎受当前平台支持
     final dependencyManager = PlatformDependencyManager.instance;
     if (AppSettings.instance.playerEngineType != null &&
-        !dependencyManager.isPlayerEngineSupported(AppSettings.instance.playerEngineType!)) {
+        !dependencyManager
+            .isPlayerEngineSupported(AppSettings.instance.playerEngineType!)) {
       // 如果当前设置的引擎不支持，则使用推荐的引擎
-      AppSettings.instance.playerEngineType = dependencyManager.getRecommendedPlayerEngine();
+      AppSettings.instance.playerEngineType =
+          dependencyManager.getRecommendedPlayerEngine();
       await AppSettings.instance.saveSettings();
     }
-    
+
     await loadPrefFont();
   }
   if (File(PlatformHelper.joinPaths([supportPath, "app_preference.json"]))
@@ -214,6 +217,9 @@ Future<void> main() async {
       !File(PlatformHelper.joinPaths([supportPath, "index.json"])).existsSync();
 
   await initWindow();
+
+  // 初始化最近播放服务
+  await RecentPlayService.instance.load();
 
   final cloudServiceManager = CloudServiceManager();
 

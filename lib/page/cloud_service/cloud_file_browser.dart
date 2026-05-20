@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:path/path.dart' as path;
+import '../../cloud_service/cloud_connection.dart';
 import '../../cloud_service/cloud_service_manager.dart';
 import '../../cloud_service/webdav_service.dart' as webdav;
 import '../../cloud_service/cloud_utils.dart' as cloud_utils;
 import 'dart:io';
 import '../../cloud_service/cloud_audio_player.dart';
-import '../../utils.dart';
 
 class CloudFileBrowser extends StatefulWidget {
   final String connectionId;
@@ -50,20 +51,127 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
   Widget build(BuildContext context) {
     final manager = context.watch<CloudServiceManager>();
     final connection = manager.getConnection(widget.connectionId);
-    
+
     if (connection == null) {
-      return const Scaffold(
-        body: Center(child: Text('连接不存在')),
-      );
+      return const Center(child: Text('连接不存在'));
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(connection.displayName ?? connection.name),
-        actions: [
+    return Column(
+      children: [
+        // 面包屑导航栏
+        _buildBreadcrumb(connection),
+        // 文件列表
+        Expanded(
+          child: FutureBuilder<List<webdav.WebDavFile>>(
+            future: _filesFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (snapshot.hasError) {
+                return Center(child: Text('错误: ${snapshot.error}'));
+              }
+
+              final files = snapshot.data ?? [];
+              _currentFiles = files;
+              return _buildFileList(files);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 构建面包屑导航
+  Widget _buildBreadcrumb(CloudConnection connection) {
+    final scheme = Theme.of(context).colorScheme;
+    final connectionName = connection.displayName ?? connection.name;
+
+    // 解析路径段
+    final segments = <_BreadcrumbSegment>[];
+    segments.add(_BreadcrumbSegment(
+      name: connectionName,
+      path: '',
+      isLast: _currentPath.isEmpty,
+    ));
+
+    if (_currentPath.isNotEmpty) {
+      final parts = _currentPath.split('/').where((p) => p.isNotEmpty).toList();
+      for (int i = 0; i < parts.length; i++) {
+        final segmentPath = parts.sublist(0, i + 1).join('/');
+        segments.add(_BreadcrumbSegment(
+          name: parts[i],
+          path: segmentPath,
+          isLast: i == parts.length - 1,
+        ));
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        border: Border(
+          bottom: BorderSide(
+            color: scheme.outlineVariant,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // 返回按钮：第一级时返回连接列表，其他级别时返回上一级目录
+          IconButton(
+            icon: const Icon(Icons.arrow_back, size: 20),
+            tooltip: _currentPath.isEmpty ? '返回连接列表' : '返回上一级',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            onPressed: () {
+              if (_currentPath.isEmpty) {
+                // 在连接根目录，返回连接列表
+                context.pop();
+              } else {
+                setState(() {
+                  _currentPath = _getParentPath(_currentPath);
+                  _loadFiles();
+                });
+              }
+            },
+          ),
+          const SizedBox(width: 8),
+          // 面包屑路径
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: segments.map((seg) {
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (seg != segments.first)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: Icon(
+                            Icons.chevron_right,
+                            size: 16,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      _buildBreadcrumbItem(seg, scheme),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          // 操作按钮
           if (_isSelectionMode)
             IconButton(
-              icon: const Icon(Icons.close),
+              icon: const Icon(Icons.close, size: 20),
+              tooltip: '取消选择',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               onPressed: () {
                 setState(() {
                   _isSelectionMode = false;
@@ -72,6 +180,8 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
               },
             ),
           PopupMenuButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             itemBuilder: (context) => [
               const PopupMenuItem(
                 value: 'scan_to_library',
@@ -81,26 +191,50 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
                 value: 'add_to_playlist',
                 child: Text('添加到播放列表'),
               ),
+              if (_isSelectionMode)
+                const PopupMenuItem(
+                  value: 'add_selected_to_library',
+                  child: Text('添加选中到音乐库'),
+                ),
             ],
             onSelected: (value) => _handleMenuAction(value),
           ),
         ],
       ),
-      body: FutureBuilder<List<webdav.WebDavFile>>(
-        future: _filesFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    );
+  }
 
-          if (snapshot.hasError) {
-            return Center(child: Text('错误: ${snapshot.error}'));
-          }
+  Widget _buildBreadcrumbItem(_BreadcrumbSegment seg, ColorScheme scheme) {
+    if (seg.isLast) {
+      // 最后一项：加粗显示，不可点击
+      return Text(
+        seg.name,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: scheme.onSurface,
+          fontSize: 14,
+        ),
+      );
+    }
 
-          final files = snapshot.data ?? [];
-          _currentFiles = files;
-          return _buildFileList(files);
-        },
+    // 可点击的面包屑项
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _currentPath = seg.path;
+          _loadFiles();
+        });
+      },
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
+        child: Text(
+          seg.name,
+          style: TextStyle(
+            color: scheme.primary,
+            fontSize: 14,
+          ),
+        ),
       ),
     );
   }
@@ -108,24 +242,17 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
   Widget _buildFileList(List<webdav.WebDavFile> files) {
     final directories = files.where((f) => f.isDirectory).toList()
       ..sort((a, b) => a.name.compareTo(b.name));
-    final audioFiles = files.where((f) => !f.isDirectory && f.isAudioFile).toList()
+    final audioFiles = files
+        .where((f) => !f.isDirectory && f.isAudioFile)
+        .toList()
       ..sort((a, b) => a.name.compareTo(b.name));
-    final otherFiles = files.where((f) => !f.isDirectory && !f.isAudioFile).toList()
+    final otherFiles = files
+        .where((f) => !f.isDirectory && !f.isAudioFile)
+        .toList()
       ..sort((a, b) => a.name.compareTo(b.name));
 
     return ListView(
       children: [
-        if (_currentPath.isNotEmpty)
-          ListTile(
-            leading: const Icon(Icons.arrow_back),
-            title: const Text('返回上一级'),
-            onTap: () {
-              setState(() {
-                _currentPath = _getParentPath(_currentPath);
-                _loadFiles();
-              });
-            },
-          ),
         ...directories.map((file) => _buildFileItem(file, audioFiles)),
         ...audioFiles.map((file) => _buildFileItem(file, audioFiles)),
         ...otherFiles.map((file) => _buildFileItem(file, audioFiles)),
@@ -133,55 +260,61 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
     );
   }
 
-  Widget _buildFileItem(webdav.WebDavFile file, List<webdav.WebDavFile> currentAudioFiles) {
+  Widget _buildFileItem(
+      webdav.WebDavFile file, List<webdav.WebDavFile> currentAudioFiles) {
     final isSelected = _selectedFiles.contains(file.path);
-    
+
     return ListTile(
-      leading: Icon(file.isDirectory 
-        ? Icons.folder 
-        : file.isAudioFile ? Icons.audiotrack : Icons.insert_drive_file),
+      leading: Icon(file.isDirectory
+          ? Icons.folder
+          : file.isAudioFile
+              ? Icons.audiotrack
+              : Icons.insert_drive_file),
       title: Text(file.name),
-      subtitle: file.isDirectory 
-        ? null 
-        : Text(_formatFileSize(file.size)),
+      subtitle: file.isDirectory ? null : Text(_formatFileSize(file.size)),
       trailing: _isSelectionMode
-        ? Checkbox(
-            value: isSelected,
-            onChanged: (selected) {
-              setState(() {
-                if (selected == true) {
-                  _selectedFiles.add(file.path);
-                } else {
-                  _selectedFiles.remove(file.path);
-                }
-              });
-            },
-          )
-        : PopupMenuButton(
-            itemBuilder: (context) => [
-              if (file.isAudioFile) ...[
+          ? Checkbox(
+              value: isSelected,
+              onChanged: (selected) {
+                setState(() {
+                  if (selected == true) {
+                    _selectedFiles.add(file.path);
+                  } else {
+                    _selectedFiles.remove(file.path);
+                  }
+                });
+              },
+            )
+          : PopupMenuButton(
+              itemBuilder: (context) => [
+                if (file.isAudioFile) ...[
+                  const PopupMenuItem(
+                    value: 'play',
+                    child: Text('播放'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'add_to_playlist',
+                    child: Text('添加到播放列表'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'add_to_library',
+                    child: Text('添加到音乐库'),
+                  ),
+                ],
+                if (file.isDirectory) ...[
+                  const PopupMenuItem(
+                    value: 'scan_folder_to_library',
+                    child: Text('扫描到音乐库'),
+                  ),
+                ],
                 const PopupMenuItem(
-                  value: 'play',
-                  child: Text('播放'),
-                ),
-                const PopupMenuItem(
-                  value: 'add_to_playlist',
-                  child: Text('添加到播放列表'),
+                  value: 'download',
+                  child: Text('下载'),
                 ),
               ],
-              if (file.isDirectory) ...[
-                const PopupMenuItem(
-                  value: 'scan_folder_to_library',
-                  child: Text('扫描到音乐库'),
-                ),
-              ],
-              const PopupMenuItem(
-                value: 'download',
-                child: Text('下载'),
-              ),
-            ],
-            onSelected: (value) => _handleFileAction(file, value, currentAudioFiles),
-          ),
+              onSelected: (value) =>
+                  _handleFileAction(file, value, currentAudioFiles),
+            ),
       onTap: () {
         if (_isSelectionMode) {
           setState(() {
@@ -220,11 +353,13 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (bytes < 1024 * 1024 * 1024)
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
-  Future<void> _playAudio(webdav.WebDavFile file, List<webdav.WebDavFile> currentAudioFiles) async {
+  Future<void> _playAudio(
+      webdav.WebDavFile file, List<webdav.WebDavFile> currentAudioFiles) async {
     final manager = context.read<CloudServiceManager>();
     final service = manager.getService(widget.connectionId);
     if (service != null) {
@@ -237,7 +372,9 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
           connectionId: widget.connectionId,
           onPlayStarted: () {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('开始播放: ${file.name}（共 ${currentAudioFiles.length} 首）')),
+              SnackBar(
+                  content: Text(
+                      '开始播放: ${file.name}（共 ${currentAudioFiles.length} 首）')),
             );
           },
         );
@@ -249,13 +386,17 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
     }
   }
 
-  Future<void> _handleFileAction(webdav.WebDavFile file, String action, List<webdav.WebDavFile> currentAudioFiles) async {
+  Future<void> _handleFileAction(webdav.WebDavFile file, String action,
+      List<webdav.WebDavFile> currentAudioFiles) async {
     switch (action) {
       case 'play':
         _playAudio(file, currentAudioFiles);
         break;
       case 'add_to_playlist':
         _addToPlaylist([file]);
+        break;
+      case 'add_to_library':
+        _addAudioToLibrary(file);
         break;
       case 'scan_folder_to_library':
         _scanFolderToLibrary(file);
@@ -275,12 +416,17 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
         final selectedFiles = _getSelectedFiles();
         _addToPlaylist(selectedFiles);
         break;
+      case 'add_selected_to_library':
+        _addSelectedToLibrary();
+        break;
     }
   }
 
   List<webdav.WebDavFile> _getSelectedFiles() {
     if (_isSelectionMode && _selectedFiles.isNotEmpty) {
-      return _currentFiles.where((f) => _selectedFiles.contains(f.path)).toList();
+      return _currentFiles
+          .where((f) => _selectedFiles.contains(f.path))
+          .toList();
     }
     return _currentFiles.where((f) => f.isAudioFile).toList();
   }
@@ -367,6 +513,57 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
     );
   }
 
+  Future<void> _addAudioToLibrary(webdav.WebDavFile file) async {
+    final manager = context.read<CloudServiceManager>();
+    final service = manager.getService(widget.connectionId);
+    if (service == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('无法连接到云服务')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _AddToLibraryDialog(
+        service: service,
+        files: [file],
+        connectionId: widget.connectionId,
+      ),
+    );
+  }
+
+  Future<void> _addSelectedToLibrary() async {
+    final selectedFiles = _getSelectedFiles();
+    final audioFiles = selectedFiles.where((f) => f.isAudioFile).toList();
+    if (audioFiles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请选择音频文件')),
+      );
+      return;
+    }
+
+    final manager = context.read<CloudServiceManager>();
+    final service = manager.getService(widget.connectionId);
+    if (service == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('无法连接到云服务')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _AddToLibraryDialog(
+        service: service,
+        files: audioFiles,
+        connectionId: widget.connectionId,
+      ),
+    );
+  }
+
   Future<void> _downloadFile(webdav.WebDavFile file) async {
     try {
       final manager = context.read<CloudServiceManager>();
@@ -396,6 +593,19 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
   Future<String> getDownloadDir() async {
     return cloud_utils.getDownloadDir();
   }
+}
+
+/// 面包屑导航段
+class _BreadcrumbSegment {
+  final String name;
+  final String path;
+  final bool isLast;
+
+  _BreadcrumbSegment({
+    required this.name,
+    required this.path,
+    required this.isLast,
+  });
 }
 
 class _ScanToLibraryDialog extends StatefulWidget {
@@ -441,10 +651,11 @@ class _ScanToLibraryDialogState extends State<_ScanToLibraryDialog> {
       );
       if (mounted) setState(() => _done = true);
     } catch (e) {
-      if (mounted) setState(() {
-        _status = '扫描失败: $e';
-        _done = true;
-      });
+      if (mounted)
+        setState(() {
+          _status = '扫描失败: $e';
+          _done = true;
+        });
     }
   }
 
@@ -459,6 +670,78 @@ class _ScanToLibraryDialogState extends State<_ScanToLibraryDialog> {
           if (!_done) const SizedBox(height: 16),
           Text(_status),
           if (_count > 0) Text('已发现 $_count 首音频'),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(_done ? '完成' : '取消'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AddToLibraryDialog extends StatefulWidget {
+  final webdav.WebDavService service;
+  final List<webdav.WebDavFile> files;
+  final String? connectionId;
+
+  const _AddToLibraryDialog({
+    required this.service,
+    required this.files,
+    this.connectionId,
+  });
+
+  @override
+  State<_AddToLibraryDialog> createState() => _AddToLibraryDialogState();
+}
+
+class _AddToLibraryDialogState extends State<_AddToLibraryDialog> {
+  String _status = '准备添加...';
+  int _count = 0;
+  bool _done = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAdd();
+  }
+
+  Future<void> _startAdd() async {
+    try {
+      await CloudAudioPlayer.addCloudFilesToLibrary(
+        service: widget.service,
+        files: widget.files,
+        connectionId: widget.connectionId,
+        onProgress: (count) {
+          if (mounted) setState(() => _count = count);
+        },
+        onStatus: (status) {
+          if (mounted) setState(() => _status = status);
+        },
+      );
+      if (mounted) setState(() => _done = true);
+    } catch (e) {
+      if (mounted)
+        setState(() {
+          _status = '添加失败: $e';
+          _done = true;
+        });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('添加到音乐库'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!_done) const CircularProgressIndicator(),
+          if (!_done) const SizedBox(height: 16),
+          Text(_status),
+          if (_count > 0) Text('已添加 $_count 首音频'),
         ],
       ),
       actions: [

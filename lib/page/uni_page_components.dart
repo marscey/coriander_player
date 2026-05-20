@@ -37,16 +37,15 @@ class RemoveFromLibrary extends StatelessWidget {
       listenable: multiSelectController,
       builder: (context, _) {
         final selected = multiSelectController.selected;
-        final cloudAudios = selected.where((a) => a.isCloudAudio).toList();
         return FilledButton.tonalIcon(
-          onPressed: cloudAudios.isEmpty
+          onPressed: selected.isEmpty
               ? null
               : () {
                   showDialog(
                     context: context,
                     builder: (ctx) => AlertDialog(
                       title: const Text('确认移除'),
-                      content: Text('确定将 ${cloudAudios.length} 首云音频从音乐库中移除吗？'),
+                      content: Text('确定将 ${selected.length} 首音频从音乐库中移除吗？'),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(ctx),
@@ -54,14 +53,14 @@ class RemoveFromLibrary extends StatelessWidget {
                         ),
                         TextButton(
                           onPressed: () async {
-                            for (final audio in cloudAudios) {
+                            for (final audio in selected) {
                               await AudioLibrary.instance.removeAudio(audio);
                             }
                             multiSelectController.clear();
                             multiSelectController.useMultiSelectView(false);
                             Navigator.pop(ctx);
                             showTextOnSnackBar(
-                              '已从音乐库移除 ${cloudAudios.length} 首音频',
+                              '已从音乐库移除 ${selected.length} 首音频',
                             );
                           },
                           child: Text(
@@ -73,10 +72,11 @@ class RemoveFromLibrary extends StatelessWidget {
                     ),
                   );
                 },
-          icon: Icon(Symbols.delete, color: cloudAudios.isEmpty ? null : scheme.error),
+          icon: Icon(Symbols.delete,
+              color: selected.isEmpty ? null : scheme.error),
           label: Text(
-            '移除 (${cloudAudios.length})',
-            style: TextStyle(color: cloudAudios.isEmpty ? null : scheme.error),
+            '移除 (${selected.length})',
+            style: TextStyle(color: selected.isEmpty ? null : scheme.error),
           ),
           style: const ButtonStyle(
             fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),

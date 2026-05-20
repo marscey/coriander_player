@@ -235,6 +235,13 @@ class AudioLibrary extends ChangeNotifier {
   Future<void> removeAudio(Audio audio) async {
     audioCollection.remove(audio);
 
+    // 从 folders 中移除本地音频
+    if (!audio.isCloudAudio) {
+      for (final folder in folders) {
+        folder.audios.remove(audio);
+      }
+    }
+
     for (String artistName in audio.splitedArtists) {
       final artist = artistCollection[artistName];
       if (artist != null) {
@@ -438,7 +445,8 @@ class Audio {
     required int width,
     required int height,
   }) async {
-    if (_cover != null) return _cover;
+    // 只有当请求尺寸不超过已缓存的封面尺寸（48x48）时才复用缓存
+    if (_cover != null && width <= 48 && height <= 48) return _cover;
 
     if (isCloudAudio) {
       final cachedPath = CloudCacheManager.instance.getCachedFilePath(path);

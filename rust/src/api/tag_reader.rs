@@ -826,3 +826,88 @@ pub fn update_index(index_path: String, sink: StreamSink<IndexActionState>) -> a
 
     Ok(())
 }
+
+/// for Flutter
+/// 从部分字节（文件头 + 文件尾）中解析音频元数据。
+/// [head_bytes]: 文件头部字节（建议至少 64KB）
+/// [tail_bytes]: 文件尾部字节（建议至少 128KB）
+/// [file_size]: 文件总大小（字节）
+/// [file_name]: 文件名（用于格式检测和作为标题回退）
+///
+/// 返回 JSON 字符串，包含 title/artist/album/duration/bitrate/sample_rate 字段。
+pub fn read_metadata_from_bytes(
+    head_bytes: Vec<u8>,
+    tail_bytes: Vec<u8>,
+    file_size: u32,
+    file_name: String,
+) -> Option<String> {
+    let file_size = file_size as u64;
+    // 构造虚拟文件：头部 + 零填充 + 尾部
+    let head_len = head_bytes.len() as u64;
+    let tail_len = tail_bytes.len() as u64;
+    let tail_start = file_size.saturating_sub(tail_len);
+
+    let mut buffer = Vec::with_capacity(file_size as usize);
+    buffer.extend_from_slice(&head_bytes);
+
+    // 中间填充零
+    if tail_start > head_len {
+        buffer.resize(tail_start as usize, 0);
+    }
+
+    // 如果尾部和头部有重叠，截断头部
+    if tail_start < head_len {
+        buffer.truncate(tail_start as usize);
+    }
+
+    buffer.extend_from_slice(&tail_bytes);
+
+    let mut cursor = Cursor::new(buffer);
+
+    // 使用 lofty::Probe 从 Cursor 读取
+    let tagged_file = match lofty::probe::Probe::new(&mut cursor).read() {
+        Ok(val) => val,
+        Err(err) => {
+            log_to_dart(format!("read_metadata_from_bytes lofty error: {}", err));
+            return None;
+        }
+    };
+
+    let properties = tagged_file.properties();
+    let duration = properties.duration().as_secs();
+    let bitrate = properties.audio_bitrate();
+    let sample_rate = properties.sample_rate();
+
+    let (title, artist, album, track) = if let Some(tag) = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag())
+    {
+        let artist_strs: Vec<_> = tag.get_strings(&ItemKey::TrackArtist).collect();
+        let artist = if artist_strs.is_empty() {
+            String::new()
+        } else {
+            artist_strs.join("/")
+        };
+
+        (
+            tag.title().map(|s| s.to_string()).unwrap_or_else(|| file_name.clone()),
+            artist,
+            tag.album().map(|s| s.to_string()).unwrap_or_default(),
+            tag.track(),
+        )
+    } else {
+        (file_name.clone(), String::new(), String::new(), None)
+    };
+
+    let result = serde_json::json!({
+        "title": title,
+        "artist": artist,
+        "album": album,
+        "track": track,
+        "duration": duration,
+        "bitrate": bitrate,
+        "sample_rate": sample_rate,
+    });
+
+    Some(result.to_string())
+}

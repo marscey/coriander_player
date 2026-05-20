@@ -1,53 +1,87 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../app_paths.dart' as app_paths;
 import '../../cloud_service/cloud_connection.dart';
 import '../../cloud_service/cloud_service_manager.dart';
 import 'cloud_connection_form.dart';
-import 'cloud_file_browser.dart';
 
 class CloudConnectionsPage extends StatelessWidget {
   const CloudConnectionsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('云服务连接'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _showAddConnectionDialog(context),
-          ),
-        ],
-      ),
-      body: Consumer<CloudServiceManager>(
-        builder: (context, manager, child) {
-          final connections = manager.connections;
-          
-          if (connections.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+    final scheme = Theme.of(context).colorScheme;
+
+    return Consumer<CloudServiceManager>(
+      builder: (context, manager, child) {
+        final connections = manager.connections;
+
+        if (connections.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.cloud_off, size: 64, color: scheme.outline),
+                const SizedBox(height: 16),
+                Text('暂无云服务连接', style: TextStyle(color: scheme.onSurfaceVariant)),
+                const SizedBox(height: 8),
+                Text('点击下方按钮添加连接', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () => _showAddConnectionDialog(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('添加连接'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            // 顶部操作栏
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0),
+              child: Row(
                 children: [
-                  Icon(Icons.cloud_off, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('暂无云服务连接'),
-                  SizedBox(height: 8),
-                  Text('点击右上角 + 添加连接', style: TextStyle(color: Colors.grey)),
+                  Text(
+                    '云服务连接',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  const Spacer(),
+                  FilledButton.tonal(
+                    onPressed: () => _showAddConnectionDialog(context),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add, size: 18),
+                        SizedBox(width: 4),
+                        Text('添加连接'),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-            );
-          }
-
-          return ListView.builder(
-            itemCount: connections.length,
-            itemBuilder: (context, index) {
-              final connection = connections[index];
-              return _buildConnectionItem(context, connection, manager);
-            },
-          );
-        },
-      ),
+            ),
+            // 连接列表
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.only(top: 8.0),
+                itemCount: connections.length,
+                itemBuilder: (context, index) {
+                  final connection = connections[index];
+                  return _buildConnectionItem(context, connection, manager);
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -111,13 +145,8 @@ class CloudConnectionsPage extends StatelessWidget {
           ),
         ),
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => CloudFileBrowser(
-                connectionId: connection.id,
-              ),
-            ),
+          context.push(
+            '${app_paths.CLOUD_BROWSER_PAGE}/${connection.id}',
           );
         },
       ),
@@ -136,7 +165,7 @@ class CloudConnectionsPage extends StatelessWidget {
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
-    
+
     if (difference.inDays == 0) {
       return '今天 ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     } else if (difference.inDays == 1) {
@@ -156,13 +185,8 @@ class CloudConnectionsPage extends StatelessWidget {
   ) async {
     switch (action) {
       case 'browse':
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CloudFileBrowser(
-              connectionId: connection.id,
-            ),
-          ),
+        context.push(
+          '${app_paths.CLOUD_BROWSER_PAGE}/${connection.id}',
         );
         break;
       case 'edit':
@@ -194,7 +218,7 @@ class CloudConnectionsPage extends StatelessWidget {
   Future<void> _testConnection(BuildContext context, CloudConnection connection) async {
     final manager = context.read<CloudServiceManager>();
     final service = manager.getService(connection.id);
-    
+
     if (service == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('连接测试失败：服务不可用')),
@@ -204,6 +228,7 @@ class CloudConnectionsPage extends StatelessWidget {
 
     try {
       final isConnected = await service.testConnection();
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(isConnected ? '连接成功' : '连接失败'),
@@ -211,6 +236,7 @@ class CloudConnectionsPage extends StatelessWidget {
         ),
       );
     } catch (e) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('连接测试失败：$e')),
       );
@@ -242,6 +268,7 @@ class CloudConnectionsPage extends StatelessWidget {
 
     if (confirmed == true) {
       await manager.removeConnection(connection.id);
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('连接已删除')),
       );

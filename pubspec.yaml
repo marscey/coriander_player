@@ -33,11 +33,11 @@ dependencies:
   desktop_lyric:
     git:
       url: https://github.com/marscey/desktop_lyric.git
-      ref: fe84f66ba0b0e304b05c558483b37552c906cc06
+      # ref: 6db3158f2cccba61d2970c881737e33b5bf09259
   music_api:
     git:
       url: https://github.com/marscey/music_api_dart.git
-      ref: c6f3e0abd9c6295b3678ce10d30bc09debda9abe
+      # ref: c6f3e0abd9c6295b3678ce10d30bc09debda9abe
   pinyin: ^3.3.0
   hotkey_manager: ^0.2.3
   logger: ^2.4.0

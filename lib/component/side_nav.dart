@@ -14,8 +14,11 @@ class DestinationDesc {
   DestinationDesc(this.icon, this.label, this.desPath);
 }
 
+/// 导航项与 StatefulShellRoute 分支的对应关系
+/// 分支顺序必须与 entry.dart 中 StatefulShellRoute.indexedStack 的 branches 顺序一致
 final destinations = <DestinationDesc>[
   DestinationDesc(Symbols.library_music, "音乐", app_paths.AUDIOS_PAGE),
+  DestinationDesc(Symbols.history, "最近播放", app_paths.RECENT_PLAYS_PAGE),
   DestinationDesc(Symbols.artist, "艺术家", app_paths.ARTISTS_PAGE),
   DestinationDesc(Symbols.album, "专辑", app_paths.ALBUMS_PAGE),
   DestinationDesc(Symbols.folder, "文件夹", app_paths.FOLDERS_PAGE),
@@ -26,7 +29,9 @@ final destinations = <DestinationDesc>[
 ];
 
 class SideNav extends StatelessWidget {
-  const SideNav({super.key});
+  const SideNav({super.key, required this.navigationShell});
+
+  final StatefulNavigationShell navigationShell;
 
   @override
   Widget build(BuildContext context) {
@@ -39,10 +44,15 @@ class SideNav extends StatelessWidget {
     void onDestinationSelected(int value) {
       if (value == selected) return;
 
-      final index = app_paths.START_PAGES.indexOf(destinations[value].desPath);
+      final targetDesc = destinations[value];
+      final index = app_paths.START_PAGES.indexOf(targetDesc.desPath);
       if (index != -1) AppPreference.instance.startPage = index;
 
-      context.push(destinations[value].desPath);
+      // 使用 StatefulNavigationShell.goBranch 切换分支，保留各分支路由栈
+      navigationShell.goBranch(
+        value,
+        initialLocation: value == navigationShell.currentIndex,
+      );
 
       var scaffold = Scaffold.of(context);
       if (scaffold.hasDrawer) scaffold.closeDrawer();

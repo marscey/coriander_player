@@ -20,6 +20,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:coriander_player/cloud_service/cloud_audio_player.dart';
 import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
+import 'package:coriander_player/play_service/recent_play_service.dart';
 
 enum PlayMode {
   forward,
@@ -187,22 +188,26 @@ class PlaybackService extends ChangeNotifier {
 
       final isCloud = nowPlaying!.isCloudAudio;
 
-      LOGGER.i("[_loadAndPlay] title=${nowPlaying!.title}, path=${nowPlaying!.path}, isCloud=$isCloud");
+      LOGGER.i(
+          "[_loadAndPlay] title=${nowPlaying!.title}, path=${nowPlaying!.path}, isCloud=$isCloud");
 
       if (isCloud && _supportsStreamingForCloud()) {
-        final cachedPath = CloudCacheManager.instance.getCachedFilePath(nowPlaying!.path);
+        final cachedPath =
+            CloudCacheManager.instance.getCachedFilePath(nowPlaying!.path);
         if (cachedPath != null) {
           LOGGER.i("[_loadAndPlay] using cached file: $cachedPath");
           await _player.setSource(cachedPath, isNetwork: false);
         } else {
           try {
-            final resolved = await CloudAudioPlayer.resolveStreamingUrl(nowPlaying!.path);
+            final resolved =
+                await CloudAudioPlayer.resolveStreamingUrl(nowPlaying!.path);
             await _player.setSource(
               resolved.url,
               isNetwork: true,
               httpHeaders: resolved.headers,
             );
-            _cacheStreamInBackground(nowPlaying!.path, resolved.url, resolved.headers);
+            _cacheStreamInBackground(
+                nowPlaying!.path, resolved.url, resolved.headers);
           } catch (e) {
             LOGGER.e("[_loadAndPlay] resolve streaming URL failed: $e");
             showTextOnSnackBar('云音频播放失败: $e');
@@ -228,6 +233,9 @@ class PlaybackService extends ChangeNotifier {
       LOGGER.i("[_loadAndPlay] play() completed, playerState=$playerState");
       notifyListeners();
       ThemeProvider.instance.applyThemeFromAudio(nowPlaying!);
+
+      // 记录到最近播放
+      RecentPlayService.instance.recordPlay(nowPlaying!);
 
       if (isCloud && nowPlaying!.artist.isEmpty) {
         CloudAudioPlayer.updateMetadataFromCache(nowPlaying!);
@@ -271,7 +279,8 @@ class PlaybackService extends ChangeNotifier {
     return engineType == PlayerEngineType.mediaKit;
   }
 
-  void _cacheStreamInBackground(String webdavPath, String streamingUrl, Map<String, String>? headers) {
+  void _cacheStreamInBackground(
+      String webdavPath, String streamingUrl, Map<String, String>? headers) {
     () async {
       final client = HttpClient();
       client.autoUncompress = false;
@@ -292,7 +301,8 @@ class PlaybackService extends ChangeNotifier {
             originalName: originalName,
           );
         } else {
-          LOGGER.w('[CloudCache] background cache failed: HTTP ${response.statusCode}');
+          LOGGER.w(
+              '[CloudCache] background cache failed: HTTP ${response.statusCode}');
           await response.drain<void>();
         }
       } catch (e) {
@@ -504,7 +514,8 @@ class PlaybackService extends ChangeNotifier {
       final currentPosition = _player.position;
       final currentAudio = nowPlaying;
       final isPlaying = playerState == PlayerState.playing;
-      LOGGER.i("[switchEngine] Saved state: position=${currentPosition.inSeconds}s, audio=${currentAudio?.title}, isPlaying=$isPlaying");
+      LOGGER.i(
+          "[switchEngine] Saved state: position=${currentPosition.inSeconds}s, audio=${currentAudio?.title}, isPlaying=$isPlaying");
 
       LOGGER.i("[switchEngine] Canceling stream subscriptions...");
       _playerStateStreamSub.cancel();
@@ -537,22 +548,27 @@ class PlaybackService extends ChangeNotifier {
 
       if (currentAudio != null) {
         final isCloud = currentAudio.isCloudAudio;
-        LOGGER.i("[switchEngine] Restoring playback: path=${currentAudio.path}, isCloud=$isCloud");
+        LOGGER.i(
+            "[switchEngine] Restoring playback: path=${currentAudio.path}, isCloud=$isCloud");
         if (isCloud && type != PlayerEngineType.mediaKit) {
-          LOGGER.i("[switchEngine] Cloud audio not supported by BASS engine, skipping restore");
+          LOGGER.i(
+              "[switchEngine] Cloud audio not supported by BASS engine, skipping restore");
         } else {
           try {
             LOGGER.i("[switchEngine] Calling setSource...");
             if (isCloud) {
-              final cachedPath = CloudCacheManager.instance.getCachedFilePath(currentAudio.path);
+              final cachedPath = CloudCacheManager.instance
+                  .getCachedFilePath(currentAudio.path);
               if (cachedPath != null) {
                 await _player
                     .setSource(cachedPath, isNetwork: false)
                     .timeout(const Duration(seconds: 10));
               } else {
-                final resolved = await CloudAudioPlayer.resolveStreamingUrl(currentAudio.path);
+                final resolved = await CloudAudioPlayer.resolveStreamingUrl(
+                    currentAudio.path);
                 await _player
-                    .setSource(resolved.url, isNetwork: true, httpHeaders: resolved.headers)
+                    .setSource(resolved.url,
+                        isNetwork: true, httpHeaders: resolved.headers)
                     .timeout(const Duration(seconds: 10));
               }
             } else {
@@ -560,8 +576,11 @@ class PlaybackService extends ChangeNotifier {
                   .setSource(currentAudio.path, isNetwork: false)
                   .timeout(const Duration(seconds: 10));
             }
-            LOGGER.i("[switchEngine] setSource done, seeking to ${currentPosition.inSeconds}s...");
-            await _player.seek(currentPosition).timeout(const Duration(seconds: 5));
+            LOGGER.i(
+                "[switchEngine] setSource done, seeking to ${currentPosition.inSeconds}s...");
+            await _player
+                .seek(currentPosition)
+                .timeout(const Duration(seconds: 5));
             LOGGER.i("[switchEngine] seek done, isPlaying=$isPlaying");
             if (isPlaying) {
               LOGGER.i("[switchEngine] Calling play...");
@@ -569,7 +588,8 @@ class PlaybackService extends ChangeNotifier {
               LOGGER.i("[switchEngine] play done");
             }
           } catch (e) {
-            LOGGER.e("[switchEngine] Failed to restore playback after engine switch: $e");
+            LOGGER.e(
+                "[switchEngine] Failed to restore playback after engine switch: $e");
           }
         }
       }

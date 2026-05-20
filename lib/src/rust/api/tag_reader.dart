@@ -46,6 +46,19 @@ Stream<IndexActionState> buildIndexFromFoldersRecursively(
 Stream<IndexActionState> updateIndex({required String indexPath}) =>
     RustLib.instance.api.crateApiTagReaderUpdateIndex(indexPath: indexPath);
 
+/// for Flutter
+/// 从部分字节（文件头 + 文件尾）中解析音频元数据。
+/// [headBytes]: 文件头部字节（建议至少 64KB）
+/// [tailBytes]: 文件尾部字节（建议至少 128KB）
+/// [fileSize]: 文件总大小（字节）
+/// [fileName]: 文件名（用于格式检测和作为标题回退）
+///
+/// 返回 JSON 字符串，包含 title/artist/album/duration/bitrate/sample_rate 字段。
+Future<String?> readMetadataFromBytes(
+        {required Uint8List headBytes, required Uint8List tailBytes, required int fileSize, required String fileName}) =>
+    RustLib.instance.api.crateApiTagReaderReadMetadataFromBytes(
+        headBytes: headBytes, tailBytes: tailBytes, fileSize: fileSize, fileName: fileName);
+
 class IndexActionState {
   /// completed / total
   final double progress;

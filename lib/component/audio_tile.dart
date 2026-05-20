@@ -6,6 +6,7 @@ import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -123,37 +124,36 @@ class AudioTile extends StatelessWidget {
         ),
 
         /// remove from library
-        if (audio.isCloudAudio)
-          MenuItemButton(
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('确认移除'),
-                  content: Text('确定将"${audio.title}"从音乐库中移除吗？'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('取消'),
+        MenuItemButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('确认移除'),
+                content: Text('确定将"${audio.title}"从音乐库中移除吗？'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('取消'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      AudioLibrary.instance.removeAudio(audio);
+                      Navigator.pop(ctx);
+                      showTextOnSnackBar('已从音乐库移除"${audio.title}"');
+                    },
+                    child: Text(
+                      '移除',
+                      style: TextStyle(color: scheme.error),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        AudioLibrary.instance.removeAudio(audio);
-                        Navigator.pop(ctx);
-                        showTextOnSnackBar('已从音乐库移除"${audio.title}"');
-                      },
-                      child: Text(
-                        '移除',
-                        style: TextStyle(color: scheme.error),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-            leadingIcon: Icon(Symbols.delete, color: scheme.error),
-            child: Text('从音乐库移除', style: TextStyle(color: scheme.error)),
-          ),
+                  ),
+                ],
+              ),
+            );
+          },
+          leadingIcon: Icon(Symbols.delete, color: scheme.error),
+          child: Text('从音乐库移除', style: TextStyle(color: scheme.error)),
+        ),
       ],
       builder: (context, controller, _) {
         final textColor = focus ? scheme.primary : scheme.onSurface;
@@ -186,10 +186,22 @@ class AudioTile extends StatelessWidget {
                   !multiSelectController!.enableMultiSelectView) {
                 PlayService.instance.playbackService.play(audioIndex, playlist);
               } else {
-                if (multiSelectController!.selected.contains(audio)) {
+                final isShiftPressed = HardwareKeyboard
+                        .instance.logicalKeysPressed
+                        .contains(LogicalKeyboardKey.shiftLeft) ||
+                    HardwareKeyboard.instance.logicalKeysPressed
+                        .contains(LogicalKeyboardKey.shiftRight);
+                if (isShiftPressed &&
+                    multiSelectController!.lastSelectedIndex >= 0) {
+                  multiSelectController!.selectRange(
+                    playlist,
+                    multiSelectController!.lastSelectedIndex,
+                    audioIndex,
+                  );
+                } else if (multiSelectController!.selected.contains(audio)) {
                   multiSelectController!.unselect(audio);
                 } else {
-                  multiSelectController!.select(audio);
+                  multiSelectController!.selectAtIndex(audio, audioIndex);
                 }
               }
             },

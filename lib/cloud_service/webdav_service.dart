@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:coriander_player/utils.dart';
@@ -258,6 +259,60 @@ class WebDavService {
     }
 
     return response.bodyBytes;
+  }
+
+  /// 通过 HTTP Range 请求下载文件的指定字节范围。
+  /// [start] 起始字节偏移（包含），[end] 结束字节偏移（包含）。
+  /// 返回 null 表示服务器不支持 Range 请求。
+  Future<Uint8List?> downloadRange(String filePath, int start, int end) async {
+    try {
+      final url = getFileUrl(filePath);
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Authorization': _authHeader,
+          'Range': 'bytes=$start-$end',
+        },
+      );
+
+      if (response.statusCode == 206) {
+        return response.bodyBytes;
+      } else if (response.statusCode == 200) {
+        // 服务器不支持 Range，返回完整文件中截取需要的部分
+        final bytes = response.bodyBytes;
+        if (start < bytes.length) {
+          return bytes.sublist(start, (end + 1).clamp(0, bytes.length));
+        }
+        return null;
+      }
+      LOGGER.w('[WebDAV] downloadRange failed: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      LOGGER.e('[WebDAV] downloadRange error: $e');
+      return null;
+    }
+  }
+
+  /// 获取文件大小（通过 HEAD 请求）。
+  /// 返回 null 表示无法获取。
+  Future<int?> getFileSize(String filePath) async {
+    try {
+      final url = getFileUrl(filePath);
+      final response = await http.head(
+        Uri.parse(url),
+        headers: {'Authorization': _authHeader},
+      );
+      if (response.statusCode == 200) {
+        final contentLength = response.headers['content-length'];
+        if (contentLength != null) {
+          return int.tryParse(contentLength);
+        }
+      }
+      return null;
+    } catch (e) {
+      LOGGER.e('[WebDAV] getFileSize error: $e');
+      return null;
+    }
   }
 
   String getFileUrl(String filePath) {

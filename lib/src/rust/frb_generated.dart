@@ -127,6 +127,9 @@ abstract class RustLibApi extends BaseApi {
   Stream<IndexActionState> crateApiTagReaderUpdateIndex(
       {required String indexPath});
 
+  Future<String?> crateApiTagReaderReadMetadataFromBytes(
+      {required Uint8List headBytes, required Uint8List tailBytes, required int fileSize, required String fileName});
+
   RustArcIncrementStrongCountFnType
       get rust_arc_increment_strong_count_SmtcFlutter;
 
@@ -581,6 +584,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "update_index",
         argNames: ["indexPath", "sink"],
+      );
+
+  @override
+  Future<String?> crateApiTagReaderReadMetadataFromBytes(
+      {required Uint8List headBytes, required Uint8List tailBytes, required int fileSize, required String fileName}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_8_strict(headBytes, serializer);
+        sse_encode_list_prim_u_8_strict(tailBytes, serializer);
+        sse_encode_u_32(fileSize, serializer);
+        sse_encode_String(fileName, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 17, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_opt_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiTagReaderReadMetadataFromBytesConstMeta,
+      argValues: [headBytes, tailBytes, fileSize, fileName],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiTagReaderReadMetadataFromBytesConstMeta =>
+      const TaskConstMeta(
+        debugName: "read_metadata_from_bytes",
+        argNames: ["headBytes", "tailBytes", "fileSize", "fileName"],
       );
 
   RustArcIncrementStrongCountFnType
