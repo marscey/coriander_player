@@ -1,15 +1,47 @@
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/component/audio_tile.dart';
+import 'package:coriander_player/component/playing_indicator.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/page/uni_page_components.dart';
+import 'package:coriander_player/play_service/play_service.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-class AudiosPage extends StatelessWidget {
+class AudiosPage extends StatefulWidget {
   final Audio? locateTo;
   const AudiosPage({super.key, this.locateTo});
+
+  @override
+  State<AudiosPage> createState() => _AudiosPageState();
+}
+
+class _AudiosPageState extends State<AudiosPage> {
+  @override
+  void initState() {
+    super.initState();
+    PlayService.instance.playbackService.addListener(_onPlaybackChanged);
+  }
+
+  @override
+  void dispose() {
+    PlayService.instance.playbackService.removeListener(_onPlaybackChanged);
+    super.dispose();
+  }
+
+  void _onPlaybackChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _hasPlayingAudioInLibrary {
+    final nowPlaying = PlayService.instance.playbackService.nowPlaying;
+    if (nowPlaying == null) return false;
+    // 只有当播放的音频在音乐库中时才显示定位按钮
+    return AudioLibrary.instance.audioCollection
+        .any((a) => a.path == nowPlaying.path);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,20 +52,20 @@ class AudiosPage extends StatelessWidget {
         final multiSelectController = MultiSelectController<Audio>();
         return UniPage<Audio>(
       pref: AppPreference.instance.audiosPagePref,
-      title: "音乐",
+      title: "音乐库",
       subtitle: "${contentList.length} 首乐曲",
       contentList: contentList,
       contentBuilder: (context, item, i, multiSelectController) => AudioTile(
         audioIndex: i,
         playlist: contentList,
-        focus: item == locateTo,
+        focus: item == widget.locateTo,
         multiSelectController: multiSelectController,
       ),
       enableShufflePlay: true,
       enableSortMethod: true,
       enableSortOrder: true,
       enableContentViewSwitch: true,
-      locateTo: locateTo,
+      locateTo: widget.locateTo,
       multiSelectController: multiSelectController,
       multiSelectViewActions: [
         AddAllToPlaylist(multiSelectController: multiSelectController),
@@ -44,6 +76,16 @@ class AudiosPage extends StatelessWidget {
         ),
         MultiSelectExit(multiSelectController: multiSelectController),
       ],
+      primaryAction: LocatePlayingButton(
+        hasPlayingAudio: _hasPlayingAudioInLibrary,
+        onLocate: () {
+          final nowPlaying =
+              PlayService.instance.playbackService.nowPlaying;
+          if (nowPlaying == null) return;
+          // 通过 push 带上 locateTo 参数，让 UniPage 自动滚动
+          context.push('/audios', extra: nowPlaying);
+        },
+      ),
       sortMethods: [
         SortMethodDesc(
           icon: Symbols.title,
@@ -82,7 +124,7 @@ class AudiosPage extends StatelessWidget {
                 list.sort((a, b) => a.album.localeCompareTo(b.album));
                 break;
               case SortOrder.decending:
-                list.sort((a, b) => b.album.localeCompareTo(a.album));
+                list.sort((a, b) => b.album.localeCompareTo(b.album));
                 break;
             }
           },
@@ -96,7 +138,7 @@ class AudiosPage extends StatelessWidget {
                 list.sort((a, b) => a.created.compareTo(b.created));
                 break;
               case SortOrder.decending:
-                list.sort((a, b) => b.created.compareTo(a.created));
+                list.sort((a, b) => a.created.compareTo(b.created));
                 break;
             }
           },
@@ -110,7 +152,7 @@ class AudiosPage extends StatelessWidget {
                 list.sort((a, b) => a.modified.compareTo(b.modified));
                 break;
               case SortOrder.decending:
-                list.sort((a, b) => b.modified.compareTo(a.modified));
+                list.sort((a, b) => b.modified.compareTo(b.modified));
                 break;
             }
           },

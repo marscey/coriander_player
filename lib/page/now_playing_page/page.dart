@@ -19,6 +19,7 @@ import 'package:coriander_player/src/bass/bass_player.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -652,6 +653,9 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
               maxLines: 1,
               style: TextStyle(color: scheme.onSecondaryContainer),
             ),
+            // 音频格式、码率和采样率
+            if (nowPlaying != null)
+              _buildAudioMeta(nowPlaying, scheme),
             const SizedBox(height: 16),
             Expanded(
               child: Center(
@@ -692,5 +696,56 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
   void dispose() {
     playbackService.removeListener(updateCover);
     super.dispose();
+  }
+
+  /// 构建音频元信息（格式、码率、采样率）
+  Widget _buildAudioMeta(Audio audio, ColorScheme scheme) {
+    final parts = <String>[];
+    final ext = _getAudioFormat(audio);
+    if (ext.isNotEmpty) parts.add(ext);
+    if (audio.bitrate != null) parts.add('${audio.bitrate}kbps');
+    if (audio.sampleRate != null) {
+      final sr = audio.sampleRate!;
+      parts.add(sr >= 1000
+          ? '${(sr / 1000).toStringAsFixed(1)}kHz'
+          : '${sr}Hz');
+    }
+    if (parts.isEmpty) return const SizedBox.shrink();
+    return Text(
+      parts.join(' · '),
+      maxLines: 1,
+      style: TextStyle(
+        color: scheme.onSecondaryContainer.withValues(alpha: 0.7),
+        fontSize: 12,
+      ),
+    );
+  }
+
+  static String _getAudioFormat(Audio audio) {
+    final ext = p.extension(audio.path).toLowerCase();
+    switch (ext) {
+      case '.mp3':
+        return 'MP3';
+      case '.flac':
+        return 'FLAC';
+      case '.wav':
+        return 'WAV';
+      case '.aac':
+        return 'AAC';
+      case '.m4a':
+        return 'M4A';
+      case '.ogg':
+        return 'OGG';
+      case '.opus':
+        return 'OPUS';
+      case '.ape':
+        return 'APE';
+      case '.wma':
+        return 'WMA';
+      case '.alac':
+        return 'ALAC';
+      default:
+        return ext.isNotEmpty ? ext.substring(1).toUpperCase() : '';
+    }
   }
 }

@@ -209,9 +209,9 @@ class Entry extends StatelessWidget {
                 GoRoute(
                   path: "detail",
                   pageBuilder: (context, state) {
-                    final folder = state.extra as AudioFolder;
+                    final args = state.extra as FolderDetailArgs;
                     return SlideTransitionPage(
-                      child: FolderDetailPage(folder: folder),
+                      child: FolderDetailPage(folder: args.folder, locateToPath: args.locateToPath),
                     );
                   },
                 ),
@@ -229,8 +229,13 @@ class Entry extends StatelessWidget {
                   path: "browser/:connectionId",
                   pageBuilder: (context, state) {
                     final connectionId = state.pathParameters['connectionId']!;
+                    final args = state.extra as CloudBrowserArgs?;
                     return SlideTransitionPage(
-                      child: CloudFileBrowser(connectionId: connectionId),
+                      child: CloudFileBrowser(
+                        connectionId: connectionId,
+                        initialPath: args?.initialPath ?? '',
+                        locateToPath: args?.locateToPath,
+                      ),
                     );
                   },
                 ),
@@ -400,7 +405,11 @@ class _AppState extends State<App> with WindowListener, TrayListener {
 
   @override
   void onWindowClose() async {
-    await windowManager.hide();
+    try {
+      await windowManager.hide();
+    } catch (e) {
+      await windowManager.minimize();
+    }
   }
 
   @override

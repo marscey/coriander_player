@@ -81,10 +81,15 @@ Future<void> initWindow() async {
 class MyWindowListener extends WindowListener {
   @override
   void onWindowClose() async {
-    bool preventClose = await windowManager.isPreventClose();
-    if (preventClose) {
-      // 隐藏窗口而不是关闭
+    try {
       await windowManager.hide();
+    } catch (e) {
+      try {
+        await windowManager.setPreventClose(true);
+        await windowManager.hide();
+      } catch (e2) {
+        await windowManager.minimize();
+      }
     }
   }
 

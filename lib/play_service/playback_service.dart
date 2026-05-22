@@ -446,6 +446,8 @@ class PlaybackService extends ChangeNotifier {
 
         playService.desktopLyricService.sendPlayerStateMessage(false);
       });
+
+      notifyListeners();
     } catch (err) {
       LOGGER.e("[pause] $err");
       showTextOnSnackBar(err.toString());
@@ -469,6 +471,8 @@ class PlaybackService extends ChangeNotifier {
 
         playService.desktopLyricService.sendPlayerStateMessage(true);
       });
+
+      notifyListeners();
     } catch (err) {
       LOGGER.e("[start]: $err");
       showTextOnSnackBar(err.toString());

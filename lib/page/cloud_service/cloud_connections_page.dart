@@ -4,10 +4,70 @@ import 'package:provider/provider.dart';
 import '../../app_paths.dart' as app_paths;
 import '../../cloud_service/cloud_connection.dart';
 import '../../cloud_service/cloud_service_manager.dart';
+import '../../play_service/play_service.dart';
+import 'package:coriander_player/component/playing_indicator.dart';
+import 'cloud_file_browser.dart';
 import 'cloud_connection_form.dart';
 
-class CloudConnectionsPage extends StatelessWidget {
+class CloudConnectionsPage extends StatefulWidget {
   const CloudConnectionsPage({super.key});
+
+  @override
+  State<CloudConnectionsPage> createState() => _CloudConnectionsPageState();
+}
+
+class _CloudConnectionsPageState extends State<CloudConnectionsPage> {
+  @override
+  void initState() {
+    super.initState();
+    PlayService.instance.playbackService.addListener(_onPlaybackChanged);
+  }
+
+  @override
+  void dispose() {
+    PlayService.instance.playbackService.removeListener(_onPlaybackChanged);
+    super.dispose();
+  }
+
+  void _onPlaybackChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool _isConnectionPlaying(CloudConnection connection) {
+    final nowPlaying = PlayService.instance.playbackService.nowPlaying;
+    return nowPlaying != null &&
+        nowPlaying.isCloudAudio &&
+        nowPlaying.connectionId == connection.id;
+  }
+
+  bool get _hasPlayingCloudAudio {
+    final nowPlaying = PlayService.instance.playbackService.nowPlaying;
+    return nowPlaying != null && nowPlaying.isCloudAudio;
+  }
+
+  void _locatePlayingConnection() {
+    final nowPlaying = PlayService.instance.playbackService.nowPlaying;
+    if (nowPlaying == null || !nowPlaying.isCloudAudio) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('当前未在播放云音频')),
+      );
+      return;
+    }
+    final connectionId = nowPlaying.connectionId;
+    if (connectionId == null) return;
+
+    // 计算播放文件所在的目录路径
+    final playingPath = nowPlaying.path;
+    final dirPath = playingPath.contains('/')
+        ? playingPath.substring(0, playingPath.lastIndexOf('/'))
+        : '';
+
+    // 跳转到连接的文件浏览器，带上初始路径和定位目标
+    context.push(
+      '${app_paths.CLOUD_BROWSER_PAGE}/$connectionId',
+      extra: CloudBrowserArgs(dirPath, playingPath),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,9 +84,12 @@ class CloudConnectionsPage extends StatelessWidget {
               children: [
                 Icon(Icons.cloud_off, size: 64, color: scheme.outline),
                 const SizedBox(height: 16),
-                Text('暂无云服务连接', style: TextStyle(color: scheme.onSurfaceVariant)),
+                Text('暂无云服务连接',
+                    style: TextStyle(color: scheme.onSurfaceVariant)),
                 const SizedBox(height: 8),
-                Text('点击下方按钮添加连接', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
+                Text('点击下方按钮添加连接',
+                    style: TextStyle(
+                        color: scheme.onSurfaceVariant, fontSize: 13)),
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   onPressed: () => _showAddConnectionDialog(context),
@@ -40,7 +103,6 @@ class CloudConnectionsPage extends StatelessWidget {
 
         return Column(
           children: [
-            // 顶部操作栏
             Padding(
               padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0),
               child: Row(
@@ -54,6 +116,15 @@ class CloudConnectionsPage extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
+                  if (_hasPlayingCloudAudio)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: IconButton.filledTonal(
+                        onPressed: _locatePlayingConnection,
+                        icon: const Icon(Icons.my_location, size: 20),
+                        tooltip: '定位正在播放的云音频',
+                      ),
+                    ),
                   FilledButton.tonal(
                     onPressed: () => _showAddConnectionDialog(context),
                     child: const Row(
@@ -68,7 +139,6 @@ class CloudConnectionsPage extends StatelessWidget {
                 ],
               ),
             ),
-            // 连接列表
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.only(top: 8.0),
@@ -90,10 +160,16 @@ class CloudConnectionsPage extends StatelessWidget {
     CloudConnection connection,
     CloudServiceManager manager,
   ) {
+    final isPlaying = _isConnectionPlaying(connection);
+
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: ListTile(
-        leading: const Icon(Icons.cloud, size: 40),
+        leading: PlayingIndicatorOverlay(
+          size: PlayingIndicatorSize.medium,
+          isActivelyPlaying: isPlaying,
+          child: Icon(Icons.cloud, size: 36),
+        ),
         title: Text(
           connection.displayName ?? connection.name,
           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -208,14 +284,16 @@ class CloudConnectionsPage extends StatelessWidget {
     );
   }
 
-  void _showEditConnectionDialog(BuildContext context, CloudConnection connection) {
+  void _showEditConnectionDialog(
+      BuildContext context, CloudConnection connection) {
     showDialog(
       context: context,
       builder: (context) => CloudConnectionForm(connection: connection),
     );
   }
 
-  Future<void> _testConnection(BuildContext context, CloudConnection connection) async {
+  Future<void> _testConnection(
+      BuildContext context, CloudConnection connection) async {
     final manager = context.read<CloudServiceManager>();
     final service = manager.getService(connection.id);
 
@@ -225,7 +303,6 @@ class CloudConnectionsPage extends StatelessWidget {
       );
       return;
     }
-
     try {
       final isConnected = await service.testConnection();
       if (!context.mounted) return;
@@ -252,7 +329,8 @@ class CloudConnectionsPage extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('确认删除'),
-        content: Text('确定要删除连接 "${connection.displayName ?? connection.name}" 吗？'),
+        content:
+            Text('确定要删除连接 "${connection.displayName ?? connection.name}" 吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

@@ -1,8 +1,10 @@
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/component/playing_indicator.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/library/playlist.dart';
+import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +18,59 @@ class PlaylistsPage extends StatefulWidget {
 }
 
 class _PlaylistsPageState extends State<PlaylistsPage> {
+  @override
+  void initState() {
+    super.initState();
+    PlayService.instance.playbackService.addListener(_onPlaybackChanged);
+  }
+
+  @override
+  void dispose() {
+    PlayService.instance.playbackService.removeListener(_onPlaybackChanged);
+    super.dispose();
+  }
+
+  void _onPlaybackChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool _isPlaylistPlaying(Playlist playlist) {
+    final nowPlaying = PlayService.instance.playbackService.nowPlaying;
+    if (nowPlaying == null) return false;
+    return playlist.audios.containsKey(nowPlaying.path);
+  }
+
+  bool get _hasPlayingAudio {
+    return PlayService.instance.playbackService.nowPlaying != null;
+  }
+
+  void _locatePlayingPlaylist() {
+    final nowPlaying = PlayService.instance.playbackService.nowPlaying;
+    if (nowPlaying == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('当前未在播放音频')),
+      );
+      return;
+    }
+
+    Playlist? targetPlaylist;
+    for (final playlist in PLAYLISTS) {
+      if (playlist.audios.containsKey(nowPlaying.path)) {
+        targetPlaylist = playlist;
+        break;
+      }
+    }
+
+    if (targetPlaylist == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('播放文件不在任何歌单中')),
+      );
+      return;
+    }
+
+    context.push(app_paths.PLAYLIST_DETAIL_PAGE, extra: targetPlaylist);
+  }
+
   void newPlaylist(BuildContext context) async {
     final name = await showDialog<String>(
       context: context,
@@ -51,6 +106,15 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
       subtitle: "${PLAYLISTS.length} 个歌单",
       contentList: PLAYLISTS,
       contentBuilder: (context, item, i, multiSelectController) => ListTile(
+        leading: PlayingIndicatorOverlay(
+          size: PlayingIndicatorSize.medium,
+          isActivelyPlaying: _isPlaylistPlaying(PLAYLISTS[i]),
+          child: Icon(
+            Symbols.queue_music,
+            size: 36,
+            color: scheme.primary,
+          ),
+        ),
         title: Text(
           PLAYLISTS[i].name,
           softWrap: false,
@@ -88,13 +152,27 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
           extra: PLAYLISTS[i],
         ),
       ),
-      primaryAction: FilledButton.icon(
-        onPressed: () => newPlaylist(context),
-        icon: const Icon(Symbols.add),
-        label: const Text("新建歌单"),
-        style: const ButtonStyle(
-          fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
-        ),
+      primaryAction: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_hasPlayingAudio)
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: IconButton(
+                icon: const Icon(Icons.my_location, size: 20),
+                tooltip: "定位播放文件",
+                onPressed: _locatePlayingPlaylist,
+              ),
+            ),
+          FilledButton.icon(
+            onPressed: () => newPlaylist(context),
+            icon: const Icon(Symbols.add),
+            label: const Text("新建歌单"),
+            style: const ButtonStyle(
+              fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
+            ),
+          ),
+        ],
       ),
       enableShufflePlay: false,
       enableSortMethod: true,

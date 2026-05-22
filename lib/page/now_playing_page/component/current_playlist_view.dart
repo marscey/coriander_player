@@ -1,3 +1,5 @@
+import 'package:coriander_player/component/playing_indicator.dart';
+import 'package:coriander_player/component/playlist_audio_item.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:flutter/material.dart';
 
@@ -14,8 +16,13 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
 
   void _toNowPlaying() {
     if (scrollController.hasClients) {
+      final itemHeight = 56.0;
+      final viewportHeight = scrollController.position.viewportDimension;
+      final targetOffset =
+          playbackService.playlistIndex * itemHeight - (viewportHeight / 2) + (itemHeight / 2);
+      final maxExtent = scrollController.position.maxScrollExtent;
       scrollController.animateTo(
-        playbackService.playlistIndex * 56.0,
+        targetOffset.clamp(0.0, maxExtent),
         duration: const Duration(milliseconds: 300),
         curve: Curves.fastOutSlowIn,
       );
@@ -42,13 +49,22 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
         children: [
           Padding(
             padding: const EdgeInsets.all(8.0),
-            child: Text(
-              "播放列表",
-              style: TextStyle(
-                color: scheme.onSecondaryContainer,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+            child: Row(
+              children: [
+                Text(
+                  "播放列表",
+                  style: TextStyle(
+                    color: scheme.onSecondaryContainer,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                LocatePlayingButton(
+                  hasPlayingAudio: playbackService.nowPlaying != null,
+                  onLocate: _toNowPlaying,
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -60,7 +76,18 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
                   itemCount: playbackService.playlist.value.length,
                   itemExtent: 56.0,
                   itemBuilder: (context, index) {
-                    return _PlaylistViewItem(index: index);
+                    final item = playbackService.playlist.value[index];
+                    final isNowPlaying =
+                        playbackService.nowPlaying?.path == item.path;
+                    return PlaylistAudioItem(
+                      audio: item,
+                      index: index,
+                      isNowPlaying: isNowPlaying,
+                      textColor: scheme.onSecondaryContainer,
+                      onTap: () {
+                        playbackService.playIndexOfPlaylist(index);
+                      },
+                    );
                   },
                 );
               },
@@ -76,40 +103,5 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
     super.dispose();
     playbackService.removeListener(_toNowPlaying);
     scrollController.dispose();
-  }
-}
-
-class _PlaylistViewItem extends StatelessWidget {
-  const _PlaylistViewItem({required this.index});
-
-  final int index;
-
-  @override
-  Widget build(BuildContext context) {
-    var playbackService = PlayService.instance.playbackService;
-    final item = playbackService.playlist.value[index];
-    final scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(8.0),
-      onTap: () {
-        playbackService.playIndexOfPlaylist(index);
-      },
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: DefaultTextStyle(
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: scheme.onSecondaryContainer, fontSize: 14),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(item.title),
-              Text(item.subtitleText),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

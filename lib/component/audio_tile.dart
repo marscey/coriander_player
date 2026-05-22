@@ -1,3 +1,4 @@
+import 'package:coriander_player/component/playing_indicator.dart';
 import 'package:coriander_player/component/scroll_aware_future_builder.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/library/audio_library.dart';
@@ -9,11 +10,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:path/path.dart' as p;
+import 'dart:io';
 
 /// 由[playlist]和[audioIndex]确定audio，而不是直接传入audio，
 /// 这是为了实现点击列表项播放乐曲时指定该列表为播放列表。
 /// 同时，播放乐曲时也是需要index和playlist来定位audio和设置播放列表。
-class AudioTile extends StatelessWidget {
+class AudioTile extends StatefulWidget {
   const AudioTile({
     super.key,
     required this.audioIndex,
@@ -32,9 +35,36 @@ class AudioTile extends StatelessWidget {
   final MultiSelectController? multiSelectController;
 
   @override
+  State<AudioTile> createState() => _AudioTileState();
+}
+
+class _AudioTileState extends State<AudioTile> {
+  @override
+  void initState() {
+    super.initState();
+    PlayService.instance.playbackService.addListener(_onPlaybackChanged);
+  }
+
+  @override
+  void dispose() {
+    PlayService.instance.playbackService.removeListener(_onPlaybackChanged);
+    super.dispose();
+  }
+
+  void _onPlaybackChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _isNowPlaying {
+    final nowPlaying = PlayService.instance.playbackService.nowPlaying;
+    final audio = widget.playlist[widget.audioIndex];
+    return nowPlaying != null && nowPlaying.path == audio.path;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final audio = playlist[audioIndex];
+    final audio = widget.playlist[widget.audioIndex];
 
     return MenuAnchor(
       consumeOutsideTap: true,
@@ -80,11 +110,11 @@ class AudioTile extends StatelessWidget {
         ),
 
         /// 多选
-        if (multiSelectController != null)
+        if (widget.multiSelectController != null)
           MenuItemButton(
             onPressed: () {
-              multiSelectController!.useMultiSelectView(true);
-              multiSelectController!.select(audio);
+              widget.multiSelectController!.useMultiSelectView(true);
+              widget.multiSelectController!.select(audio);
             },
             leadingIcon: const Icon(Symbols.select),
             child: const Text("多选"),
@@ -156,7 +186,8 @@ class AudioTile extends StatelessWidget {
         ),
       ],
       builder: (context, controller, _) {
-        final textColor = focus ? scheme.primary : scheme.onSurface;
+        final textColor =
+            (widget.focus || _isNowPlaying) ? scheme.primary : scheme.onSurface;
         final placeholder = Icon(
           Symbols.broken_image,
           size: 48.0,
@@ -166,9 +197,9 @@ class AudioTile extends StatelessWidget {
         return Ink(
           height: 64.0,
           decoration: BoxDecoration(
-            color: multiSelectController == null
+            color: widget.multiSelectController == null
                 ? Colors.transparent
-                : multiSelectController!.selected.contains(audio)
+                : widget.multiSelectController!.selected.contains(audio)
                     ? scheme.secondaryContainer
                     : Colors.transparent,
             borderRadius: BorderRadius.circular(8.0),
@@ -182,9 +213,10 @@ class AudioTile extends StatelessWidget {
                 return;
               }
 
-              if (multiSelectController == null ||
-                  !multiSelectController!.enableMultiSelectView) {
-                PlayService.instance.playbackService.play(audioIndex, playlist);
+              if (widget.multiSelectController == null ||
+                  !widget.multiSelectController!.enableMultiSelectView) {
+                PlayService.instance.playbackService
+                    .play(widget.audioIndex, widget.playlist);
               } else {
                 final isShiftPressed = HardwareKeyboard
                         .instance.logicalKeysPressed
@@ -192,21 +224,24 @@ class AudioTile extends StatelessWidget {
                     HardwareKeyboard.instance.logicalKeysPressed
                         .contains(LogicalKeyboardKey.shiftRight);
                 if (isShiftPressed &&
-                    multiSelectController!.lastSelectedIndex >= 0) {
-                  multiSelectController!.selectRange(
-                    playlist,
-                    multiSelectController!.lastSelectedIndex,
-                    audioIndex,
+                    widget.multiSelectController!.lastSelectedIndex >= 0) {
+                  widget.multiSelectController!.selectRange(
+                    widget.playlist,
+                    widget.multiSelectController!.lastSelectedIndex,
+                    widget.audioIndex,
                   );
-                } else if (multiSelectController!.selected.contains(audio)) {
-                  multiSelectController!.unselect(audio);
+                } else if (widget.multiSelectController!.selected
+                    .contains(audio)) {
+                  widget.multiSelectController!.unselect(audio);
                 } else {
-                  multiSelectController!.selectAtIndex(audio, audioIndex);
+                  widget.multiSelectController!
+                      .selectAtIndex(audio, widget.audioIndex);
                 }
               }
             },
             onSecondaryTapDown: (details) {
-              if (multiSelectController?.enableMultiSelectView == true) return;
+              if (widget.multiSelectController?.enableMultiSelectView == true)
+                return;
 
               controller.open(
                   position: details.localPosition.translate(0, -240));
@@ -214,30 +249,50 @@ class AudioTile extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Row(children: [
-                if (leading != null)
+                // 序号
+                SizedBox(
+                  width: 32.0,
+                  child: Text(
+                    '${widget.audioIndex + 1}',
+                    style: TextStyle(
+                      color: (widget.focus || _isNowPlaying)
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
+                      fontSize: 13,
+                    ),
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+                const SizedBox(width: 12.0),
+
+                if (widget.leading != null)
                   Padding(
                     padding: const EdgeInsets.only(right: 16.0),
-                    child: leading!,
+                    child: widget.leading!,
                   ),
 
                 /// cover
-                ScrollAwareFutureBuilder(
-                  future: () => audio.cover,
-                  builder: (context, snapshot) {
-                    if (snapshot.data == null) {
-                      return placeholder;
-                    }
+                PlayingIndicatorOverlay(
+                  size: PlayingIndicatorSize.small,
+                  isActivelyPlaying: _isNowPlaying,
+                  child: ScrollAwareFutureBuilder(
+                    future: () => audio.cover,
+                    builder: (context, snapshot) {
+                      if (snapshot.data == null) {
+                        return placeholder;
+                      }
 
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(8.0),
-                      child: Image(
-                        image: snapshot.data!,
-                        width: 48.0,
-                        height: 48.0,
-                        errorBuilder: (_, __, ___) => placeholder,
-                      ),
-                    );
-                  },
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(8.0),
+                        child: Image(
+                          image: snapshot.data!,
+                          width: 48.0,
+                          height: 48.0,
+                          errorBuilder: (_, __, ___) => placeholder,
+                        ),
+                      );
+                    },
+                  ),
                 ),
                 const SizedBox(width: 16.0),
 
@@ -249,7 +304,7 @@ class AudioTile extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Expanded(
+                          Flexible(
                             child: Text(
                               audio.title,
                               style: TextStyle(color: textColor, fontSize: 16),
@@ -268,10 +323,10 @@ class AudioTile extends StatelessWidget {
                             ),
                         ],
                       ),
-                      const SizedBox(width: 4.0),
+                      const SizedBox(height: 2.0),
                       Text(
                         audio.subtitleText,
-                        style: TextStyle(color: textColor),
+                        style: TextStyle(color: textColor, fontSize: 13),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -279,16 +334,25 @@ class AudioTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8.0),
-                Text(
-                  Duration(seconds: audio.duration).toStringHMMSS(),
-                  style: TextStyle(
-                    color: focus ? scheme.primary : scheme.onSurface,
-                  ),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      Duration(seconds: audio.duration).toStringHMMSS(),
+                      style: TextStyle(
+                        color: (widget.focus || _isNowPlaying)
+                            ? scheme.primary
+                            : scheme.onSurface,
+                      ),
+                    ),
+                    _buildAudioMetaRight(audio, scheme),
+                  ],
                 ),
-                if (action != null)
+                if (widget.action != null)
                   Padding(
                     padding: const EdgeInsets.only(left: 8.0),
-                    child: action!,
+                    child: widget.action!,
                   ),
               ]),
             ),
@@ -296,5 +360,75 @@ class AudioTile extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// 构建右侧元信息（时长下方：格式 · 文件大小）
+  static Widget _buildAudioMetaRight(Audio audio, ColorScheme scheme) {
+    final format = _getAudioFormat(audio);
+    final parts = <String>[];
+    if (format.isNotEmpty) parts.add(format);
+    // 获取文件大小
+    final fileSize = _getFileSize(audio);
+    if (fileSize != null) parts.add(fileSize);
+
+    if (parts.isEmpty) return const SizedBox.shrink();
+    return Text(
+      parts.join(' · '),
+      style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11),
+    );
+  }
+
+  /// 获取音频文件大小
+  static String? _getFileSize(Audio audio) {
+    if (audio.isCloudAudio) return null;
+    try {
+      final file = File(audio.path);
+      if (file.existsSync()) {
+        final bytes = file.lengthSync();
+        return _formatFileSize(bytes);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// 格式化文件大小
+  static String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    }
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  /// 从路径获取音频格式
+  static String _getAudioFormat(Audio audio) {
+    final ext = p.extension(audio.path).toLowerCase();
+    switch (ext) {
+      case '.mp3':
+        return 'MP3';
+      case '.flac':
+        return 'FLAC';
+      case '.wav':
+        return 'WAV';
+      case '.aac':
+        return 'AAC';
+      case '.m4a':
+        return 'M4A';
+      case '.ogg':
+        return 'OGG';
+      case '.opus':
+        return 'OPUS';
+      case '.ape':
+        return 'APE';
+      case '.wma':
+        return 'WMA';
+      case '.alac':
+        return 'ALAC';
+      default:
+        return ext.isNotEmpty ? ext.substring(1).toUpperCase() : '';
+    }
   }
 }

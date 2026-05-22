@@ -17,11 +17,11 @@ class DestinationDesc {
 /// 导航项与 StatefulShellRoute 分支的对应关系
 /// 分支顺序必须与 entry.dart 中 StatefulShellRoute.indexedStack 的 branches 顺序一致
 final destinations = <DestinationDesc>[
-  DestinationDesc(Symbols.library_music, "音乐", app_paths.AUDIOS_PAGE),
+  DestinationDesc(Symbols.library_music, "音乐库", app_paths.AUDIOS_PAGE),
   DestinationDesc(Symbols.history, "最近播放", app_paths.RECENT_PLAYS_PAGE),
   DestinationDesc(Symbols.artist, "艺术家", app_paths.ARTISTS_PAGE),
   DestinationDesc(Symbols.album, "专辑", app_paths.ALBUMS_PAGE),
-  DestinationDesc(Symbols.folder, "文件夹", app_paths.FOLDERS_PAGE),
+  DestinationDesc(Symbols.folder, "本地", app_paths.FOLDERS_PAGE),
   DestinationDesc(Symbols.cloud, "连接", app_paths.CLOUD_CONNECTIONS_PAGE),
   DestinationDesc(Symbols.list, "歌单", app_paths.PLAYLISTS_PAGE),
   DestinationDesc(Symbols.search, "搜索", app_paths.SEARCH_PAGE),

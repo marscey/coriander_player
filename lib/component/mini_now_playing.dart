@@ -1,6 +1,7 @@
 import 'package:coriander_player/component/rectangle_progress_indicator.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
-import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/component/playlist_audio_item.dart';
+import 'package:coriander_player/component/playing_indicator.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/bass/bass_player.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
@@ -77,6 +78,21 @@ class _NowPlayingForeground extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const Spacer(),
+                  LocatePlayingButton(
+                    hasPlayingAudio: playbackService.nowPlaying != null,
+                    onLocate: () {
+                      final index = playbackService.playlistIndex;
+                      if (!scrollController.hasClients) return;
+                      final viewportHeight = scrollController.position.viewportDimension;
+                      final targetOffset = index * 56.0 - (viewportHeight / 2) + 28.0;
+                      final maxExtent = scrollController.position.maxScrollExtent;
+                      scrollController.animateTo(
+                        targetOffset.clamp(0.0, maxExtent),
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.fastOutSlowIn,
+                      );
+                    },
+                  ),
                   ListenableBuilder(
                     listenable: playbackService.playlist,
                     builder: (context, _) => Text(
@@ -103,30 +119,10 @@ class _NowPlayingForeground extends StatelessWidget {
                     itemBuilder: (context, index) {
                       final item = playlist[index];
                       final isCurrent = index == currentIndex;
-                      return ListTile(
-                        dense: true,
-                        selected: isCurrent,
-                        leading: isCurrent
-                            ? Icon(Symbols.play_arrow,
-                                size: 20,
-                                color: Theme.of(context).colorScheme.primary)
-                            : null,
-                        title: Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: isCurrent
-                              ? TextStyle(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontWeight: FontWeight.w600)
-                              : null,
-                        ),
-                        subtitle: Text(
-                          item.subtitleText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 12),
-                        ),
+                      return PlaylistAudioItem(
+                        audio: item,
+                        index: index,
+                        isNowPlaying: isCurrent,
                         onTap: () {
                           playbackService.playIndexOfPlaylist(index);
                         },

@@ -10,8 +10,9 @@ import 'package:path/path.dart' as p;
 class RecentPlayEntry {
   final String audioPath;
   final int playedAt; // secs since UNIX EPOCH
+  Audio? audioRef; // 内存中的Audio引用，不序列化
 
-  RecentPlayEntry({required this.audioPath, required this.playedAt});
+  RecentPlayEntry({required this.audioPath, required this.playedAt, this.audioRef});
 
   Map toMap() => {
         'audioPath': audioPath,
@@ -42,7 +43,8 @@ class RecentPlayService extends ChangeNotifier {
   List<RecentPlayEntry> _entries = [];
   List<RecentPlayEntry> get entries => _entries;
 
-  /// 获取最近播放的 Audio 列表（从 AudioLibrary 中查找对应的 Audio 对象）
+  /// 获取最近播放的 Audio 列表
+  /// 先从 AudioLibrary.audioCollection 查找，找不到则使用内存中的 audioRef（云音频场景）
   List<Audio> get recentAudios {
     final audios = <Audio>[];
     for (final entry in _entries) {
@@ -51,6 +53,11 @@ class RecentPlayService extends ChangeNotifier {
           .firstOrNull;
       if (audio != null) {
         audios.add(audio);
+        // 更新内存引用
+        entry.audioRef = audio;
+      } else if (entry.audioRef != null) {
+        // 云音频可能不在 audioCollection 中，使用内存引用
+        audios.add(entry.audioRef!);
       }
     }
     return audios;
@@ -92,12 +99,13 @@ class RecentPlayService extends ChangeNotifier {
     // 去重：移除已有的同一首歌的记录
     _entries.removeWhere((e) => e.audioPath == audio.path);
 
-    // 在列表头部插入新记录
+    // 在列表头部插入新记录，同时保存Audio引用
     _entries.insert(
       0,
       RecentPlayEntry(
         audioPath: audio.path,
         playedAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        audioRef: audio,
       ),
     );
 

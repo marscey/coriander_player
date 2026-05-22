@@ -343,8 +343,8 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
             // 关闭桌面歌词（窗口隐藏时不需要显示）
             PlayService.instance.desktopLyricService.killDesktopLyric();
 
-            // 关闭窗口，由windowManager.onWindowClose监听器处理隐藏逻辑
-            windowManager.close();
+            // 隐藏窗口到系统托盘，而不是退出应用
+            await windowManager.hide();
           },
           icon: const Icon(Symbols.close),
         ),
