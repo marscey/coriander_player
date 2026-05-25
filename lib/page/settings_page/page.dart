@@ -5,6 +5,7 @@ import 'package:coriander_player/page/settings_page/check_update.dart';
 import 'package:coriander_player/page/settings_page/create_issue.dart';
 import 'package:coriander_player/page/settings_page/other_settings.dart';
 import 'package:coriander_player/page/settings_page/player_engine_selector.dart';
+import 'package:coriander_player/page/settings_page/scraper_settings.dart';
 import 'package:coriander_player/page/settings_page/theme_settings.dart';
 import 'package:flutter/material.dart';
 
@@ -21,9 +22,15 @@ class SettingsPage extends StatelessWidget {
         children: const [
           AudioLibraryEditor(),
           SizedBox(height: 16.0),
-          CloudCacheSettings(),
+          CacheManagementSettings(),
+          SizedBox(height: 16.0),
+          CloseBehaviorControl(),
           SizedBox(height: 16.0),
           DefaultLyricSourceControl(),
+          SizedBox(height: 16.0),
+          BluetoothLyricSwitch(),
+          SizedBox(height: 16.0),
+          ScraperSettings(),
           SizedBox(height: 16.0),
           DynamicThemeSwitch(),
           SizedBox(height: 16.0),

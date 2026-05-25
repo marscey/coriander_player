@@ -23,6 +23,7 @@ dependencies:
   ffi: ^2.1.0
   path: ^1.8.3
   audio_service: ^0.18.18
+  audio_session: ^0.1.25
   just_audio: ^0.9.35
   material_symbols_icons: ^4.2719.1
   github: ^9.24.0
@@ -41,13 +42,16 @@ dependencies:
   pinyin: ^3.3.0
   hotkey_manager: ^0.2.3
   logger: ^2.4.0
-  flutter_rust_bridge: 2.8.0
+  flutter_rust_bridge: 2.12.0
   rust_lib_coriander_player:
     path: rust_builder
   http: ^1.2.0
   webdav_client: ^1.2.2
   shared_preferences: ^2.2.2
+  sqflite: ^2.3.3+2
+  crypto: ^3.0.5
   flutter_secure_storage: ^9.0.0
+  home_widget: ^0.7.0
   xml: ^6.3.0
   # 使用指定版本的media_kit库解决依赖问题
   media_kit: ^1.1.11

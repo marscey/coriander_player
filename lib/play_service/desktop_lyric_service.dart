@@ -24,9 +24,13 @@ class DesktopLyricService extends ChangeNotifier {
   Future<Process?> desktopLyric = Future.value(null);
   StreamSubscription? _desktopLyricSubscription;
 
-  bool isLocked = false;
+  bool _isLocked = false;
+  bool get isLocked => PlatformHelper.isDesktop ? _isLocked : false;
+  set isLocked(bool value) => _isLocked = value;
 
   Future<void> startDesktopLyric() async {
+    if (!PlatformHelper.isDesktop) return;
+
     // 移除macOS平台的限制，允许在所有桌面平台上启动桌面歌词
     
     final desktopLyricPath = PlatformHelper.desktopLyricExecutablePath;
@@ -153,6 +157,8 @@ class DesktopLyricService extends ChangeNotifier {
   }
 
   void killDesktopLyric() {
+    if (!PlatformHelper.isDesktop) return;
+
     desktopLyric.then((value) {
       value?.kill();
       desktopLyric = Future.value(null);
@@ -167,6 +173,8 @@ class DesktopLyricService extends ChangeNotifier {
   }
 
   void sendUnlockMessage() {
+    if (!PlatformHelper.isDesktop) return;
+
     sendMessage(const msg.UnlockMessage());
     isLocked = false;
     notifyListeners();

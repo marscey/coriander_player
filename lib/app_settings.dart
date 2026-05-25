@@ -72,6 +72,18 @@ class AppSettings {
   // 播放器引擎类型
   PlayerEngineType? playerEngineType;
 
+  /// iOS 蓝牙歌词：将歌词绘制到封面图上，通过 AVRCP 传给蓝牙设备
+  bool bluetoothLyric = true;
+
+  /// 关闭主窗口时最小化到托盘（true）或退出程序（false）
+  bool closeToTray = true;
+
+  /// 是否已提示过"已最小化到托盘"
+  bool hasShownTrayTip = false;
+
+  /// 云音频缓存容量上限（MB），-1 表示无限制，默认 2048MB (2GB)
+  int cloudCacheMaxSizeMB = 2048;
+
   late String artistSplitPattern = artistSeparator.join("|");
 
   static final AppSettings _instance = AppSettings._();
@@ -227,6 +239,28 @@ class AppSettings {
           // 如果配置的值无效，保持默认值
         }
       }
+
+      // 读取蓝牙歌词配置
+      final bl = settingsMap["BluetoothLyric"];
+      if (bl != null) {
+        _instance.bluetoothLyric = bl;
+      }
+
+      // 读取关闭行为配置
+      final ctt = settingsMap["CloseToTray"];
+      if (ctt != null) {
+        _instance.closeToTray = ctt;
+      }
+
+      final hst = settingsMap["HasShownTrayTip"];
+      if (hst != null) {
+        _instance.hasShownTrayTip = hst;
+      }
+
+      final ccms = settingsMap["CloudCacheMaxSizeMB"];
+      if (ccms != null) {
+        _instance.cloudCacheMaxSizeMB = ccms;
+      }
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -234,8 +268,18 @@ class AppSettings {
 
   Future<void> saveSettings() async {
     try {
-      final isMaximized = await windowManager.isMaximized();
-      final isFullScreen = await windowManager.isFullScreen();
+      bool isMaximized = false;
+      bool isFullScreen = false;
+      Size currentSize = windowSize;
+
+      if (PlatformHelper.isDesktop) {
+        isMaximized = await windowManager.isMaximized();
+        isFullScreen = await windowManager.isFullScreen();
+        if (!isMaximized && !isFullScreen) {
+          currentSize = await windowManager.getSize();
+        }
+      }
+
       final settingsMap = {
         "Version": version,
         "ThemeMode": themeMode == ThemeMode.dark,
@@ -249,16 +293,17 @@ class AppSettings {
         "FontFamily": fontFamily,
         "FontPath": fontPath,
         "PlayerEngineType": playerEngineType?.name,
+        "BluetoothLyric": bluetoothLyric,
+        "CloseToTray": closeToTray,
+        "HasShownTrayTip": hasShownTrayTip,
+        "CloudCacheMaxSizeMB": cloudCacheMaxSizeMB,
       };
 
-      // 只有在窗口不是最大化且不是全屏时才保存窗口尺寸
-      // 这样windowSize始终保存的是窗口化时的尺寸
-      Size sizeToSave = windowSize;
-      if (!isMaximized && !isFullScreen) {
-        sizeToSave = await windowManager.getSize();
+      // 只有桌面端保存窗口尺寸
+      if (PlatformHelper.isDesktop) {
+        settingsMap["WindowSize"] =
+            "${currentSize.width.toStringAsFixed(1)},${currentSize.height.toStringAsFixed(1)}";
       }
-      settingsMap["WindowSize"] =
-          "${sizeToSave.width.toStringAsFixed(1)},${sizeToSave.height.toStringAsFixed(1)}";
 
       final settingsStr = json.encode(settingsMap);
       final supportPath = (await getAppDataDir()).path;

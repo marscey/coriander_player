@@ -93,3 +93,60 @@ class SideNav extends StatelessWidget {
     );
   }
 }
+
+/// 移动端底部导航栏的导航项
+/// key: 显示在底部导航栏中的项 index (0-4)
+/// value: 对应 StatefulShellRoute 的分支 index
+const _mobileNavBranchMapping = [0, 1, 5, 7, 8];
+
+/// 移动端底部导航栏显示的5个导航项
+final _mobileDestinations = <DestinationDesc>[
+  destinations[0], // 音乐库
+  destinations[1], // 最近播放
+  destinations[5], // 连接
+  destinations[7], // 搜索
+  destinations[8], // 设置
+];
+
+class MobileBottomNav extends StatelessWidget {
+  const MobileBottomNav({super.key, required this.navigationShell});
+
+  final StatefulNavigationShell navigationShell;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final location = GoRouterState.of(context).uri.toString();
+
+    // 找到当前路由对应的 destinations index
+    int selectedInDestinations = destinations.indexWhere(
+      (desc) => location.startsWith(desc.desPath),
+    );
+
+    // 映射到底部导航栏的 index
+    int selectedInMobile = _mobileNavBranchMapping.indexOf(selectedInDestinations);
+    if (selectedInMobile == -1) selectedInMobile = 0;
+
+    void onDestinationSelected(int mobileIndex) {
+      if (mobileIndex == selectedInMobile) return;
+      final branchIndex = _mobileNavBranchMapping[mobileIndex];
+      navigationShell.goBranch(
+        branchIndex,
+        initialLocation: branchIndex == navigationShell.currentIndex,
+      );
+    }
+
+    return NavigationBar(
+      backgroundColor: scheme.surfaceContainer,
+      selectedIndex: selectedInMobile,
+      onDestinationSelected: onDestinationSelected,
+      destinations: List.generate(
+        _mobileDestinations.length,
+        (i) => NavigationDestination(
+          icon: Icon(_mobileDestinations[i].icon),
+          label: _mobileDestinations[i].label,
+        ),
+      ),
+    );
+  }
+}

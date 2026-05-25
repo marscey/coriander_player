@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:ui';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
+import 'package:coriander_player/metadata/media_cache.dart';
+import 'package:coriander_player/metadata/metadata_service.dart';
 import 'package:coriander_player/src/rust/api/tag_reader.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/platform_helper.dart';
@@ -469,10 +471,23 @@ class Audio {
       path: path,
       width: (width * ratio).round(),
       height: (height * ratio).round(),
-    ).then((pic) {
-      if (pic == null) return null;
+    ).then((pic) async {
+      if (pic != null) return MemoryImage(pic);
 
-      return MemoryImage(pic);
+      // 文件内嵌封面不存在，尝试从 MediaCache 获取刮削的封面
+      try {
+        final audioId = await MetadataService.instance.computeAudioId(this);
+        if (audioId != null) {
+          final cached = await MediaCache.instance.getCover(audioId);
+          if (cached != null) {
+            final coverBytes = cached.$1;
+            return MemoryImage(coverBytes);
+          }
+        }
+      } catch (e) {
+        LOGGER.e("[Audio] Failed to get cover from cache: $e");
+      }
+      return null;
     });
   }
 
@@ -494,6 +509,11 @@ class Audio {
 
   void setCover(ImageProvider cover) {
     _cover = cover;
+  }
+
+  /// 清除封面缓存，下次访问时重新加载
+  void clearCoverCache() {
+    _cover = null;
   }
 
   bool get isCloudAudio => by == 'Cloud';

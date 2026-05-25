@@ -4,9 +4,56 @@ import 'package:coriander_player/component/settings_tile.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
+import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/play_service/play_service.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+class CloseBehaviorControl extends StatefulWidget {
+  const CloseBehaviorControl({super.key});
+
+  @override
+  State<CloseBehaviorControl> createState() => _CloseBehaviorControlState();
+}
+
+class _CloseBehaviorControlState extends State<CloseBehaviorControl> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PlatformHelper.isDesktop) return const SizedBox.shrink();
+
+    return SettingsTile(
+      description: "关闭主窗口时",
+      action: SegmentedButton<bool>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment<bool>(
+            value: true,
+            icon: Icon(Symbols.minimize),
+            label: Text("最小化到托盘"),
+          ),
+          ButtonSegment<bool>(
+            value: false,
+            icon: Icon(Symbols.close),
+            label: Text("退出程序"),
+          ),
+        ],
+        selected: {settings.closeToTray},
+        onSelectionChanged: (newSelection) async {
+          if (newSelection.first == settings.closeToTray) return;
+
+          setState(() {
+            settings.closeToTray = newSelection.first;
+          });
+          await settings.saveSettings();
+        },
+      ),
+    );
+  }
+}
 
 class DefaultLyricSourceControl extends StatefulWidget {
   const DefaultLyricSourceControl({super.key});
@@ -174,15 +221,25 @@ class _AudioLibraryEditorDialogState extends State<AudioLibraryEditorDialog> {
                 children: [
                   TextButton(
                     onPressed: () async {
-                      final dirPicker = DirectoryPicker();
-                      dirPicker.title = "选择文件夹";
+                      if (PlatformHelper.isWindows) {
+                        final dirPicker = DirectoryPicker();
+                        dirPicker.title = "选择文件夹";
 
-                      final dir = dirPicker.getDirectory();
-                      if (dir == null) return;
+                        final dir = dirPicker.getDirectory();
+                        if (dir == null) return;
 
-                      setState(() {
-                        folders.add(dir.path);
-                      });
+                        setState(() {
+                          folders.add(dir.path);
+                        });
+                      } else {
+                        final dir =
+                            await FilePicker.platform.getDirectoryPath();
+                        if (dir == null) return;
+
+                        setState(() {
+                          folders.add(dir);
+                        });
+                      }
                     },
                     child: const Text("添加"),
                   ),
@@ -205,6 +262,40 @@ class _AudioLibraryEditorDialogState extends State<AudioLibraryEditorDialog> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// iOS 蓝牙歌词开关
+/// 将歌词绘制到封面图上，通过 AVRCP 传给蓝牙设备显示
+class BluetoothLyricSwitch extends StatefulWidget {
+  const BluetoothLyricSwitch({super.key});
+
+  @override
+  State<BluetoothLyricSwitch> createState() => _BluetoothLyricSwitchState();
+}
+
+class _BluetoothLyricSwitchState extends State<BluetoothLyricSwitch> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    // 仅 iOS 显示此设置
+    if (!PlatformHelper.isIOS) return const SizedBox.shrink();
+
+    return SettingsTile(
+      description: "蓝牙歌词",
+      action: Switch(
+        value: settings.bluetoothLyric,
+        onChanged: (value) async {
+          setState(() {
+            settings.bluetoothLyric = value;
+          });
+          // 同步更新媒体控制服务
+          PlayService.instance.playbackService.setBluetoothLyricEnabled(value);
+          await settings.saveSettings();
+        },
       ),
     );
   }

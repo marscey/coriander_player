@@ -22,7 +22,7 @@ class ResolvedStreaming {
 
 class CloudAudioPlayer {
   static bool get _supportsStreaming {
-    final engineType = AppSettings.instance.playerEngineType;
+    final engineType = AppSettings.instance.playerEngineType ?? PlayerEngineType.defaultForPlatform;
     return engineType == PlayerEngineType.mediaKit;
   }
 

@@ -15,6 +15,12 @@ class PlayService {
     return _instance!;
   }
 
+  /// 显式初始化 PlayService
+  /// iOS/macOS 上需要等待 AudioService.init() 完成
+  Future<void> initialize() async {
+    await playbackService.initialize();
+  }
+
   void close() {
     desktopLyricService.killDesktopLyric();
     playbackService.close();

@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'package:audio_session/audio_session.dart';
 import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/utils.dart';
 
 class PlatformSpecificInitialization {
   /// 针对不同平台进行特定的初始化
@@ -26,25 +28,50 @@ class PlatformSpecificInitialization {
   /// Windows平台特定初始化
   static Future<void> _initializeForWindows() async {
     // Windows平台上的BASS库初始化主要在BassPlayer类中完成
-    // 这里可以添加一些Windows特有的配置
   }
 
   /// macOS平台特定初始化
   static Future<void> _initializeForMacOS() async {
-    // macOS平台上可能需要的特定初始化
-    // 例如配置音频会话或权限
+    await _configureAudioSession();
   }
 
   /// Android平台特定初始化
   static Future<void> _initializeForAndroid() async {
-    // 在Android平台上，可能需要请求音频焦点或处理Doze模式
-    // 这些操作通常会在MediaKitPlayerEngine中处理
+    await _configureAudioSession();
   }
 
   /// iOS平台特定初始化
   static Future<void> _initializeForiOS() async {
-    // 在iOS平台上，可能需要配置音频会话类别
-    // 例如设置后台播放或混音模式
+    await _configureAudioSession();
+  }
+
+  /// 配置音频会话 - 对 iOS/macOS/Android 均必要
+  /// iOS: 设置 AVAudioSession category 为 playback 并激活，
+  ///      确保后台播放、锁屏控制、蓝牙控制正常工作
+  static Future<void> _configureAudioSession() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+      LOGGER.i("[PlatformInit] AudioSession configured as music/playback");
+
+      // 关键：显式激活音频会话
+      // iOS 上 MPNowPlayingInfoCenter 需要 AVAudioSession.setActive(true) 才能显示
+      try {
+        await session.setActive(true);
+        LOGGER.i("[PlatformInit] AudioSession setActive(true) SUCCESS");
+      } catch (e) {
+        LOGGER.e("[PlatformInit] AudioSession setActive(true) FAILED: $e");
+      }
+
+      // 验证激活状态
+      if (PlatformHelper.isIOS) {
+        LOGGER.i("[PlatformInit] AudioSession isConfigured=${session.isConfigured}");
+      }
+    } catch (e) {
+      // 音频会话配置失败不应阻止应用启动
+      if (PlatformHelper.isDesktop) return;
+      LOGGER.e("[PlatformInit] Failed to configure audio session: $e");
+    }
   }
 
   /// 检查平台是否支持指定的播放引擎

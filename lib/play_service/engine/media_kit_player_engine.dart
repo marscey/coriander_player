@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:audio_session/audio_session.dart';
 import 'package:coriander_player/play_service/engine/player_engine.dart';
 import 'package:coriander_player/src/bass/bass_player.dart' as bass_player;
 import 'package:coriander_player/utils.dart';
@@ -62,6 +64,19 @@ class MediaKitPlayerEngine implements PlayerEngine {
       } catch (_) {}
     });
     LOGGER.i("[MediaKit] initialize DONE");
+
+    // iOS: media_kit 初始化后可能修改了 AVAudioSession 配置
+    // 需要重新设置为 playback category 并激活，确保锁屏/控制中心正常显示
+    if (Platform.isIOS) {
+      try {
+        final session = await AudioSession.instance;
+        await session.configure(const AudioSessionConfiguration.music());
+        await session.setActive(true);
+        LOGGER.i("[MediaKit] AudioSession re-configured and activated after Player init");
+      } catch (e) {
+        LOGGER.e("[MediaKit] Failed to re-configure AudioSession after init: $e");
+      }
+    }
   }
 
   void _onPlayingChanged(bool playing) {

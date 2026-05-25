@@ -4,6 +4,32 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as path;
 import 'package:coriander_player/utils.dart';
 
+class _CacheEntry {
+  String filePath;
+  int fileSize;
+  DateTime lastAccessed;
+
+  _CacheEntry({
+    required this.filePath,
+    required this.fileSize,
+    required this.lastAccessed,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'filePath': filePath,
+        'fileSize': fileSize,
+        'lastAccessed': lastAccessed.toIso8601String(),
+      };
+
+  factory _CacheEntry.fromJson(Map<String, dynamic> json) => _CacheEntry(
+        filePath: json['filePath'] as String,
+        fileSize: json['fileSize'] as int? ?? 0,
+        lastAccessed: json['lastAccessed'] != null
+            ? DateTime.parse(json['lastAccessed'] as String)
+            : DateTime.now(),
+      );
+}
+
 class CloudCacheManager {
   static final CloudCacheManager _instance = CloudCacheManager._();
   static CloudCacheManager get instance => _instance;
@@ -12,6 +38,24 @@ class CloudCacheManager {
 
   static String _defaultCacheDir = '';
   static String _customCacheDir = '';
+
+  int _maxCacheSizeBytes = 2 * 1024 * 1024 * 1024;
+  int get maxCacheSizeBytes => _maxCacheSizeBytes;
+
+  static const int noLimit = -1;
+
+  void setMaxCacheSizeMB(int sizeMB) {
+    if (sizeMB == noLimit) {
+      _maxCacheSizeBytes = noLimit;
+    } else {
+      _maxCacheSizeBytes = sizeMB * 1024 * 1024;
+    }
+  }
+
+  int get maxCacheSizeMB {
+    if (_maxCacheSizeBytes == noLimit) return noLimit;
+    return (_maxCacheSizeBytes / (1024 * 1024)).round();
+  }
 
   static Future<void> init() async {
     final appData = await _getAppDataDir();
@@ -36,7 +80,8 @@ class CloudCacheManager {
 
   static File _getConfigFile() {
     final appData = Platform.environment['USERPROFILE'] ?? 'C:\\Users';
-    return File(path.join(appData, 'Documents', 'coriander_player', 'cloud_cache_config.json'));
+    return File(path.join(appData, 'Documents', 'coriander_player',
+        'cloud_cache_config.json'));
   }
 
   static Future<void> _loadCustomDirConfig() async {
@@ -46,7 +91,9 @@ class CloudCacheManager {
         final content = await configFile.readAsString();
         final Map<String, dynamic> json = jsonDecode(content);
         final customDir = json['cacheDir'] as String?;
-        if (customDir != null && customDir.isNotEmpty && await Directory(customDir).exists()) {
+        if (customDir != null &&
+            customDir.isNotEmpty &&
+            await Directory(customDir).exists()) {
           _customCacheDir = customDir;
         }
       } catch (e) {
@@ -110,37 +157,101 @@ class CloudCacheManager {
       }
     }
 
-    _cacheIndex.clear();
+    _cacheEntries.clear();
     await _loadIndex();
     LOGGER.i('[CloudCache] migrated cache from $oldDir to $newDir');
   }
 
-  final Map<String, String> _cacheIndex = {};
+  final Map<String, _CacheEntry> _cacheEntries = {};
 
-  Map<String, String> get cacheIndex => Map.unmodifiable(_cacheIndex);
+  Map<String, String> get cacheIndex =>
+      Map.unmodifiable(_cacheEntries.map((k, v) => MapEntry(k, v.filePath)));
 
   File _getIndexFile() => File(path.join(cacheDir, 'cache_index.json'));
 
   Future<void> _loadIndex() async {
     final indexFile = _getIndexFile();
-    if (await indexFile.exists()) {
-      try {
-        final content = await indexFile.readAsString();
-        final Map<String, dynamic> json = jsonDecode(content);
-        _cacheIndex.clear();
-        json.forEach((key, value) {
-          _cacheIndex[key] = value as String;
-        });
-        LOGGER.i('[CloudCache] loaded ${_cacheIndex.length} cache entries');
-      } catch (e) {
-        LOGGER.e('[CloudCache] failed to load index: $e');
-      }
+    if (!await indexFile.exists()) {
+      await _migrateFromOldIndex();
+      return;
     }
+
+    try {
+      final content = await indexFile.readAsString();
+      final Map<String, dynamic> json = jsonDecode(content);
+
+      if (json.isEmpty) {
+        await _migrateFromOldIndex();
+        return;
+      }
+
+      final firstValue = json.values.first;
+      if (firstValue is String) {
+        await _migrateFromOldIndex();
+        return;
+      }
+
+      _cacheEntries.clear();
+      json.forEach((key, value) {
+        if (value is Map<String, dynamic>) {
+          _cacheEntries[key] = _CacheEntry.fromJson(value);
+        }
+      });
+      LOGGER.i('[CloudCache] loaded ${_cacheEntries.length} cache entries');
+    } catch (e) {
+      LOGGER.e('[CloudCache] failed to load index: $e');
+      await _migrateFromOldIndex();
+    }
+  }
+
+  Future<void> _migrateFromOldIndex() async {
+    final indexFile = _getIndexFile();
+    if (!await indexFile.exists()) return;
+
+    try {
+      final content = await indexFile.readAsString();
+      final Map<String, dynamic> json = jsonDecode(content);
+      _cacheEntries.clear();
+
+      for (final entry in json.entries) {
+        if (entry.value is String) {
+          final filePath = entry.value as String;
+          final file = File(filePath);
+          int fileSize = 0;
+          if (await file.exists()) {
+            try {
+              fileSize = await file.length();
+            } catch (_) {}
+          }
+          _cacheEntries[entry.key] = _CacheEntry(
+            filePath: filePath,
+            fileSize: fileSize,
+            lastAccessed: await _getFileLastModified(file),
+          );
+        }
+      }
+
+      await _saveIndex();
+      LOGGER.i(
+          '[CloudCache] migrated ${_cacheEntries.length} entries from old index format');
+    } catch (e) {
+      LOGGER.e('[CloudCache] failed to migrate old index: $e');
+    }
+  }
+
+  Future<DateTime> _getFileLastModified(File file) async {
+    try {
+      if (await file.exists()) {
+        return await file.lastModified();
+      }
+    } catch (_) {}
+    return DateTime.now();
   }
 
   Future<void> _saveIndex() async {
     final indexFile = _getIndexFile();
-    await indexFile.writeAsString(jsonEncode(_cacheIndex));
+    final json = _cacheEntries.map((k, v) => MapEntry(k, v.toJson()));
+    await indexFile.writeAsString(jsonEncode(json));
   }
 
   String _cacheKey(String webdavPath) {
@@ -149,23 +260,36 @@ class CloudCacheManager {
 
   String? getCachedFilePath(String webdavPath) {
     final key = _cacheKey(webdavPath);
-    final cachedPath = _cacheIndex[key];
-    if (cachedPath == null) return null;
+    final entry = _cacheEntries[key];
+    if (entry == null) return null;
 
-    final file = File(cachedPath);
+    final file = File(entry.filePath);
     if (!file.existsSync()) {
-      _cacheIndex.remove(key);
+      _cacheEntries.remove(key);
       return null;
     }
-    return cachedPath;
+
+    entry.lastAccessed = DateTime.now();
+    return entry.filePath;
   }
 
   bool isCached(String webdavPath) {
     return getCachedFilePath(webdavPath) != null;
   }
 
-  Future<String> saveToCache(String webdavPath, List<int> bytes, {String? originalName}) async {
+  Future<String> saveToCache(String webdavPath, List<int> bytes,
+      {String? originalName}) async {
     final key = _cacheKey(webdavPath);
+
+    final existing = _cacheEntries[key];
+    if (existing != null) {
+      final oldFile = File(existing.filePath);
+      if (await oldFile.exists()) {
+        await oldFile.delete();
+      }
+      _cacheEntries.remove(key);
+    }
+
     final ext = originalName != null ? path.extension(originalName) : '.audio';
     final cacheFileName = '$key$ext';
     final cacheFilePath = path.join(cacheDir, cacheFileName);
@@ -173,15 +297,33 @@ class CloudCacheManager {
     final cacheFile = File(cacheFilePath);
     await cacheFile.writeAsBytes(bytes);
 
-    _cacheIndex[key] = cacheFilePath;
+    _cacheEntries[key] = _CacheEntry(
+      filePath: cacheFilePath,
+      fileSize: bytes.length,
+      lastAccessed: DateTime.now(),
+    );
     await _saveIndex();
 
-    LOGGER.i('[CloudCache] cached: $webdavPath -> $cacheFilePath (${bytes.length} bytes)');
+    LOGGER.i(
+        '[CloudCache] cached: $webdavPath -> $cacheFilePath (${bytes.length} bytes)');
+
+    await _evictIfNeeded();
     return cacheFilePath;
   }
 
-  Future<String> saveStreamToCache(String webdavPath, Stream<List<int>> stream, {String? originalName}) async {
+  Future<String> saveStreamToCache(String webdavPath, Stream<List<int>> stream,
+      {String? originalName}) async {
     final key = _cacheKey(webdavPath);
+
+    final existing = _cacheEntries[key];
+    if (existing != null) {
+      final oldFile = File(existing.filePath);
+      if (await oldFile.exists()) {
+        await oldFile.delete();
+      }
+      _cacheEntries.remove(key);
+    }
+
     final ext = originalName != null ? path.extension(originalName) : '.audio';
     final cacheFileName = '$key$ext';
     final cacheFilePath = path.join(cacheDir, cacheFileName);
@@ -195,27 +337,73 @@ class CloudCacheManager {
     }
     await sink.close();
 
-    _cacheIndex[key] = cacheFilePath;
+    _cacheEntries[key] = _CacheEntry(
+      filePath: cacheFilePath,
+      fileSize: totalBytes,
+      lastAccessed: DateTime.now(),
+    );
     await _saveIndex();
 
-    LOGGER.i('[CloudCache] stream cached: $webdavPath -> $cacheFilePath ($totalBytes bytes)');
+    LOGGER.i(
+        '[CloudCache] stream cached: $webdavPath -> $cacheFilePath ($totalBytes bytes)');
+
+    await _evictIfNeeded();
     return cacheFilePath;
   }
 
-  Future<int> getCacheSize() async {
-    final dir = Directory(cacheDir);
-    if (!await dir.exists()) return 0;
+  Future<void> _evictIfNeeded() async {
+    if (_maxCacheSizeBytes == noLimit) return;
 
+    final totalSize = _cacheEntries.values.fold<int>(0, (sum, e) => sum + e.fileSize);
+    if (totalSize <= _maxCacheSizeBytes) return;
+
+    final sorted = _cacheEntries.entries.toList()
+      ..sort((a, b) => a.value.lastAccessed.compareTo(b.value.lastAccessed));
+
+    int currentSize = totalSize;
+    final targetSize = (_maxCacheSizeBytes * 0.8).round();
+
+    for (final entry in sorted) {
+      if (currentSize <= targetSize) break;
+
+      final file = File(entry.value.filePath);
+      try {
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } catch (e) {
+        LOGGER.w('[CloudCache] failed to delete evicted file: ${entry.value.filePath}: $e');
+      }
+
+      currentSize -= entry.value.fileSize;
+      _cacheEntries.remove(entry.key);
+      LOGGER.i('[CloudCache] evicted: ${entry.key} (${formatSize(entry.value.fileSize)})');
+    }
+
+    await _saveIndex();
+    LOGGER.i('[CloudCache] eviction complete, cache size: ${formatSize(currentSize)}');
+  }
+
+  Future<void> evictIfNeeded() async => await _evictIfNeeded();
+
+  Future<int> getCacheSize() async {
     int totalSize = 0;
-    await for (final entity in dir.list(recursive: true)) {
-      if (entity is File) {
+    for (final entry in _cacheEntries.values) {
+      final file = File(entry.filePath);
+      if (await file.exists()) {
         try {
-          totalSize += await entity.length();
-        } catch (_) {}
+          final actualSize = await file.length();
+          entry.fileSize = actualSize;
+          totalSize += actualSize;
+        } catch (_) {
+          totalSize += entry.fileSize;
+        }
       }
     }
     return totalSize;
   }
+
+  int get cachedEntryCount => _cacheEntries.length;
 
   Future<int> getCacheFileCount() async {
     final dir = Directory(cacheDir);
@@ -225,7 +413,17 @@ class CloudCacheManager {
     await for (final entity in dir.list(recursive: true)) {
       if (entity is File) {
         final ext = path.extension(entity.path).toLowerCase();
-        if ({'.mp3', '.flac', '.wav', '.aac', '.m4a', '.ogg', '.opus', '.ape', '.wma'}.contains(ext)) {
+        if ({
+          '.mp3',
+          '.flac',
+          '.wav',
+          '.aac',
+          '.m4a',
+          '.ogg',
+          '.opus',
+          '.ape',
+          '.wma'
+        }.contains(ext)) {
           count++;
         }
       }
@@ -242,16 +440,16 @@ class CloudCacheManager {
         }
       }
     }
-    _cacheIndex.clear();
+    _cacheEntries.clear();
     await _saveIndex();
     LOGGER.i('[CloudCache] cache cleared');
   }
 
   Future<void> removeCache(String webdavPath) async {
     final key = _cacheKey(webdavPath);
-    final cachedPath = _cacheIndex.remove(key);
-    if (cachedPath != null) {
-      final file = File(cachedPath);
+    final entry = _cacheEntries.remove(key);
+    if (entry != null) {
+      final file = File(entry.filePath);
       if (await file.exists()) {
         await file.delete();
       }
@@ -262,7 +460,9 @@ class CloudCacheManager {
   String formatSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 }

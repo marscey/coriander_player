@@ -2,6 +2,7 @@ import 'package:coriander_player/component/rectangle_progress_indicator.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:coriander_player/component/playlist_audio_item.dart';
 import 'package:coriander_player/component/playing_indicator.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/bass/bass_player.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
@@ -16,6 +17,7 @@ class MiniNowPlaying extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = PlatformHelper.isMobile;
     return ResponsiveBuilder(builder: (context, screenType) {
       return Align(
         alignment: Alignment.bottomCenter,
@@ -24,11 +26,11 @@ class MiniNowPlaying extends StatelessWidget {
             8.0,
             0,
             8.0,
-            screenType == ScreenType.small ? 8.0 : 32.0,
+            isMobile ? 8.0 : (screenType == ScreenType.small ? 8.0 : 32.0),
           ),
           child: SizedBox(
             height: 64.0,
-            width: 600.0,
+            width: isMobile ? double.infinity : 600.0,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
@@ -83,9 +85,12 @@ class _NowPlayingForeground extends StatelessWidget {
                     onLocate: () {
                       final index = playbackService.playlistIndex;
                       if (!scrollController.hasClients) return;
-                      final viewportHeight = scrollController.position.viewportDimension;
-                      final targetOffset = index * 56.0 - (viewportHeight / 2) + 28.0;
-                      final maxExtent = scrollController.position.maxScrollExtent;
+                      final viewportHeight =
+                          scrollController.position.viewportDimension;
+                      final targetOffset =
+                          index * 56.0 - (viewportHeight / 2) + 28.0;
+                      final maxExtent =
+                          scrollController.position.maxScrollExtent;
                       scrollController.animateTo(
                         targetOffset.clamp(0.0, maxExtent),
                         duration: const Duration(milliseconds: 300),
@@ -203,7 +208,6 @@ class _NowPlayingForeground extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: scheme.onSecondaryContainer),
                         ),
-
                         Text(
                           nowPlaying != null
                               ? nowPlaying.subtitleText
@@ -216,13 +220,12 @@ class _NowPlayingForeground extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 4.0),
-
                   IconButton(
                     tooltip: '播放列表',
-                    icon: Icon(Symbols.queue_music, color: scheme.onSecondaryContainer),
+                    icon: Icon(Symbols.queue_music,
+                        color: scheme.onSecondaryContainer),
                     onPressed: () => _showPlaylistBottomSheet(context),
                   ),
-
                   StreamBuilder(
                     stream: playbackService.playerStateStream,
                     initialData: playbackService.playerState,

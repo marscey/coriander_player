@@ -1,5 +1,7 @@
 // ignore_for_file: camel_case_types
 
+import 'dart:io';
+
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/horizontal_lyric_view.dart';
@@ -7,17 +9,20 @@ import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:window_manager/window_manager.dart';
-
 class TitleBar extends StatelessWidget {
   const TitleBar({super.key});
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformHelper.isMobile) {
+      return const SizedBox.shrink();
+    }
     return ResponsiveBuilder(
       builder: (context, screenType) {
         switch (screenType) {
@@ -334,17 +339,33 @@ class _WindowControllsState extends State<WindowControlls> with WindowListener {
         IconButton(
           tooltip: "关闭",
           onPressed: () async {
-            // 保存应用状态
-            await savePlaylists();
-            await saveLyricSources();
-            await AppSettings.instance.saveSettings();
-            await AppPreference.instance.save();
+            if (AppSettings.instance.closeToTray) {
+              await savePlaylists();
+              await saveLyricSources();
+              await AppSettings.instance.saveSettings();
+              await AppPreference.instance.save();
 
-            // 关闭桌面歌词（窗口隐藏时不需要显示）
-            PlayService.instance.desktopLyricService.killDesktopLyric();
+              PlayService.instance.desktopLyricService.killDesktopLyric();
 
-            // 隐藏窗口到系统托盘，而不是退出应用
-            await windowManager.hide();
+              await windowManager.hide();
+
+              if (!AppSettings.instance.hasShownTrayTip) {
+                AppSettings.instance.hasShownTrayTip = true;
+                await AppSettings.instance.saveSettings();
+              }
+            } else {
+              await savePlaylists();
+              await saveLyricSources();
+              await AppSettings.instance.saveSettings();
+              await AppPreference.instance.save();
+
+              PlayService.instance.close();
+
+              await HotkeysHelper.unregisterAll();
+              await windowManager.setPreventClose(false);
+              await windowManager.close();
+              exit(0);
+            }
           },
           icon: const Icon(Symbols.close),
         ),

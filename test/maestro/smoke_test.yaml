@@ -1,0 +1,4 @@
+appId: com.senyepss.corianderPlayer
+commands:
+  - launchApp
+  - assertVisible: "Music"

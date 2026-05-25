@@ -1,4 +1,5 @@
 import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/src/bass/bass_player.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
@@ -59,6 +60,7 @@ class HotkeysHelper {
   static Future<void> unregisterAll() => hotKeyManager.unregisterAll();
 
   static Future<void> onFocusChanges(focus) async {
+    if (!PlatformHelper.isDesktop) return;
     if (focus) {
       await unregisterAll();
     } else {

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/metadata/metadata_service.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/bass/bass_player.dart';
 import 'package:coriander_player/src/rust/api/smtc_flutter.dart';
@@ -16,6 +17,7 @@ import 'package:coriander_player/play_service/engine/player_engine_factory.dart'
 import 'package:coriander_player/play_service/engine/player_engine_type.dart';
 import 'package:coriander_player/play_service/engine/platform_specific_initialization.dart';
 import 'package:coriander_player/play_service/engine/bass_player_engine.dart';
+import 'package:coriander_player/play_service/now_playing_widget.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:coriander_player/cloud_service/cloud_audio_player.dart';
@@ -39,11 +41,11 @@ class PlaybackService extends ChangeNotifier {
   final PlayService playService;
 
   late StreamSubscription _playerStateStreamSub;
-  late StreamSubscription _smtcEventStreamSub;
-  late StreamSubscription _positionStreamSub;
+  StreamSubscription? _smtcEventStreamSub;
+  StreamSubscription? _positionStreamSub;
 
-  late final MacosMediaControlService _macosMediaControlService;
-  late StreamSubscription? _positionStreamForMacosMediaControl;
+  MacosMediaControlService? _macosMediaControlService;
+  StreamSubscription? _positionStreamForMacosMediaControl;
 
   late PlayerEngine _player;
 
@@ -51,51 +53,71 @@ class PlaybackService extends ChangeNotifier {
     _player = PlayerEngineFactory.getDefaultEngine();
     _player.initialize();
 
-    _asyncInit();
-
     _playerStateStreamSub = playerStateStream.listen((event) {
       if (event == PlayerState.completed) {
         _autoNextAudio();
       }
     });
 
-    _smtcEventStreamSub = _smtc.subscribeToControlEvents().listen((event) {
-      switch (event) {
-        case SMTCControlEvent.play:
-          start();
-          break;
-        case SMTCControlEvent.pause:
-          pause();
-          break;
-        case SMTCControlEvent.previous:
-          lastAudio();
-          break;
-        case SMTCControlEvent.next:
-          nextAudio();
-          break;
-        case SMTCControlEvent.unknown:
-      }
-    });
+    if (PlatformHelper.isDesktop) {
+      _smtc = SMTCFlutter();
+      _smtcEventStreamSub = _smtc!.subscribeToControlEvents().listen((event) {
+        switch (event) {
+          case SMTCControlEvent.play:
+            start();
+            break;
+          case SMTCControlEvent.pause:
+            pause();
+            break;
+          case SMTCControlEvent.previous:
+            lastAudio();
+            break;
+          case SMTCControlEvent.next:
+            nextAudio();
+            break;
+          case SMTCControlEvent.unknown:
+        }
+      });
 
-    _positionStreamSub = positionStream.listen((progress) {
-      _smtc.updateTimeProperties(progress: (progress * 1000).floor());
-    });
-
-    if (PlatformHelper.isMacOS) {
-      _initMacosMediaControlService();
+      _positionStreamSub = positionStream.listen((progress) {
+        _smtc!.updateTimeProperties(progress: (progress * 1000).floor());
+      });
     }
   }
 
-  void _asyncInit() async {
+  /// 异步初始化（必须在 main() 中显式 await）
+  /// iOS/macOS 上需要等待 AudioService.init() 完成
+  Future<void> initialize() async {
+    LOGGER.i("[DEBUG] PlaybackService-initialize: START");
+
+    // 先配置平台特定初始化（AudioSession 等）
     await PlatformSpecificInitialization.initializeForPlatform();
+    LOGGER.i(
+        "[DEBUG] PlaybackService-initialize: PlatformSpecificInitialization done");
+
+    // macOS 和 iOS 初始化系统媒体控制
+    if (PlatformHelper.isMacOS || PlatformHelper.isIOS) {
+      await _initMediaControlService();
+    }
+
+    LOGGER.i("[DEBUG] PlaybackService-initialize: DONE");
   }
 
-  Future<void> _initMacosMediaControlService() async {
+  Future<void> _initMediaControlService() async {
     try {
+      LOGGER.i("[DEBUG] PlaybackService-_initMediaControlService: START");
       _macosMediaControlService = await MacosMediaControlService.init();
-      _macosMediaControlService.setPlaybackService(this);
+      _macosMediaControlService!.setPlaybackService(this);
 
-      _macosMediaControlService.setCallbacks(
+      // 同步蓝牙歌词设置
+      if (PlatformHelper.isIOS) {
+        _macosMediaControlService!.bluetoothLyricEnabled =
+            AppSettings.instance.bluetoothLyric;
+      }
+
+      LOGGER.i(
+          "[DEBUG] PlaybackService-_initMediaControlService: setting callbacks...");
+      _macosMediaControlService!.setCallbacks(
         onPlay: start,
         onPause: pause,
         onStop: () {
@@ -108,20 +130,27 @@ class PlaybackService extends ChangeNotifier {
         },
       );
 
-      _positionStreamForMacosMediaControl = positionStream.listen((progress) {
+      LOGGER.i(
+          "[DEBUG] PlaybackService-_initMediaControlService: listening position stream...");
+      // 降低位置更新频率：只在位置变化超过1秒时才更新
+      // 避免每100ms触发一次原生调用导致性能问题
+      _positionStreamForMacosMediaControl = positionStream
+          .distinct((a, b) => (a - b).abs() < 1.0)
+          .listen((progress) {
         if (nowPlaying != null) {
-          _macosMediaControlService.updatePlaybackState(
+          _macosMediaControlService?.updatePlaybackState(
             playing: playerState == PlayerState.playing,
             position: Duration(milliseconds: (progress * 1000).toInt()),
           );
         }
       });
+      LOGGER.i("[DEBUG] PlaybackService-_initMediaControlService: DONE");
     } catch (e) {
-      LOGGER.e("Failed to initialize macOS media control service: $e");
+      LOGGER.e("[DEBUG] PlaybackService-_initMediaControlService: FAILED: $e");
     }
   }
 
-  final _smtc = SmtcFlutter();
+  SMTCFlutter? _smtc;
   final _pref = AppPreference.instance.playbackPref;
 
   late final _wasapiExclusive = ValueNotifier(false);
@@ -241,41 +270,73 @@ class PlaybackService extends ChangeNotifier {
         CloudAudioPlayer.updateMetadataFromCache(nowPlaying!);
       }
 
-      _smtc.updateState(state: SMTCState.playing);
+      if (PlatformHelper.isDesktop) {
+        _smtc?.updateState(state: SMTCState.playing);
 
-      if (!isCloud) {
-        _smtc.updateDisplay(
-          title: nowPlaying!.title,
-          artist: nowPlaying!.artist,
-          album: nowPlaying!.album,
-          duration: (length * 1000).floor(),
-          path: nowPlaying!.path,
-        );
+        if (!isCloud) {
+          _smtc?.updateDisplay(
+            title: nowPlaying!.title,
+            artist: nowPlaying!.artist,
+            album: nowPlaying!.album,
+            duration: (length * 1000).floor(),
+            path: nowPlaying!.path,
+          );
+        }
       }
 
-      if (PlatformHelper.isMacOS && nowPlaying != null) {
-        _macosMediaControlService.updateCurrentMediaItem(nowPlaying!);
-        _macosMediaControlService.updatePlaybackState(
+      if ((PlatformHelper.isMacOS || PlatformHelper.isIOS) &&
+          nowPlaying != null) {
+        // 确保 AudioSession 处于激活状态
+        // media_kit 可能在初始化时覆盖了 AVAudioSession 配置
+        await MacosMediaControlService.ensureAudioSessionActive();
+
+        _macosMediaControlService?.updateCurrentMediaItem(nowPlaying!);
+        _macosMediaControlService?.updatePlaybackState(
           playing: true,
           position: Duration.zero,
         );
+        if (PlatformHelper.isIOS) {
+          NowPlayingWidget.update();
+        }
+        LOGGER.i("[_loadAndPlay] MediaControl updated for iOS/macOS");
       }
 
-      playService.desktopLyricService.canSendMessage.then((canSend) {
-        if (!canSend) return;
+      if (PlatformHelper.isDesktop) {
+        playService.desktopLyricService.canSendMessage.then((canSend) {
+          if (!canSend) return;
 
-        playService.desktopLyricService
-            .sendPlayerStateMessage(playerState == PlayerState.playing);
-        playService.desktopLyricService.sendNowPlayingMessage(nowPlaying!);
-      });
+          playService.desktopLyricService
+              .sendPlayerStateMessage(playerState == PlayerState.playing);
+          playService.desktopLyricService.sendNowPlayingMessage(nowPlaying!);
+        });
+      }
+
+      // 后台自动刮削元数据（不阻塞播放流程）
+      _autoScrapeMetadata(nowPlaying!);
     } catch (err) {
       LOGGER.e("[_loadAndPlay] $err");
       showTextOnSnackBar(err.toString());
     }
   }
 
+  /// 后台自动刮削元数据
+  /// 只有当刮削结果与音频元数据完全匹配时，才会自动保存
+  void _autoScrapeMetadata(Audio audio) {
+    // 在后台执行，不阻塞播放流程
+    MetadataService.instance.autoScrape(audio, onScraped: (isExactMatch, output) {
+      if (isExactMatch && output != null) {
+        // 完全匹配，刷新歌词和封面
+        LOGGER.i("[_loadAndPlay] Auto-scrape exact match, refreshing lyric and cover");
+        playService.lyricService.updateLyric();
+        audio.clearCoverCache();
+        notifyListeners();
+      }
+    });
+  }
+
   bool _supportsStreamingForCloud() {
-    final engineType = AppSettings.instance.playerEngineType;
+    final engineType = AppSettings.instance.playerEngineType ??
+        PlayerEngineType.defaultForPlatform;
     return engineType == PlayerEngineType.mediaKit;
   }
 
@@ -432,20 +493,31 @@ class PlaybackService extends ChangeNotifier {
   void pause() {
     try {
       _player.pause();
-      _smtc.updateState(state: SMTCState.paused);
 
-      if (PlatformHelper.isMacOS && nowPlaying != null) {
-        _macosMediaControlService.updatePlaybackState(
+      if (PlatformHelper.isDesktop) {
+        _smtc?.updateState(state: SMTCState.paused);
+      }
+
+      if ((PlatformHelper.isMacOS || PlatformHelper.isIOS) &&
+          nowPlaying != null) {
+        _macosMediaControlService?.updatePlaybackState(
           playing: false,
           position: _player.position,
         );
+        // 暂停时清除封面歌词
+        if (PlatformHelper.isIOS) {
+          _macosMediaControlService?.clearLyricFromCover();
+          NowPlayingWidget.update();
+        }
       }
 
-      playService.desktopLyricService.canSendMessage.then((canSend) {
-        if (!canSend) return;
+      if (PlatformHelper.isDesktop) {
+        playService.desktopLyricService.canSendMessage.then((canSend) {
+          if (!canSend) return;
 
-        playService.desktopLyricService.sendPlayerStateMessage(false);
-      });
+          playService.desktopLyricService.sendPlayerStateMessage(false);
+        });
+      }
 
       notifyListeners();
     } catch (err) {
@@ -457,20 +529,31 @@ class PlaybackService extends ChangeNotifier {
   void start() {
     try {
       _player.play();
-      _smtc.updateState(state: SMTCState.playing);
 
-      if (PlatformHelper.isMacOS && nowPlaying != null) {
-        _macosMediaControlService.updatePlaybackState(
+      if (PlatformHelper.isDesktop) {
+        _smtc?.updateState(state: SMTCState.playing);
+      }
+
+      if ((PlatformHelper.isMacOS || PlatformHelper.isIOS) &&
+          nowPlaying != null) {
+        // 确保 AudioSession 激活（防止被 media_kit 覆盖）
+        MacosMediaControlService.ensureAudioSessionActive();
+        _macosMediaControlService?.updatePlaybackState(
           playing: true,
           position: _player.position,
         );
+        if (PlatformHelper.isIOS) {
+          NowPlayingWidget.update();
+        }
       }
 
-      playService.desktopLyricService.canSendMessage.then((canSend) {
-        if (!canSend) return;
+      if (PlatformHelper.isDesktop) {
+        playService.desktopLyricService.canSendMessage.then((canSend) {
+          if (!canSend) return;
 
-        playService.desktopLyricService.sendPlayerStateMessage(true);
-      });
+          playService.desktopLyricService.sendPlayerStateMessage(true);
+        });
+      }
 
       notifyListeners();
     } catch (err) {
@@ -481,12 +564,27 @@ class PlaybackService extends ChangeNotifier {
 
   void playAgain() => _nextAudio_singleLoop();
 
+  /// 更新蓝牙歌词（iOS 封面图+歌词合成）
+  /// 由 LyricService 在歌词行变化时调用
+  void updateBluetoothLyric(String lyricText, {String? translation}) {
+    if (!PlatformHelper.isIOS) return;
+    _macosMediaControlService?.updateLyricOnCover(lyricText,
+        translation: translation);
+  }
+
+  /// 设置蓝牙歌词开关
+  void setBluetoothLyricEnabled(bool enabled) {
+    if (!PlatformHelper.isIOS) return;
+    _macosMediaControlService?.bluetoothLyricEnabled = enabled;
+  }
+
   void seek(double position) {
     _player.seek(Duration(seconds: position.floor()));
     playService.lyricService.findCurrLyricLine();
 
-    if (PlatformHelper.isMacOS && nowPlaying != null) {
-      _macosMediaControlService.updatePlaybackState(
+    if ((PlatformHelper.isMacOS || PlatformHelper.isIOS) &&
+        nowPlaying != null) {
+      _macosMediaControlService?.updatePlaybackState(
         playing: playerState == PlayerState.playing,
         position: _player.position,
       );
@@ -495,12 +593,12 @@ class PlaybackService extends ChangeNotifier {
 
   void close() {
     _playerStateStreamSub.cancel();
-    _positionStreamSub.cancel();
-    _smtcEventStreamSub.cancel();
+    _positionStreamSub?.cancel();
+    _smtcEventStreamSub?.cancel();
 
-    if (PlatformHelper.isMacOS) {
+    if (PlatformHelper.isMacOS || PlatformHelper.isIOS) {
       _positionStreamForMacosMediaControl?.cancel();
-      _macosMediaControlService.dispose();
+      _macosMediaControlService?.dispose();
     }
 
     try {
@@ -509,7 +607,9 @@ class PlaybackService extends ChangeNotifier {
       LOGGER.e("Failed to free player engine: $e");
     }
 
-    _smtc.close();
+    if (PlatformHelper.isDesktop) {
+      _smtc?.close();
+    }
   }
 
   Future<void> switchEngine(PlayerEngineType type) async {
@@ -523,7 +623,7 @@ class PlaybackService extends ChangeNotifier {
 
       LOGGER.i("[switchEngine] Canceling stream subscriptions...");
       _playerStateStreamSub.cancel();
-      _positionStreamSub.cancel();
+      _positionStreamSub?.cancel();
 
       LOGGER.i("[switchEngine] Disposing old engine...");
       try {
@@ -547,7 +647,7 @@ class PlaybackService extends ChangeNotifier {
       });
 
       _positionStreamSub = positionStream.listen((progress) {
-        _smtc.updateTimeProperties(progress: (progress * 1000).floor());
+        _smtc?.updateTimeProperties(progress: (progress * 1000).floor());
       });
 
       if (currentAudio != null) {

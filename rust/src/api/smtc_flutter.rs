@@ -1,5 +1,5 @@
 #[cfg(target_os = "windows")]
-mod windows_impl {
+pub mod windows_impl {
     use flutter_rust_bridge::frb;
     use std::time::Duration;
     use windows::{
@@ -212,7 +212,7 @@ mod windows_impl {
 }
 
 #[cfg(not(target_os = "windows"))]
-mod non_windows_impl {
+pub mod non_windows_impl {
     use flutter_rust_bridge::frb;
     use crate::frb_generated::StreamSink;
 

@@ -35,8 +35,8 @@ class _NowPlayingPage_Large extends StatelessWidget {
           ),
           const SizedBox(height: 16.0),
           const _NowPlayingSlider(),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Stack(
               alignment: Alignment.center,
               children: [
@@ -49,10 +49,10 @@ class _NowPlayingPage_Large extends StatelessWidget {
                       spacer,
                       _NowPlayingPlayModeSwitch(),
                       spacer,
-                      _NowPlayingVolDspSlider(),
-                      spacer,
-                      _ExclusiveModeSwitch(),
-                      spacer,
+                      if (!PlatformHelper.isMobile) _NowPlayingVolDspSlider(),
+                      if (!PlatformHelper.isMobile) spacer,
+                      if (!PlatformHelper.isMobile) _ExclusiveModeSwitch(),
+                      if (!PlatformHelper.isMobile) spacer,
                       PlayerEngineIndicator(),
                     ],
                   ),
@@ -65,8 +65,8 @@ class _NowPlayingPage_Large extends StatelessWidget {
                     children: [
                       _NowPlayingLargeViewSwitch(),
                       spacer,
-                      _DesktopLyricSwitch(),
-                      spacer,
+                      if (!PlatformHelper.isMobile) _DesktopLyricSwitch(),
+                      if (!PlatformHelper.isMobile) spacer,
                       _NowPlayingMoreAction(),
                     ],
                   ),

@@ -7,7 +7,7 @@ class PlayerEngineIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final engineType = AppSettings.instance.playerEngineType ?? PlayerEngineType.bass;
+    final engineType = AppSettings.instance.playerEngineType ?? PlayerEngineType.defaultForPlatform;
     
     return Tooltip(
       message: '当前播放引擎：${_getEngineName(engineType)}',

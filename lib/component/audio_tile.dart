@@ -5,7 +5,9 @@ import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:coriander_player/page/settings_page/edit_tag_dialog.dart';
 import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -153,6 +155,42 @@ class _AudioTileState extends State<AudioTile> {
           child: const Text("详细信息"),
         ),
 
+        /// edit tags
+        MenuItemButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => EditTagDialog(audio: audio),
+            ).then((saved) {
+              if (saved == true) {
+                audio.clearCoverCache();
+                PlayService.instance.lyricService.updateLyric();
+                PlayService.instance.playbackService.refreshNowPlaying();
+              }
+            });
+          },
+          leadingIcon: const Icon(Symbols.edit),
+          child: const Text("编辑标签"),
+        ),
+
+        /// scrape metadata
+        MenuItemButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => EditTagDialog(audio: audio, autoSearch: true),
+            ).then((saved) {
+              if (saved == true) {
+                audio.clearCoverCache();
+                PlayService.instance.lyricService.updateLyric();
+                PlayService.instance.playbackService.refreshNowPlaying();
+              }
+            });
+          },
+          leadingIcon: const Icon(Symbols.search),
+          child: const Text("刮削元数据"),
+        ),
+
         /// remove from library
         MenuItemButton(
           onPressed: () {
@@ -239,6 +277,15 @@ class _AudioTileState extends State<AudioTile> {
                 }
               }
             },
+            // 移动端长按进入多选模式并选中当前项
+            onLongPress: () {
+              if (widget.multiSelectController == null) return;
+              if (!widget.multiSelectController!.enableMultiSelectView) {
+                widget.multiSelectController!.useMultiSelectView(true);
+              }
+              widget.multiSelectController!.selectAtIndex(audio, widget.audioIndex);
+              HapticFeedback.mediumImpact();
+            },
             onSecondaryTapDown: (details) {
               if (widget.multiSelectController?.enableMultiSelectView == true)
                 return;
@@ -247,23 +294,37 @@ class _AudioTileState extends State<AudioTile> {
                   position: details.localPosition.translate(0, -240));
             },
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              padding: EdgeInsets.symmetric(
+                horizontal: PlatformHelper.isMobile ? 4.0 : 8.0,
+              ),
               child: Row(children: [
-                // 序号
+                // 序号 / 多选勾选框
                 SizedBox(
-                  width: 32.0,
-                  child: Text(
-                    '${widget.audioIndex + 1}',
-                    style: TextStyle(
-                      color: (widget.focus || _isNowPlaying)
-                          ? scheme.primary
-                          : scheme.onSurfaceVariant,
-                      fontSize: 13,
-                    ),
-                    textAlign: TextAlign.end,
-                  ),
+                  width: PlatformHelper.isMobile ? 24.0 : 32.0,
+                  child: widget.multiSelectController != null &&
+                          widget.multiSelectController!.enableMultiSelectView
+                      ? Icon(
+                          widget.multiSelectController!.selected.contains(audio)
+                              ? Symbols.check_circle
+                              : Symbols.circle,
+                          color: widget.multiSelectController!.selected
+                                  .contains(audio)
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant,
+                          size: 22,
+                        )
+                      : Text(
+                          '${widget.audioIndex + 1}',
+                          style: TextStyle(
+                            color: (widget.focus || _isNowPlaying)
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
+                          textAlign: TextAlign.end,
+                        ),
                 ),
-                const SizedBox(width: 12.0),
+                SizedBox(width: PlatformHelper.isMobile ? 8.0 : 12.0),
 
                 if (widget.leading != null)
                   Padding(
@@ -294,7 +355,7 @@ class _AudioTileState extends State<AudioTile> {
                     },
                   ),
                 ),
-                const SizedBox(width: 16.0),
+                SizedBox(width: PlatformHelper.isMobile ? 10.0 : 16.0),
 
                 /// title, artist and album
                 Expanded(

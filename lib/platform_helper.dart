@@ -14,9 +14,18 @@ class PlatformHelper {
   /// 判断当前平台是否为Linux
   static bool get isLinux => Platform.isLinux;
 
+  /// 判断当前平台是否为iOS
+  static bool get isIOS => Platform.isIOS;
+
+  /// 判断当前平台是否为Android
+  static bool get isAndroid => Platform.isAndroid;
+
   /// 判断当前平台是否为桌面平台
   static bool get isDesktop =>
       Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+
+  /// 判断当前平台是否为移动平台
+  static bool get isMobile => Platform.isIOS || Platform.isAndroid;
 
   /// 根据当前平台获取BASS库的文件扩展名
   static String get bassLibraryExtension {

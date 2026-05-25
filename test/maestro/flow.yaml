@@ -1,0 +1,92 @@
+appId: com.senyepss.corianderPlayer
+
+---
+name: iOS 移动端适配 - 初始启动验证
+commands:
+  - launchApp
+  - assertVisible:
+      id: "音乐库"
+  - takeScreenshot: 01-initial-launch
+
+---
+name: 底部导航栏结构验证
+commands:
+  - launchApp
+  - assertVisible:
+      id: "音乐库"
+      expect: "1 or more"
+  - assertVisible:
+      id: "最近播放"
+      expect: "1 or more"
+  - assertVisible:
+      id: "连接"
+      expect: "1 or more"
+  - assertVisible:
+      id: "搜索"
+      expect: "1 or more"
+  - assertVisible:
+      id: "设置"
+      expect: "1 or more"
+  - takeScreenshot: 02-nav-bar-structure
+
+---
+name: 桌面端UI隐藏验证
+commands:
+  - launchApp
+  - assertNotVisible:
+      id: "全屏"
+      optional: true
+  - assertNotVisible:
+      id: "最小化"
+      optional: true
+  - assertNotVisible:
+      id: "关闭"
+      optional: true
+  - takeScreenshot: 03-no-desktop-ui
+
+---
+name: Mini 播放器验证
+commands:
+  - launchApp
+  - assertVisible: "Coriander Player"
+  - takeScreenshot: 04-mini-player-visible
+
+---
+name: 导航切换 - 最近播放
+commands:
+  - launchApp
+  - tapOn: "最近播放"
+  - assertVisible: "最近播放"
+  - takeScreenshot: 05-nav-recent-plays
+
+---
+name: 导航切换 - 连接(云服务)
+commands:
+  - launchApp
+  - tapOn: "连接"
+  - assertVisible: "云服务连接"
+  - takeScreenshot: 06-nav-cloud-connection
+
+---
+name: 导航切换 - 搜索
+commands:
+  - launchApp
+  - tapOn: "搜索"
+  - assertVisible: "搜索"
+  - takeScreenshot: 07-nav-search
+
+---
+name: 导航切换 - 设置
+commands:
+  - launchApp
+  - tapOn: "设置"
+  - assertVisible: "设置"
+  - takeScreenshot: 08-nav-settings
+
+---
+name: 完整布局最终验证
+commands:
+  - launchApp
+  - assertVisible: "音乐库"
+  - assertVisible: "Coriander Player"
+  - takeScreenshot: 09-final-full-layout

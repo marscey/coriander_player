@@ -6,6 +6,7 @@ import 'package:coriander_player/page/now_playing_page/component/lyric_view_cont
 import 'package:coriander_player/page/now_playing_page/page.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/play_service/playback_service.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/utils.dart';
 
 class PagePreference {
@@ -21,10 +22,10 @@ class PagePreference {
         "contentView": contentView.name,
       };
 
-  factory PagePreference.fromMap(Map map) => PagePreference(
-        map["sortMethod"] ?? 0,
-        SortOrder.fromString(map["sortOrder"]) ?? SortOrder.ascending,
-        ContentView.fromString(map["contentView"]) ?? ContentView.list,
+  factory PagePreference.fromMap(Map? map) => PagePreference(
+        map?["sortMethod"] ?? 0,
+        SortOrder.fromString(map?["sortOrder"]) ?? SortOrder.ascending,
+        ContentView.fromString(map?["contentView"]) ?? ContentView.list,
       );
 }
 
@@ -48,13 +49,13 @@ class NowPlayingPagePreference {
         "translationFontSize": translationFontSize,
       };
 
-  factory NowPlayingPagePreference.fromMap(Map map) {
+  factory NowPlayingPagePreference.fromMap(Map? map) {
     return NowPlayingPagePreference(
-      NowPlayingViewMode.fromString(map["nowPlayingViewMode"]) ??
+      NowPlayingViewMode.fromString(map?["nowPlayingViewMode"]) ??
           NowPlayingViewMode.withLyric,
-      LyricTextAlign.fromString(map["lyricTextAlign"]) ?? LyricTextAlign.left,
-      map["lyricFontSize"] ?? 22.0,
-      map["translationFontSize"] ?? 18.0,
+      LyricTextAlign.fromString(map?["lyricTextAlign"]) ?? LyricTextAlign.left,
+      map?["lyricFontSize"] ?? 22.0,
+      map?["translationFontSize"] ?? 18.0,
     );
   }
 }
@@ -70,9 +71,9 @@ class PlaybackPreference {
         "volumeDsp": volumeDsp,
       };
 
-  factory PlaybackPreference.fromMap(Map map) => PlaybackPreference(
-        PlayMode.fromString(map["playMode"]) ?? PlayMode.forward,
-        map["volumeDsp"] ?? 1.0,
+  factory PlaybackPreference.fromMap(Map? map) => PlaybackPreference(
+        PlayMode.fromString(map?["playMode"]) ?? PlayMode.forward,
+        map?["volumeDsp"] ?? 1.0,
       );
 }
 
@@ -116,7 +117,7 @@ class AppPreference {
   Future<void> save() async {
     try {
       final supportPath = (await getAppDataDir()).path;
-      final appPreferencePath = "$supportPath\\app_preference.json";
+      final appPreferencePath = PlatformHelper.joinPaths([supportPath, "app_preference.json"]);
 
       Map prefMap = {
         "audiosPagePref": audiosPagePref.toMap(),
@@ -145,7 +146,7 @@ class AppPreference {
   static Future<void> read() async {
     try {
       final supportPath = (await getAppDataDir()).path;
-      final appPreferencePath = "$supportPath\\app_preference.json";
+      final appPreferencePath = PlatformHelper.joinPaths([supportPath, "app_preference.json"]);
 
       final prefJson = await File(appPreferencePath).readAsString();
       final Map prefMap = json.decode(prefJson);

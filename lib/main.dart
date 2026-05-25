@@ -10,8 +10,10 @@ import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
 import 'package:coriander_player/platform_dependency_manager.dart';
 import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/metadata/scraper_orchestrator.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/play_service/recent_play_service.dart';
+import 'package:coriander_player/src/bass/bass_player.dart' as bass;
 import 'package:coriander_player/src/rust/api/logger.dart';
 import 'package:coriander_player/src/rust/frb_generated.dart';
 import 'package:coriander_player/theme_provider.dart';
@@ -22,31 +24,73 @@ import 'package:media_kit/media_kit.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
+Future<void> _exitApp() async {
+  PlayService.instance.close();
+  await savePlaylists();
+  await saveLyricSources();
+  await AppSettings.instance.saveSettings();
+  await AppPreference.instance.save();
+  if (PlatformHelper.isDesktop) {
+    await HotkeysHelper.unregisterAll();
+    await windowManager.setPreventClose(false);
+    await windowManager.close();
+  }
+  exit(0);
+}
+
+Future<void> _updateTrayMenu() async {
+  final ps = PlayService.instance.playbackService;
+  final isPlaying = ps.playerState == bass.PlayerState.playing;
+  final hasAudio = ps.nowPlaying != null;
+
+  await trayManager.setContextMenu(Menu(items: [
+    MenuItem(
+      key: 'toggle_window',
+      label: '显示/隐藏窗口',
+    ),
+    MenuItem.separator(),
+    MenuItem(
+      key: 'play_pause',
+      label: isPlaying ? '暂停' : '播放',
+      disabled: !hasAudio,
+    ),
+    MenuItem(
+      key: 'previous',
+      label: '上一首',
+      disabled: !hasAudio,
+    ),
+    MenuItem(
+      key: 'next',
+      label: '下一首',
+      disabled: !hasAudio,
+    ),
+    MenuItem.separator(),
+    MenuItem(
+      key: 'exit_app',
+      label: '退出',
+    ),
+  ]));
+}
+
 Future<void> initWindow() async {
+  if (!PlatformHelper.isDesktop) return;
+
   await windowManager.ensureInitialized();
 
-  // 设置系统托盘图标
   try {
-    await trayManager.setIcon('app_icon.ico');
+    if (PlatformHelper.isWindows) {
+      await trayManager.setIcon('app_icon.ico');
+    } else if (PlatformHelper.isMacOS) {
+      await trayManager.setIcon('AppIcon');
+    } else {
+      await trayManager.setIcon('app_icon.png');
+    }
   } catch (e) {
     LOGGER.e('Failed to set tray icon: $e');
   }
 
-  // 设置系统托盘菜单项
-  await trayManager.setContextMenu(Menu(
-    items: [
-      MenuItem(
-        key: 'show_window',
-        label: '显示窗口',
-      ),
-      MenuItem(
-        key: 'exit_app',
-        label: '退出应用',
-      ),
-    ],
-  ));
+  await _updateTrayMenu();
 
-  // macOS平台的窗口设置
   final windowOptions = WindowOptions(
     minimumSize: const Size(507, 507),
     size: AppSettings.instance.windowSize,
@@ -61,95 +105,85 @@ Future<void> initWindow() async {
     await windowManager.setPreventClose(true);
     await windowManager.show();
     await windowManager.focus();
-
-    // macOS平台特有的设置
-    if (PlatformHelper.isMacOS) {
-      // 启用macOS上的窗口全尺寸内容视图
-      // 注释掉不存在的方法调用
-      // await windowManager.setFullSizeContentView(true);
-    }
   });
 
-  // 监听窗口关闭事件
-  windowManager.addListener(MyWindowListener());
+  windowManager.addListener(_AppWindowListener());
+  trayManager.addListener(_AppTrayListener());
 
-  // 监听系统托盘点击事件
-  trayManager.addListener(_TrayManagerListener());
+  PlayService.instance.playbackService.addListener(_onPlaybackStateChanged);
 }
 
-// 自定义窗口监听器
-class MyWindowListener extends WindowListener {
+void _onPlaybackStateChanged() {
+  _updateTrayMenu();
+}
+
+class _AppWindowListener extends WindowListener {
   @override
   void onWindowClose() async {
-    try {
+    if (AppSettings.instance.closeToTray) {
       await windowManager.hide();
-    } catch (e) {
-      try {
-        await windowManager.setPreventClose(true);
-        await windowManager.hide();
-      } catch (e2) {
-        await windowManager.minimize();
-      }
+    } else {
+      await _exitApp();
+    }
+  }
+}
+
+class _AppTrayListener implements TrayListener {
+  @override
+  void onTrayIconMouseDown() async {
+    if (PlatformHelper.isWindows) {
+      await _toggleWindow();
+    } else {
+      await trayManager.popUpContextMenu();
     }
   }
 
-  // 其他未使用的回调方法
   @override
-  void onWindowFocus() {}
-  @override
-  void onWindowBlur() {}
-  @override
-  void onWindowMaximize() {}
-  @override
-  void onWindowUnmaximize() {}
-  @override
-  void onWindowMinimize() {}
-  @override
-  void onWindowRestore() {}
-  @override
-  void onWindowResize() {}
-  @override
-  void onWindowMove() {}
-  @override
-  void onWindowEnterFullScreen() {}
-  @override
-  void onWindowLeaveFullScreen() {}
-}
+  void onTrayIconRightMouseDown() async {
+    if (PlatformHelper.isWindows) {
+      await trayManager.popUpContextMenu();
+    } else {
+      await _toggleWindow();
+    }
+  }
 
-// 系统托盘监听器
-class _TrayManagerListener implements TrayListener {
-  @override
-  void onTrayIconMouseDown() async {
-    // 点击托盘图标显示窗口
-    await windowManager.show();
+  Future<void> _toggleWindow() async {
+    if (await windowManager.isVisible()) {
+      await windowManager.hide();
+    } else {
+      await windowManager.show();
+      await windowManager.focus();
+    }
   }
 
   @override
   void onTrayMenuItemClick(MenuItem menuItem) async {
+    final ps = PlayService.instance.playbackService;
     switch (menuItem.key) {
-      case 'show_window':
-        await windowManager.show();
+      case 'toggle_window':
+        await _toggleWindow();
+        break;
+      case 'play_pause':
+        if (ps.playerState == bass.PlayerState.playing) {
+          ps.pause();
+        } else {
+          ps.start();
+        }
+        break;
+      case 'previous':
+        ps.lastAudio();
+        break;
+      case 'next':
+        ps.nextAudio();
         break;
       case 'exit_app':
-        // 退出应用前的清理工作
-        PlayService.instance.close();
-        await savePlaylists();
-        await saveLyricSources();
-        await AppSettings.instance.saveSettings();
-        await AppPreference.instance.save();
-        await HotkeysHelper.unregisterAll();
-        await windowManager.setPreventClose(false);
-        await windowManager.close();
-        exit(0);
+        await _exitApp();
         break;
     }
   }
 
-  // 其他未使用的回调方法
   @override
   void onTrayIconMouseUp() {}
-  @override
-  void onTrayIconRightMouseDown() {}
   @override
   void onTrayIconRightMouseUp() {}
 }
@@ -176,7 +210,6 @@ Future<void> loadPrefFont() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 初始化MediaKit播放器
   MediaKit.ensureInitialized();
 
   await RustLib.init();
@@ -185,9 +218,10 @@ Future<void> main() async {
     LOGGER.i("[rs]: $msg");
   });
 
-  // For hot reload, `unregisterAll()` needs to be called.
-  await HotkeysHelper.unregisterAll();
-  HotkeysHelper.registerHotKeys();
+  if (PlatformHelper.isDesktop) {
+    await HotkeysHelper.unregisterAll();
+    HotkeysHelper.registerHotKeys();
+  }
 
   await migrateAppData();
 
@@ -197,16 +231,14 @@ Future<void> main() async {
     await AppSettings.readFromJson();
 
     await CloudCacheManager.init();
+    CloudCacheManager.instance.setMaxCacheSizeMB(AppSettings.instance.cloudCacheMaxSizeMB);
 
-    // 初始化平台特定依赖管理
     await PlatformDependencyManager.instance.initialize();
 
-    // 确保设置的播放器引擎受当前平台支持
     final dependencyManager = PlatformDependencyManager.instance;
     if (AppSettings.instance.playerEngineType != null &&
         !dependencyManager
             .isPlayerEngineSupported(AppSettings.instance.playerEngineType!)) {
-      // 如果当前设置的引擎不支持，则使用推荐的引擎
       AppSettings.instance.playerEngineType =
           dependencyManager.getRecommendedPlayerEngine();
       await AppSettings.instance.saveSettings();
@@ -218,13 +250,17 @@ Future<void> main() async {
       .existsSync()) {
     await AppPreference.read();
   }
-  final welcome =
-      !File(PlatformHelper.joinPaths([supportPath, "index.json"])).existsSync();
+  final welcome = PlatformHelper.isMobile
+      ? false
+      : !File(PlatformHelper.joinPaths([supportPath, "index.json"])).existsSync();
 
   await initWindow();
 
-  // 初始化最近播放服务
   await RecentPlayService.instance.load();
+
+  await ScraperOrchestrator.instance.initDefaults();
+
+  await PlayService.instance.initialize();
 
   final cloudServiceManager = CloudServiceManager();
 

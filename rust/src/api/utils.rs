@@ -3,7 +3,7 @@
 // open a link in browser, ...
 
 #[cfg(target_os = "windows")]
-mod windows_impl {
+pub mod windows_impl {
     use windows::{
         core::{h, Interface, HSTRING},
         Foundation::Uri,
@@ -77,7 +77,7 @@ mod windows_impl {
 }
 
 #[cfg(not(target_os = "windows"))]
-mod non_windows_impl {
+pub mod non_windows_impl {
     /// 在非Windows平台上，该函数直接返回false
     pub fn show_in_explorer(_path: String) -> bool {
         false

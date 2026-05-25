@@ -52,3 +52,7 @@ lib/page/settings_page/cpfeedback_key.dart
 
 # 测试相关
 test/CODE_WIKI.md
+
+# Maestro 测试产物
+report.xml
+test/maestro/screenshots/

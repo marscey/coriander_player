@@ -46,14 +46,15 @@ class PlatformDependencyManager {
   /// 获取当前平台支持的播放器引擎列表
   List<PlayerEngineType> getSupportedPlayerEngines() {
     final List<PlayerEngineType> supportedEngines = [];
-    
-    // Windows、macOS和Linux平台支持BASS引擎
+
+    // Windows、macOS和Linux桌面平台支持BASS引擎
+    // iOS和Android移动平台不支持BASS引擎（无原生库）
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
       supportedEngines.add(PlayerEngineType.bass);
     }
     // 所有平台都支持MediaKit引擎
     supportedEngines.add(PlayerEngineType.mediaKit);
-    
+
     return supportedEngines;
   }
 

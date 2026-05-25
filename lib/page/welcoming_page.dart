@@ -184,6 +184,8 @@ class _TitleBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformHelper.isMobile) return const SizedBox.shrink();
+
     final scheme = Theme.of(context).colorScheme;
     return DragToMoveArea(
       child: Padding(
@@ -227,12 +229,16 @@ class __WindowControllsState extends State<_WindowControlls>
   @override
   void initState() {
     super.initState();
-    windowManager.addListener(this);
+    if (PlatformHelper.isDesktop) {
+      windowManager.addListener(this);
+    }
   }
 
   @override
   void dispose() {
-    windowManager.removeListener(this);
+    if (PlatformHelper.isDesktop) {
+      windowManager.removeListener(this);
+    }
     super.dispose();
   }
 
@@ -253,6 +259,8 @@ class __WindowControllsState extends State<_WindowControlls>
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformHelper.isMobile) return const SizedBox.shrink();
+
     return Wrap(
       spacing: 8.0,
       children: [

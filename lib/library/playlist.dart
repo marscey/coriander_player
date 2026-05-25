@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/utils.dart';
 
 List<Playlist> PLAYLISTS = [];
@@ -12,7 +13,7 @@ List<Playlist> PLAYLISTS = [];
 Future<void> readPlaylists() async {
   try {
     final supportPath = (await getAppDataDir()).path;
-    final playlistsPath = "$supportPath\\playlists.json";
+    final playlistsPath = PlatformHelper.joinPaths([supportPath, "playlists.json"]);
 
     final playlistsStr = File(playlistsPath).readAsStringSync();
     final List playlistsJson = json.decode(playlistsStr);
@@ -28,7 +29,7 @@ Future<void> readPlaylists() async {
 Future<void> savePlaylists() async {
   try {
     final supportPath = (await getAppDataDir()).path;
-    final playlistsPath = "$supportPath\\playlists.json";
+    final playlistsPath = PlatformHelper.joinPaths([supportPath, "playlists.json"]);
 
     List<Map> playlistMaps = [];
     for (final item in PLAYLISTS) {

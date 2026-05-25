@@ -6,10 +6,12 @@ import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/play_service/engine/player_engine_type.dart';
 import 'package:coriander_player/component/title_bar.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:coriander_player/page/now_playing_page/component/current_playlist_view.dart';
+import 'package:coriander_player/page/settings_page/edit_tag_dialog.dart';
 import 'package:coriander_player/page/now_playing_page/component/filled_icon_button_style.dart';
 import 'package:coriander_player/page/now_playing_page/component/vertical_lyric_view.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
@@ -55,6 +57,11 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   final playbackService = PlayService.instance.playbackService;
   ImageProvider<Object>? nowPlayingCover;
 
+  // 移动端手势相关
+  double _dragOffsetY = 0.0;
+  double _dragOffsetX = 0.0;
+  bool _isDragging = false;
+
   void updateCover() {
     playbackService.nowPlaying?.cover.then((cover) {
       if (mounted) {
@@ -84,6 +91,114 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     final brightness = theme.brightness;
     final scheme = theme.colorScheme;
 
+    final body = Stack(
+      fit: StackFit.expand,
+      alignment: AlignmentDirectional.center,
+      children: [
+        if (nowPlayingCover != null) ...[
+          Image(
+            image: nowPlayingCover!,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          ),
+          switch (brightness) {
+            Brightness.dark => const ColoredBox(color: Colors.black45),
+            Brightness.light => const ColoredBox(color: Colors.white54),
+          },
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 250, sigmaY: 250),
+            child: const ColoredBox(color: Colors.transparent),
+          ),
+        ],
+        ChangeNotifierProvider.value(
+          value: PlayService.instance.playbackService,
+          builder: (context, _) {
+            return ResponsiveBuilder2(builder: (context, screenType) {
+              switch (screenType) {
+                case ScreenType.small:
+                  return const _NowPlayingPage_Small();
+                case ScreenType.medium:
+                case ScreenType.large:
+                  return const _NowPlayingPage_Large();
+              }
+            });
+          },
+        ),
+      ],
+    );
+
+    // 移动端：无 AppBar，支持手势关闭
+    if (PlatformHelper.isMobile) {
+      return Scaffold(
+        backgroundColor: scheme.secondaryContainer,
+        body: GestureDetector(
+          onVerticalDragStart: (_) {
+            _isDragging = true;
+          },
+          onVerticalDragUpdate: (details) {
+            // 只允许向下拖动
+            if (details.delta.dy > 0) {
+              setState(() {
+                _dragOffsetY += details.delta.dy;
+              });
+            }
+          },
+          onVerticalDragEnd: (details) {
+            // 下拉超过 150px 或速度足够快，关闭页面
+            if (_dragOffsetY > 150 ||
+                (details.primaryVelocity != null &&
+                    details.primaryVelocity! > 500)) {
+              if (context.canPop()) {
+                context.pop();
+                return;
+              }
+            }
+            setState(() {
+              _dragOffsetY = 0.0;
+              _isDragging = false;
+            });
+          },
+          onHorizontalDragStart: (_) {
+            _isDragging = true;
+          },
+          onHorizontalDragUpdate: (details) {
+            // 只允许向右拖动
+            if (details.delta.dx > 0) {
+              setState(() {
+                _dragOffsetX += details.delta.dx;
+              });
+            }
+          },
+          onHorizontalDragEnd: (details) {
+            // 右滑超过 150px 或速度足够快，关闭页面
+            if (_dragOffsetX > 150 ||
+                (details.primaryVelocity != null &&
+                    details.primaryVelocity! > 500)) {
+              if (context.canPop()) {
+                context.pop();
+                return;
+              }
+            }
+            setState(() {
+              _dragOffsetX = 0.0;
+              _isDragging = false;
+            });
+          },
+          child: Transform.translate(
+            offset: Offset(_dragOffsetX, _dragOffsetY),
+            child: Transform.scale(
+              scale: _isDragging
+                  ? (1.0 - (_dragOffsetY + _dragOffsetX) * 0.0005)
+                      .clamp(0.85, 1.0)
+                  : 1.0,
+              child: body,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 桌面端：保留 AppBar
     return Scaffold(
       appBar: const PreferredSize(
         preferredSize: Size.fromHeight(56.0),
@@ -99,41 +214,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
         ),
       ),
       backgroundColor: scheme.secondaryContainer,
-      body: Stack(
-        fit: StackFit.expand,
-        alignment: AlignmentDirectional.center,
-        children: [
-          if (nowPlayingCover != null) ...[
-            Image(
-              image: nowPlayingCover!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-            ),
-            switch (brightness) {
-              Brightness.dark => const ColoredBox(color: Colors.black45),
-              Brightness.light => const ColoredBox(color: Colors.white54),
-            },
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 250, sigmaY: 250),
-              child: const ColoredBox(color: Colors.transparent),
-            ),
-          ],
-          ChangeNotifierProvider.value(
-            value: PlayService.instance.playbackService,
-            builder: (context, _) {
-              return ResponsiveBuilder2(builder: (context, screenType) {
-                switch (screenType) {
-                  case ScreenType.small:
-                    return const _NowPlayingPage_Small();
-                  case ScreenType.medium:
-                  case ScreenType.large:
-                    return const _NowPlayingPage_Large();
-                }
-              });
-            },
-          ),
-        ],
-      ),
+      body: body,
     );
   }
 }
@@ -215,6 +296,39 @@ class _NowPlayingMoreAction extends StatelessWidget {
           },
           leadingIcon: const Icon(Symbols.info),
           child: const Text("详细信息"),
+        ),
+        MenuItemButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => EditTagDialog(audio: nowPlaying),
+            ).then((saved) {
+              if (saved == true) {
+                nowPlaying.clearCoverCache();
+                PlayService.instance.lyricService.updateLyric();
+                playbackService.refreshNowPlaying();
+              }
+            });
+          },
+          leadingIcon: const Icon(Symbols.edit),
+          child: const Text("编辑标签"),
+        ),
+        MenuItemButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) =>
+                  EditTagDialog(audio: nowPlaying, autoSearch: true),
+            ).then((saved) {
+              if (saved == true) {
+                nowPlaying.clearCoverCache();
+                PlayService.instance.lyricService.updateLyric();
+                playbackService.refreshNowPlaying();
+              }
+            });
+          },
+          leadingIcon: const Icon(Symbols.search),
+          child: const Text("刮削元数据"),
         ),
       ],
       builder: (context, controller, _) => IconButton(
@@ -501,45 +615,47 @@ class _NowPlayingSliderState extends State<_NowPlayingSlider> {
                 stream: playbackService.bufferStream,
                 initialData: playbackService.buffer,
                 builder: (context, bufferSnapshot) => StreamBuilder(
-                stream: playbackService.playerStateStream,
-                initialData: playbackService.playerState,
-                builder: (context, playerStateSnapshot) => ListenableBuilder(
-                  listenable: dragPosition,
-                  builder: (context, _) => StreamBuilder(
-                    stream: playbackService.positionStream,
-                    initialData: playbackService.position,
-                    builder: (context, positionSnapshot) {
-                      final sliderValue = isDragging
-                          ? dragPosition.value
-                          : (positionSnapshot.data! > sliderMax
-                              ? sliderMax
-                              : positionSnapshot.data!).clamp(0.0, sliderMax);
-                      final bufferValue = (bufferSnapshot.data ?? 0.0).clamp(0.0, sliderMax);
-                      return Slider(
-                      thumbColor: scheme.primary,
-                      activeColor: scheme.primary,
-                      min: 0.0,
-                      max: sliderMax,
-                      value: sliderValue,
-                      secondaryTrackValue: bufferValue,
-                      label: Duration(
-                        milliseconds: (dragPosition.value * 1000).toInt(),
-                      ).toStringHMMSS(),
-                      onChangeStart: (value) {
-                        isDragging = true;
-                        dragPosition.value = value;
+                  stream: playbackService.playerStateStream,
+                  initialData: playbackService.playerState,
+                  builder: (context, playerStateSnapshot) => ListenableBuilder(
+                    listenable: dragPosition,
+                    builder: (context, _) => StreamBuilder(
+                      stream: playbackService.positionStream,
+                      initialData: playbackService.position,
+                      builder: (context, positionSnapshot) {
+                        final sliderValue = isDragging
+                            ? dragPosition.value
+                            : (positionSnapshot.data! > sliderMax
+                                    ? sliderMax
+                                    : positionSnapshot.data!)
+                                .clamp(0.0, sliderMax);
+                        final bufferValue =
+                            (bufferSnapshot.data ?? 0.0).clamp(0.0, sliderMax);
+                        return Slider(
+                          thumbColor: scheme.primary,
+                          activeColor: scheme.primary,
+                          min: 0.0,
+                          max: sliderMax,
+                          value: sliderValue,
+                          secondaryTrackValue: bufferValue,
+                          label: Duration(
+                            milliseconds: (dragPosition.value * 1000).toInt(),
+                          ).toStringHMMSS(),
+                          onChangeStart: (value) {
+                            isDragging = true;
+                            dragPosition.value = value;
+                          },
+                          onChanged: (value) {
+                            dragPosition.value = value;
+                          },
+                          onChangeEnd: (value) {
+                            isDragging = false;
+                            playbackService.seek(value);
+                          },
+                        );
                       },
-                      onChanged: (value) {
-                        dragPosition.value = value;
-                      },
-                      onChangeEnd: (value) {
-                        isDragging = false;
-                        playbackService.seek(value);
-                      },
-                    );
-                    },
+                    ),
                   ),
-                ),
                 ),
               );
             },
@@ -647,15 +763,12 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
               ),
             ),
             Text(
-              nowPlaying == null
-                  ? "Enjoy Music"
-                  : nowPlaying.subtitleText,
+              nowPlaying == null ? "Enjoy Music" : nowPlaying.subtitleText,
               maxLines: 1,
               style: TextStyle(color: scheme.onSecondaryContainer),
             ),
             // 音频格式、码率和采样率
-            if (nowPlaying != null)
-              _buildAudioMeta(nowPlaying, scheme),
+            if (nowPlaying != null) _buildAudioMeta(nowPlaying, scheme),
             const SizedBox(height: 16),
             Expanded(
               child: Center(
@@ -706,9 +819,8 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
     if (audio.bitrate != null) parts.add('${audio.bitrate}kbps');
     if (audio.sampleRate != null) {
       final sr = audio.sampleRate!;
-      parts.add(sr >= 1000
-          ? '${(sr / 1000).toStringAsFixed(1)}kHz'
-          : '${sr}Hz');
+      parts
+          .add(sr >= 1000 ? '${(sr / 1000).toStringAsFixed(1)}kHz' : '${sr}Hz');
     }
     if (parts.isEmpty) return const SizedBox.shrink();
     return Text(

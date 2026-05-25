@@ -6,8 +6,13 @@ import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/lyric/lrc.dart';
 import 'package:coriander_player/lyric/lyric.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
+import 'package:coriander_player/metadata/media_cache.dart';
+import 'package:coriander_player/metadata/metadata_service.dart';
+import 'package:coriander_player/metadata/metadata_store.dart';
 import 'package:coriander_player/music_matcher.dart';
 import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/utils.dart';
 import 'package:flutter/foundation.dart';
 
 /// 只通知 lyric 变更
@@ -34,6 +39,21 @@ class LyricService extends ChangeNotifier {
             final currLine = value.lines[currLineIndex];
             playService.desktopLyricService.sendLyricLineMessage(currLine);
           });
+
+          // iOS: 更新蓝牙歌词（封面图+歌词合成）
+          if (PlatformHelper.isIOS) {
+            final currLine = value.lines[currLineIndex];
+            final lyricText = currLine is SyncLyricLine
+                ? currLine.content
+                : (currLine is UnsyncLyricLine ? currLine.content : '');
+            final translation = currLine is SyncLyricLine
+                ? currLine.translation
+                : null;
+            if (lyricText.isNotEmpty) {
+              playService.playbackService
+                  .updateBluetoothLyric(lyricText, translation: translation);
+            }
+          }
         }
       });
     });
@@ -73,12 +93,53 @@ class LyricService extends ChangeNotifier {
     final nowPlaying = _getNowPlaying();
     if (nowPlaying == null) return Future.value(null);
 
+    // 优先从 MetadataService 缓存获取歌词
+    final cachedLyric = await _getLyricFromCache(nowPlaying);
+    if (cachedLyric != null) return cachedLyric;
+
     if (localFirst) {
       return (await Lrc.fromAudioPath(nowPlaying)) ??
           (await getMostMatchedLyric(nowPlaying));
     }
     return (await getMostMatchedLyric(nowPlaying)) ??
         (await Lrc.fromAudioPath(nowPlaying));
+  }
+
+  /// 从 MetadataService 缓存获取歌词
+  Future<Lyric?> _getLyricFromCache(Audio audio) async {
+    try {
+      final audioId = await MetadataService.instance.computeAudioId(audio);
+      if (audioId == null) return null;
+
+      // 从本地缓存文件获取歌词
+      final cached = await MediaCache.instance.getLyric(audioId);
+      if (cached != null) {
+        final lyricText = cached.$1;
+        // 解析歌词文本为 Lyric 对象
+        final lyric = Lrc.fromLrcText(lyricText, LrcSource.local);
+        if (lyric != null) {
+          LOGGER.i("[LyricService] Loaded lyric from cache for: ${audio.title}");
+          return lyric;
+        }
+      }
+
+      // 从数据库获取歌词文本
+      final metadata = await MetadataStore.instance.getMetadata(audioId);
+      if (metadata?.lyricText != null) {
+        final lyric = Lrc.fromLrcText(metadata!.lyricText!, LrcSource.local);
+        if (lyric != null) {
+          // 同步缓存到文件
+          await MediaCache.instance.saveLyric(
+            audioId, metadata.lyricText!, synced: metadata.lyricSynced ?? false,
+          );
+          LOGGER.i("[LyricService] Loaded lyric from DB for: ${audio.title}");
+          return lyric;
+        }
+      }
+    } catch (e) {
+      LOGGER.e("[LyricService] Failed to get lyric from cache: $e");
+    }
+    return null;
   }
 
   /// 根据默认歌词来源获取歌词：
@@ -107,9 +168,50 @@ class LyricService extends ChangeNotifier {
 
     currLyricFuture.then((value) {
       _nextLyricLine = 0;
+      // 自动缓存歌词到 MetadataService
+      if (value != null) {
+        _cacheLyricInBackground(nowPlaying, value);
+      }
     });
 
     notifyListeners();
+  }
+
+  /// 后台缓存歌词（不阻塞播放流程）
+  Future<void> _cacheLyricInBackground(Audio audio, Lyric lyric) async {
+    try {
+      final audioId = await MetadataService.instance.computeAudioId(audio);
+      if (audioId == null) return;
+
+      // 检查是否已有缓存
+      final existing = await MediaCache.instance.getLyric(audioId);
+      if (existing != null) return;
+
+      // 将歌词导出为文本并缓存
+      final lyricText = _lyricToText(lyric);
+      if (lyricText.isNotEmpty) {
+        await MediaCache.instance.saveLyric(audioId, lyricText, synced: true);
+        await MetadataStore.instance.updateLyric(audioId, lyricText, synced: true);
+        LOGGER.i("[LyricService] Auto-cached lyric for: ${audio.title}");
+      }
+    } catch (e) {
+      LOGGER.e("[LyricService] Failed to cache lyric: $e");
+    }
+  }
+
+  /// 将 Lyric 对象转换为 LRC 文本
+  String _lyricToText(Lyric lyric) {
+    final buf = StringBuffer();
+    for (final line in lyric.lines) {
+      if (line is LrcLine) {
+        final startMs = line.start.inMilliseconds;
+        final min = (startMs ~/ 60000).toString().padLeft(2, '0');
+        final sec = ((startMs % 60000) ~/ 1000).toString().padLeft(2, '0');
+        final ms = (startMs % 1000).toString().padLeft(3, '0');
+        buf.writeln('[$min:$sec.$ms]${line.content}');
+      }
+    }
+    return buf.toString();
   }
 
   void useLocalLyric() {

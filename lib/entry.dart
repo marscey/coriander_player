@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/component/app_shell.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/page/album_detail_page.dart';
 import 'package:coriander_player/page/albums_page.dart';
 import 'package:coriander_player/page/artist_detail_page.dart';
@@ -211,7 +212,8 @@ class Entry extends StatelessWidget {
                   pageBuilder: (context, state) {
                     final args = state.extra as FolderDetailArgs;
                     return SlideTransitionPage(
-                      child: FolderDetailPage(folder: args.folder, locateToPath: args.locateToPath),
+                      child: FolderDetailPage(
+                          folder: args.folder, locateToPath: args.locateToPath),
                     );
                   },
                 ),
@@ -367,16 +369,20 @@ class _AppState extends State<App> with WindowListener, TrayListener {
   @override
   void initState() {
     super.initState();
-    windowManager.addListener(this);
-    trayManager.addListener(this);
-    _initSystemTray();
+    if (PlatformHelper.isDesktop) {
+      windowManager.addListener(this);
+      trayManager.addListener(this);
+      _initSystemTray();
+    }
   }
 
   @override
   void dispose() {
-    windowManager.removeListener(this);
-    trayManager.removeListener(this);
-    trayManager.destroy();
+    if (PlatformHelper.isDesktop) {
+      windowManager.removeListener(this);
+      trayManager.removeListener(this);
+      trayManager.destroy();
+    }
     super.dispose();
   }
 

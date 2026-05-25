@@ -4,9 +4,13 @@ import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/lyric/lrc.dart';
 import 'package:coriander_player/lyric/lyric.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
+import 'package:coriander_player/metadata/media_cache.dart';
+import 'package:coriander_player/metadata/metadata_service.dart';
+import 'package:coriander_player/metadata/metadata_store.dart';
 import 'package:coriander_player/music_matcher.dart';
 import 'package:coriander_player/page/now_playing_page/component/vertical_lyric_view.dart';
 import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -283,6 +287,9 @@ class _LyricSourceTileState extends State<_LyricSourceTile> {
         );
         PlayService.instance.lyricService.useSpecificLyric(lyric);
 
+        // 同步缓存歌词到 MetadataStore（下次播放可直接从缓存加载）
+        _cacheLyricForAudio(audio, lyric);
+
         Navigator.pop(context);
       },
       shape: RoundedRectangleBorder(
@@ -337,5 +344,35 @@ class _LyricSourceTileState extends State<_LyricSourceTile> {
         },
       ),
     );
+  }
+}
+
+/// 后台缓存歌词到 MetadataStore（不阻塞 UI）
+Future<void> _cacheLyricForAudio(Audio audio, Lyric lyric) async {
+  try {
+    final audioId = await MetadataService.instance.computeAudioId(audio);
+    if (audioId == null) return;
+
+    // 将歌词导出为 LRC 文本
+    final buf = StringBuffer();
+    for (final line in lyric.lines) {
+      if (line is LrcLine) {
+        final startMs = line.start.inMilliseconds;
+        final min = (startMs ~/ 60000).toString().padLeft(2, '0');
+        final sec = ((startMs % 60000) ~/ 1000).toString().padLeft(2, '0');
+        final ms = (startMs % 1000).toString().padLeft(3, '0');
+        buf.writeln('[$min:$sec.$ms]${line.content}');
+      }
+    }
+    final lyricText = buf.toString();
+    if (lyricText.isEmpty) return;
+
+    // 保存到本地缓存文件
+    await MediaCache.instance.saveLyric(audioId, lyricText, synced: true);
+    // 保存到数据库
+    await MetadataStore.instance.updateLyric(audioId, lyricText, synced: true);
+    LOGGER.i("[LyricSourceView] Cached lyric for: ${audio.title}");
+  } catch (e) {
+    LOGGER.e("[LyricSourceView] Failed to cache lyric: $e");
   }
 }
