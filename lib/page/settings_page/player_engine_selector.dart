@@ -58,6 +58,7 @@ class _PlayerEngineSelectorState extends State<PlayerEngineSelector> {
 
     return SettingsTile(
       description: "播放器引擎",
+      subtitle: "切换引擎后需重启应用生效",
       action: SegmentedButton<PlayerEngineType>(
         showSelectedIcon: false,
         segments: segments,

@@ -9,6 +9,7 @@ import 'package:coriander_player/metadata/metadata_service.dart';
 import 'package:coriander_player/metadata/metadata_store.dart';
 import 'package:coriander_player/music_matcher.dart';
 import 'package:coriander_player/page/now_playing_page/component/vertical_lyric_view.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
@@ -53,10 +54,87 @@ class _SetLyricSourceBtn extends StatelessWidget {
   final bool? isLocal;
   const _SetLyricSourceBtn({this.isLocal});
 
+  void _showMobileSheet(BuildContext context) {
+    final lyricService = PlayService.instance.lyricService;
+    final scheme = Theme.of(context).colorScheme;
+    ALWAYS_SHOW_LYRIC_VIEW_CONTROLS = true;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                '歌词来源',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            ListTile(
+              leading: Icon(Symbols.search, color: scheme.onSurface),
+              title: const Text('指定默认歌词'),
+              onTap: () {
+                Navigator.pop(context);
+                final nowPlaying =
+                    PlayService.instance.playbackService.nowPlaying;
+                showDialog<String>(
+                  context: context,
+                  builder: (context) =>
+                      _SetLyricSourceDialog(audio: nowPlaying!),
+                );
+              },
+            ),
+            ListTile(
+              leading: isLocal == false
+                  ? Icon(Symbols.check, color: scheme.primary)
+                  : Icon(Symbols.language, color: scheme.onSurface),
+              title: const Text('在线歌词'),
+              onTap: () {
+                Navigator.pop(context);
+                lyricService.useOnlineLyric();
+              },
+            ),
+            ListTile(
+              leading: isLocal == true
+                  ? Icon(Symbols.check, color: scheme.primary)
+                  : Icon(Symbols.folder, color: scheme.onSurface),
+              title: const Text('本地歌词'),
+              onTap: () {
+                Navigator.pop(context);
+                lyricService.useLocalLyric();
+              },
+            ),
+            const SizedBox(height: 8.0),
+          ],
+        ),
+      ),
+    ).whenComplete(() {
+      ALWAYS_SHOW_LYRIC_VIEW_CONTROLS = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final lyricService = PlayService.instance.lyricService;
+
+    // 移动端：点击直接弹出 BottomSheet
+    if (PlatformHelper.isMobile) {
+      return IconButton(
+        onPressed: PlayService.instance.playbackService.nowPlaying == null
+            ? null
+            : () => _showMobileSheet(context),
+        icon: const Icon(Symbols.lyrics),
+        color: scheme.onSecondaryContainer,
+      );
+    }
+
+    // 桌面端：MenuAnchor 下拉菜单
     return MenuAnchor(
       onOpen: () {
         ALWAYS_SHOW_LYRIC_VIEW_CONTROLS = true;
@@ -120,7 +198,7 @@ class _SetLyricSourceDialogState extends State<_SetLyricSourceDialog> {
   @override
   void initState() {
     super.initState();
-    _searchController.text = widget.audio.title;
+    _searchController.text = buildSearchQuery(widget.audio);
     _searchFuture = uniSearch(widget.audio);
   }
 
@@ -129,6 +207,37 @@ class _SetLyricSourceDialogState extends State<_SetLyricSourceDialog> {
       _customQuery = _searchController.text.trim();
       _searchFuture = uniSearch(widget.audio, customQuery: _customQuery);
     });
+  }
+
+  Widget _buildInfoRow(String label, String value, ColorScheme scheme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 56,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: scheme.onSurfaceVariant,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: scheme.onSurface,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -155,6 +264,25 @@ class _SetLyricSourceDialogState extends State<_SetLyricSourceDialog> {
                   ),
                 ),
               ),
+              // 当前音频信息，方便与搜索结果对比
+              Container(
+                padding: const EdgeInsets.all(12.0),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildInfoRow("歌名", widget.audio.title, scheme),
+                    if (widget.audio.artist.isNotEmpty)
+                      _buildInfoRow("艺术家", widget.audio.artist, scheme),
+                    if (widget.audio.album.isNotEmpty)
+                      _buildInfoRow("专辑", widget.audio.album, scheme),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12.0),
               TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
@@ -179,6 +307,7 @@ class _SetLyricSourceDialogState extends State<_SetLyricSourceDialog> {
                 onTap: () {
                   LYRIC_SOURCES[widget.audio.path] = 
                       LyricSource(LyricSourceType.local);
+                  saveLyricSources();
                   PlayService.instance.lyricService.useLocalLyric();
                   Navigator.pop(context);
                 },
@@ -285,6 +414,7 @@ class _LyricSourceTileState extends State<_LyricSourceTile> {
           kugouSongHash: searchResult.kugouSongHash,
           neteaseSongId: searchResult.neteaseSongId,
         );
+        saveLyricSources();
         PlayService.instance.lyricService.useSpecificLyric(lyric);
 
         // 同步缓存歌词到 MetadataStore（下次播放可直接从缓存加载）

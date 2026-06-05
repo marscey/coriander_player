@@ -267,8 +267,8 @@ class _AudioLibraryEditorDialogState extends State<AudioLibraryEditorDialog> {
   }
 }
 
-/// iOS 蓝牙歌词开关
-/// 将歌词绘制到封面图上，通过 AVRCP 传给蓝牙设备显示
+/// 蓝牙歌词开关
+/// 将歌词显示在锁屏/蓝牙设备的歌曲名称位置
 class BluetoothLyricSwitch extends StatefulWidget {
   const BluetoothLyricSwitch({super.key});
 
@@ -281,19 +281,47 @@ class _BluetoothLyricSwitchState extends State<BluetoothLyricSwitch> {
 
   @override
   Widget build(BuildContext context) {
-    // 仅 iOS 显示此设置
-    if (!PlatformHelper.isIOS) return const SizedBox.shrink();
+    if (!PlatformHelper.isIOS && !PlatformHelper.isMacOS) {
+      return const SizedBox.shrink();
+    }
 
     return SettingsTile(
       description: "蓝牙歌词",
+      subtitle: "在锁屏和蓝牙设备歌曲名称处显示当前歌词",
       action: Switch(
         value: settings.bluetoothLyric,
         onChanged: (value) async {
           setState(() {
             settings.bluetoothLyric = value;
           });
-          // 同步更新媒体控制服务
           PlayService.instance.playbackService.setBluetoothLyricEnabled(value);
+          await settings.saveSettings();
+        },
+      ),
+    );
+  }
+}
+
+class ShowTrackIndexSwitch extends StatefulWidget {
+  const ShowTrackIndexSwitch({super.key});
+
+  @override
+  State<ShowTrackIndexSwitch> createState() => _ShowTrackIndexSwitchState();
+}
+
+class _ShowTrackIndexSwitchState extends State<ShowTrackIndexSwitch> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: "显示序号",
+      action: Switch(
+        value: settings.showTrackIndex,
+        onChanged: (value) async {
+          setState(() {
+            settings.showTrackIndex = value;
+          });
           await settings.saveSettings();
         },
       ),

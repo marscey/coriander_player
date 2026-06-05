@@ -1,3 +1,4 @@
+import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/playing_indicator.dart';
 import 'package:coriander_player/component/scroll_aware_future_builder.dart';
 import 'package:coriander_player/library/audio_library.dart';
@@ -5,9 +6,7 @@ import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-/// 统一的播放列表音频项组件，用于播放列表场景（mini播放器弹窗、播放器主界面播放列表等）
-/// 与 AudioTile 不同，此组件更轻量，无右键菜单和多选功能
-class PlaylistAudioItem extends StatelessWidget {
+class PlaylistAudioItem extends StatefulWidget {
   final Audio audio;
   final int index;
   final bool isNowPlaying;
@@ -24,19 +23,41 @@ class PlaylistAudioItem extends StatelessWidget {
   });
 
   @override
+  State<PlaylistAudioItem> createState() => _PlaylistAudioItemState();
+}
+
+class _PlaylistAudioItemState extends State<PlaylistAudioItem> {
+  @override
+  void initState() {
+    super.initState();
+    AppSettings.instance.addListener(_onSettingsChanged);
+  }
+
+  @override
+  void dispose() {
+    AppSettings.instance.removeListener(_onSettingsChanged);
+    super.dispose();
+  }
+
+  void _onSettingsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final defaultTextColor = textColor ?? scheme.onSurface;
+    final defaultTextColor = widget.textColor ?? scheme.onSurface;
     final activeTextColor = scheme.primary;
-    final itemTextColor = isNowPlaying ? activeTextColor : defaultTextColor;
+    final itemTextColor = widget.isNowPlaying ? activeTextColor : defaultTextColor;
     final placeholder = Icon(
       Symbols.broken_image,
       size: 40.0,
       color: defaultTextColor,
     );
+    final showIndex = AppSettings.instance.showTrackIndex;
 
     return InkWell(
-      onTap: onTap,
+      onTap: widget.onTap,
       borderRadius: BorderRadius.circular(8.0),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
@@ -44,25 +65,24 @@ class PlaylistAudioItem extends StatelessWidget {
           height: 48.0,
           child: Row(
             children: [
-              // 序号
-              SizedBox(
-                width: 28.0,
-                child: Text(
-                  '${index + 1}',
-                  style: TextStyle(
-                    color: isNowPlaying ? activeTextColor : defaultTextColor,
-                    fontSize: 13,
+              if (showIndex)
+                SizedBox(
+                  width: 28.0,
+                  child: Text(
+                    '${widget.index + 1}',
+                    style: TextStyle(
+                      color: widget.isNowPlaying ? activeTextColor : defaultTextColor,
+                      fontSize: 13,
+                    ),
+                    textAlign: TextAlign.end,
                   ),
-                  textAlign: TextAlign.end,
                 ),
-              ),
-              const SizedBox(width: 8.0),
-              // 封面 + 播放指示器
+              if (showIndex) const SizedBox(width: 8.0),
               PlayingIndicatorOverlay(
                 size: PlayingIndicatorSize.small,
-                isActivelyPlaying: isNowPlaying,
+                isActivelyPlaying: widget.isNowPlaying,
                 child: ScrollAwareFutureBuilder(
-                  future: () => audio.cover,
+                  future: () => widget.audio.cover,
                   builder: (context, snapshot) {
                     if (snapshot.data == null) return placeholder;
                     return ClipRRect(
@@ -78,20 +98,19 @@ class PlaylistAudioItem extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12.0),
-              // 标题 + 副标题
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      audio.title,
+                      widget.audio.title,
                       style: TextStyle(color: itemTextColor, fontSize: 14),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      audio.subtitleText,
+                      widget.audio.subtitleText,
                       style: TextStyle(
                           color: itemTextColor, fontSize: 12),
                       maxLines: 1,
@@ -101,9 +120,8 @@ class PlaylistAudioItem extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8.0),
-              // 时长
               Text(
-                Duration(seconds: audio.duration).toStringHMMSS(),
+                Duration(seconds: widget.audio.duration).toStringHMMSS(),
                 style: TextStyle(color: itemTextColor, fontSize: 13),
               ),
             ],

@@ -1,6 +1,8 @@
 import 'package:coriander_player/component/playing_indicator.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
@@ -342,7 +344,9 @@ class _FolderDetailPageState extends State<FolderDetailPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = constraints.maxWidth;
-        final crossAxisCount = (screenWidth / 160).floor().clamp(2, 10);
+        final minCellWidth = PlatformHelper.isMobile ? 110.0 : 160.0;
+        final crossAxisCount =
+            (screenWidth / minCellWidth).floor().clamp(2, 10);
         const crossAxisSpacing = 8.0;
         const runSpacing = 8.0;
         const padding = 8.0;
@@ -404,14 +408,24 @@ class _FolderDetailPageState extends State<FolderDetailPage> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(
-                width: 48,
-                height: 48,
-                child: Center(
-                  child: PlayingIndicatorOverlay(
-                    size: PlayingIndicatorSize.large,
-                    isActivelyPlaying: isOnPlayingPath,
-                    child: _buildGridIcon(entry),
-                  ),
+                width: 55,
+                height: 55,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Center(
+                      child: PlayingIndicatorOverlay(
+                        size: PlayingIndicatorSize.large,
+                        isActivelyPlaying: isOnPlayingPath,
+                        child: _buildGridIcon(entry),
+                      ),
+                    ),
+                    Positioned(
+                      right: -12,
+                      bottom: -10,
+                      child: _buildLocalGridMenuButton(entry),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 8),
@@ -425,6 +439,28 @@ class _FolderDetailPageState extends State<FolderDetailPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLocalGridMenuButton(_LocalEntry entry) {
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: PopupMenuButton<String>(
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+        iconSize: 18,
+        icon: const Icon(Icons.more_horiz),
+        tooltip: '更多',
+        itemBuilder: (context) => [
+          if (entry.isAudioFile)
+            const PopupMenuItem(value: 'play', child: Text('播放')),
+          if (entry.isDirectory)
+            const PopupMenuItem(
+                value: 'scan_folder_to_library', child: Text('扫描到音乐库')),
+        ],
+        onSelected: (value) => _handleLocalFileAction(entry, value),
       ),
     );
   }
@@ -811,6 +847,24 @@ class _FolderDetailPageState extends State<FolderDetailPage> {
       _playAudio(entry, audioFiles);
     } else if (_isImageFile(entry.name)) {
       _previewLocalImage(entry);
+    }
+  }
+
+  void _handleLocalFileAction(_LocalEntry entry, String action) {
+    switch (action) {
+      case 'play':
+        _playAudio(entry, _getAudioFiles(_entries));
+        break;
+      case 'add_to_library':
+        if (entry.isAudioFile) {
+          showTextOnSnackBar('请通过音乐库管理添加');
+        }
+        break;
+      case 'scan_folder_to_library':
+        if (entry.isDirectory) {
+          showTextOnSnackBar('请通过音乐库扫描添加');
+        }
+        break;
     }
   }
 

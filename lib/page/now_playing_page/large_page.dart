@@ -51,8 +51,16 @@ class _NowPlayingPage_Large extends StatelessWidget {
                       spacer,
                       if (!PlatformHelper.isMobile) _NowPlayingVolDspSlider(),
                       if (!PlatformHelper.isMobile) spacer,
-                      if (!PlatformHelper.isMobile) _ExclusiveModeSwitch(),
-                      if (!PlatformHelper.isMobile) spacer,
+                      if (!PlatformHelper.isMobile &&
+                          (AppSettings.instance.playerEngineType ??
+                                  PlayerEngineType.defaultForPlatform) ==
+                              PlayerEngineType.bass)
+                        _ExclusiveModeSwitch(),
+                      if (!PlatformHelper.isMobile &&
+                          (AppSettings.instance.playerEngineType ??
+                                  PlayerEngineType.defaultForPlatform) ==
+                              PlayerEngineType.bass)
+                        spacer,
                       PlayerEngineIndicator(),
                     ],
                   ),

@@ -5,8 +5,10 @@ import 'package:coriander_player/lyric/lrc.dart';
 import 'package:coriander_player/lyric/lyric.dart';
 import 'package:coriander_player/page/now_playing_page/component/lyric_view_controls.dart';
 import 'package:coriander_player/page/now_playing_page/component/lyric_view_tile.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
 bool ALWAYS_SHOW_LYRIC_VIEW_CONTROLS = false;
@@ -20,6 +22,7 @@ class VerticalLyricView extends StatefulWidget {
 
 class _VerticalLyricViewState extends State<VerticalLyricView> {
   bool isHovering = false;
+  bool showMobileControls = false;
   final lyricViewController = LyricViewController();
 
   @override
@@ -33,6 +36,11 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
         child: CircularProgressIndicator(),
       ),
     );
+
+    // 移动端：点击按钮切换控制面板；桌面端：鼠标悬停显示
+    final showControls = PlatformHelper.isMobile
+        ? showMobileControls
+        : (isHovering || ALWAYS_SHOW_LYRIC_VIEW_CONTROLS);
 
     return MouseRegion(
       onEnter: (_) {
@@ -77,11 +85,40 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
                             ? noLyricWidget
                             : _VerticalLyricScrollView(lyric: lyricNullable),
                       },
-                      if (isHovering || ALWAYS_SHOW_LYRIC_VIEW_CONTROLS)
+                      if (showControls)
                         const Align(
                           alignment: Alignment.bottomRight,
                           child: LyricViewControls(),
-                        )
+                        ),
+                      // 移动端：右下角显示切换按钮
+                      if (PlatformHelper.isMobile)
+                        Positioned(
+                          right: 8.0,
+                          bottom: showControls ? 200.0 : 12.0,
+                          child: SizedBox(
+                            width: 36,
+                            height: 36,
+                            child: IconButton.filledTonal(
+                              onPressed: () {
+                                setState(() {
+                                  showMobileControls = !showMobileControls;
+                                });
+                              },
+                              icon: Icon(
+                                showControls
+                                    ? Symbols.close
+                                    : Symbols.lyrics,
+                                size: 18,
+                              ),
+                              padding: EdgeInsets.zero,
+                              style: IconButton.styleFrom(
+                                backgroundColor:
+                                    scheme.secondaryContainer.withValues(
+                                        alpha: 0.7),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   );
                 },

@@ -43,27 +43,37 @@ class _SearchResultPageState extends State<SearchResultPage> {
           length: 4,
           child: Column(
             children: [
-              Focus(
-                onFocusChange: HotkeysHelper.onFocusChanges,
-                child: Hero(
-                  tag: SEARCH_BAR_KEY,
-                  child: TextField(
-                    controller: searchBarController,
-                    decoration: const InputDecoration(
-                      suffixIcon: Padding(
-                        padding: EdgeInsets.only(right: 12.0),
-                        child: Icon(Symbols.search),
-                      ),
-                      hintText: "搜索歌曲、艺术家、专辑",
-                      border: OutlineInputBorder(),
+              Row(
+                children: [
+                  if (context.canPop())
+                    IconButton(
+                      tooltip: "返回",
+                      onPressed: () => context.pop(),
+                      icon: const Icon(Symbols.arrow_back),
                     ),
-
-                    /// when 'enter' is pressed
-                    onSubmitted: (String query) {
-                      searchResult.value = UnionSearchResult.search(query);
-                    },
+                  Expanded(
+                    child: Focus(
+                      onFocusChange: HotkeysHelper.onFocusChanges,
+                      child: Hero(
+                        tag: SEARCH_BAR_KEY,
+                        child: TextField(
+                          controller: searchBarController,
+                          decoration: const InputDecoration(
+                            suffixIcon: Padding(
+                              padding: EdgeInsets.only(right: 12.0),
+                              child: Icon(Symbols.search),
+                            ),
+                            hintText: "搜索歌曲、艺术家、专辑",
+                            border: OutlineInputBorder(),
+                          ),
+                          onSubmitted: (String query) {
+                            searchResult.value = UnionSearchResult.search(query);
+                          },
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
               const SizedBox(height: 8.0),
               Material(

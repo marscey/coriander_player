@@ -11,6 +11,18 @@ import 'package:music_api/music_api.dart';
 
 enum ResultSource { qq, kugou, netease }
 
+/// 构建在线搜索关键词：艺术家 + 歌名联合搜索，提高匹配精度。
+/// 主流音乐平台（网易云/QQ/酷狗）均支持空格分隔的多关键词搜索。
+/// 当艺术家为空或与歌名重复时，仅使用歌名。
+String buildSearchQuery(Audio audio) {
+  final artist = audio.artist.trim();
+  final title = audio.title.trim();
+  if (artist.isEmpty || title.contains(artist)) {
+    return title;
+  }
+  return '$artist $title';
+}
+
 double _computeScore(Audio audio, String title, String artists, String album) {
   int maxScore = audio.title.length + audio.artist.length + audio.album.length;
   int score = 0;
@@ -124,7 +136,8 @@ class SongSearchResult {
 }
 
 Future<List<SongSearchResult>> uniSearch(Audio audio, {String? customQuery}) async {
-  final query = customQuery ?? audio.title;
+  // 优先使用自定义查询词，否则用 "艺术家 歌名" 联合搜索提高匹配精度
+  final query = customQuery ?? buildSearchQuery(audio);
   try {
     List<SongSearchResult> result = [];
 

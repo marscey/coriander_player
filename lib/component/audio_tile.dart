@@ -5,6 +5,7 @@ import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/page/settings_page/edit_tag_dialog.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/platform_helper.dart';
@@ -45,15 +46,21 @@ class _AudioTileState extends State<AudioTile> {
   void initState() {
     super.initState();
     PlayService.instance.playbackService.addListener(_onPlaybackChanged);
+    AppSettings.instance.addListener(_onSettingsChanged);
   }
 
   @override
   void dispose() {
     PlayService.instance.playbackService.removeListener(_onPlaybackChanged);
+    AppSettings.instance.removeListener(_onSettingsChanged);
     super.dispose();
   }
 
   void _onPlaybackChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onSettingsChanged() {
     if (mounted) setState(() {});
   }
 
@@ -178,7 +185,8 @@ class _AudioTileState extends State<AudioTile> {
           onPressed: () {
             showDialog(
               context: context,
-              builder: (context) => EditTagDialog(audio: audio, autoSearch: true),
+              builder: (context) =>
+                  EditTagDialog(audio: audio, autoSearch: true),
             ).then((saved) {
               if (saved == true) {
                 audio.clearCoverCache();
@@ -280,11 +288,16 @@ class _AudioTileState extends State<AudioTile> {
             // 移动端长按进入多选模式并选中当前项
             onLongPress: () {
               if (widget.multiSelectController == null) return;
-              if (!widget.multiSelectController!.enableMultiSelectView) {
-                widget.multiSelectController!.useMultiSelectView(true);
+              if (PlatformHelper.isMobile) {
+                _showMobileContextMenu(context, audio);
+              } else {
+                if (!widget.multiSelectController!.enableMultiSelectView) {
+                  widget.multiSelectController!.useMultiSelectView(true);
+                }
+                widget.multiSelectController!
+                    .selectAtIndex(audio, widget.audioIndex);
+                HapticFeedback.mediumImpact();
               }
-              widget.multiSelectController!.selectAtIndex(audio, widget.audioIndex);
-              HapticFeedback.mediumImpact();
             },
             onSecondaryTapDown: (details) {
               if (widget.multiSelectController?.enableMultiSelectView == true)
@@ -298,33 +311,44 @@ class _AudioTileState extends State<AudioTile> {
                 horizontal: PlatformHelper.isMobile ? 4.0 : 8.0,
               ),
               child: Row(children: [
-                // 序号 / 多选勾选框
-                SizedBox(
-                  width: PlatformHelper.isMobile ? 24.0 : 32.0,
-                  child: widget.multiSelectController != null &&
-                          widget.multiSelectController!.enableMultiSelectView
-                      ? Icon(
-                          widget.multiSelectController!.selected.contains(audio)
-                              ? Symbols.check_circle
-                              : Symbols.circle,
-                          color: widget.multiSelectController!.selected
-                                  .contains(audio)
+                if (widget.multiSelectController != null &&
+                    widget.multiSelectController!.enableMultiSelectView)
+                  Padding(
+                    padding: EdgeInsets.only(
+                        right: PlatformHelper.isMobile ? 8.0 : 12.0),
+                    child: Checkbox(
+                      value: widget.multiSelectController!.selected
+                          .contains(audio),
+                      onChanged: (_) {
+                        if (widget.multiSelectController!.selected
+                            .contains(audio)) {
+                          widget.multiSelectController!.unselect(audio);
+                        } else {
+                          widget.multiSelectController!
+                              .selectAtIndex(audio, widget.audioIndex);
+                        }
+                      },
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  )
+                else if (AppSettings.instance.showTrackIndex)
+                  Padding(
+                    padding: EdgeInsets.only(
+                        right: PlatformHelper.isMobile ? 8.0 : 12.0),
+                    child: SizedBox(
+                      width: PlatformHelper.isMobile ? 24.0 : 32.0,
+                      child: Text(
+                        '${widget.audioIndex + 1}',
+                        style: TextStyle(
+                          color: (widget.focus || _isNowPlaying)
                               ? scheme.primary
                               : scheme.onSurfaceVariant,
-                          size: 22,
-                        )
-                      : Text(
-                          '${widget.audioIndex + 1}',
-                          style: TextStyle(
-                            color: (widget.focus || _isNowPlaying)
-                                ? scheme.primary
-                                : scheme.onSurfaceVariant,
-                            fontSize: 13,
-                          ),
-                          textAlign: TextAlign.end,
+                          fontSize: 13,
                         ),
-                ),
-                SizedBox(width: PlatformHelper.isMobile ? 8.0 : 12.0),
+                        textAlign: TextAlign.end,
+                      ),
+                    ),
+                  ),
 
                 if (widget.leading != null)
                   Padding(
@@ -441,7 +465,12 @@ class _AudioTileState extends State<AudioTile> {
 
   /// 获取音频文件大小
   static String? _getFileSize(Audio audio) {
-    if (audio.isCloudAudio) return null;
+    if (audio.isCloudAudio) {
+      if (audio.fileSize != null && audio.fileSize! > 0) {
+        return _formatFileSize(audio.fileSize!);
+      }
+      return null;
+    }
     try {
       final file = File(audio.path);
       if (file.existsSync()) {
@@ -491,5 +520,106 @@ class _AudioTileState extends State<AudioTile> {
       default:
         return ext.isNotEmpty ? ext.substring(1).toUpperCase() : '';
     }
+  }
+
+  void _showMobileContextMenu(BuildContext context, Audio audio) {
+    final scheme = Theme.of(context).colorScheme;
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                audio.title,
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurface),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Symbols.plus_one),
+              title: const Text("下一首播放"),
+              onTap: () {
+                Navigator.pop(ctx);
+                PlayService.instance.playbackService.addToNext(audio);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Symbols.select),
+              title: const Text("多选"),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (!widget.multiSelectController!.enableMultiSelectView) {
+                  widget.multiSelectController!.useMultiSelectView(true);
+                }
+                widget.multiSelectController!
+                    .selectAtIndex(audio, widget.audioIndex);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Symbols.info),
+              title: const Text("详细信息"),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push(app_paths.AUDIO_DETAIL_PAGE, extra: audio);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Symbols.edit),
+              title: const Text("编辑标签"),
+              onTap: () {
+                Navigator.pop(ctx);
+                showDialog(
+                  context: context,
+                  builder: (context) => EditTagDialog(audio: audio),
+                ).then((saved) {
+                  if (saved == true) {
+                    audio.clearCoverCache();
+                    PlayService.instance.lyricService.updateLyric();
+                    PlayService.instance.playbackService.refreshNowPlaying();
+                  }
+                });
+              },
+            ),
+            ListTile(
+              leading: const Icon(Symbols.search),
+              title: const Text("刮削元数据"),
+              onTap: () {
+                Navigator.pop(ctx);
+                showDialog(
+                  context: context,
+                  builder: (context) =>
+                      EditTagDialog(audio: audio, autoSearch: true),
+                ).then((saved) {
+                  if (saved == true) {
+                    audio.clearCoverCache();
+                    PlayService.instance.lyricService.updateLyric();
+                    PlayService.instance.playbackService.refreshNowPlaying();
+                  }
+                });
+              },
+            ),
+            ListTile(
+              leading: Icon(Symbols.delete, color: scheme.error),
+              title: Text("从音乐库移除", style: TextStyle(color: scheme.error)),
+              onTap: () {
+                Navigator.pop(ctx);
+                AudioLibrary.instance.removeAudio(audio);
+                showTextOnSnackBar('已从音乐库移除"${audio.title}"');
+              },
+            ),
+            const SizedBox(height: 8.0),
+          ],
+        ),
+      ),
+    );
   }
 }

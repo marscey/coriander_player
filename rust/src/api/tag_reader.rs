@@ -8,6 +8,7 @@ use std::{
 
 use image::imageops;
 use lofty::prelude::{Accessor, AudioFile, ItemKey, TaggedFileExt};
+use lofty::file::FileType;
 use sha2::{Sha256, Digest};
 
 use crate::frb_generated::StreamSink;
@@ -828,22 +829,68 @@ pub fn update_index(index_path: String, sink: StreamSink<IndexActionState>) -> a
     Ok(())
 }
 
-/// for Flutter
-/// 从部分字节（文件头 + 文件尾）中解析音频元数据。
-/// [head_bytes]: 文件头部字节（建议至少 64KB）
-/// [tail_bytes]: 文件尾部字节（建议至少 128KB）
-/// [file_size]: 文件总大小（字节）
-/// [file_name]: 文件名（用于格式检测和作为标题回退）
-///
-/// 返回 JSON 字符串，包含 title/artist/album/duration/bitrate/sample_rate 字段。
-pub fn read_metadata_from_bytes(
+/// 构造 FLAC 专用虚拟文件：仅使用 head bytes，修正最后一个元数据块的 last block 标志。
+/// FLAC 元数据块全部在文件头部，零填充会导致解析器将零误读为元数据块。
+fn construct_flac_virtual_file(mut head_bytes: Vec<u8>) -> Vec<u8> {
+    // 验证 FLAC magic: "fLaC"
+    if head_bytes.len() < 4 || &head_bytes[0..4] != b"fLaC" {
+        return head_bytes;
+    }
+
+    // 解析元数据块，找到最后一个完整块
+    let mut offset = 4usize;
+    let mut last_complete_block_end = 4usize;
+
+    while offset + 4 <= head_bytes.len() {
+        let is_last = (head_bytes[offset] & 0x80) != 0;
+        let block_size = ((head_bytes[offset + 1] as usize) << 16)
+            | ((head_bytes[offset + 2] as usize) << 8)
+            | (head_bytes[offset + 3] as usize);
+        let block_end = offset + 4 + block_size;
+
+        if block_end <= head_bytes.len() {
+            // 块完整
+            last_complete_block_end = block_end;
+            if is_last {
+                // 已有 last 标志，截断后直接返回
+                head_bytes.truncate(block_end);
+                return head_bytes;
+            }
+            offset = block_end;
+        } else {
+            // 块不完整（超出 head bytes 范围），停止
+            break;
+        }
+    }
+
+    // 截断到最后一个完整块
+    head_bytes.truncate(last_complete_block_end);
+
+    // 重新解析，给最后一个完整块设置 last 标志
+    offset = 4;
+    while offset + 4 <= last_complete_block_end {
+        let block_size = ((head_bytes[offset + 1] as usize) << 16)
+            | ((head_bytes[offset + 2] as usize) << 8)
+            | (head_bytes[offset + 3] as usize);
+        let block_end = offset + 4 + block_size;
+
+        if block_end == last_complete_block_end {
+            // 这就是最后一个完整块，设置 last 标志（bit 7）
+            head_bytes[offset] |= 0x80;
+            break;
+        }
+        offset = block_end;
+    }
+
+    head_bytes
+}
+
+/// 构造通用虚拟文件：头部 + 零填充 + 尾部（适用于 MP3/M4A 等格式）
+fn construct_full_virtual_file(
     head_bytes: Vec<u8>,
     tail_bytes: Vec<u8>,
-    file_size: u32,
-    file_name: String,
-) -> Option<String> {
-    let file_size = file_size as u64;
-    // 构造虚拟文件：头部 + 零填充 + 尾部
+    file_size: u64,
+) -> Vec<u8> {
     let head_len = head_bytes.len() as u64;
     let tail_len = tail_bytes.len() as u64;
     let tail_start = file_size.saturating_sub(tail_len);
@@ -862,22 +909,78 @@ pub fn read_metadata_from_bytes(
     }
 
     buffer.extend_from_slice(&tail_bytes);
+    buffer
+}
+
+/// for Flutter
+/// 从部分字节（文件头 + 文件尾）中解析音频元数据。
+/// [head_bytes]: 文件头部字节（建议至少 64KB）
+/// [tail_bytes]: 文件尾部字节（建议至少 128KB）
+/// [file_size]: 文件总大小（字节）
+/// [file_name]: 文件名（用于格式检测和作为标题回退）
+///
+/// 返回 JSON 字符串，包含 title/artist/album/duration/bitrate/sample_rate 字段。
+pub fn read_metadata_from_bytes(
+    head_bytes: Vec<u8>,
+    tail_bytes: Vec<u8>,
+    file_size: u32,
+    file_name: String,
+) -> Option<String> {
+    let file_size = file_size as u64;
+    log_to_dart(format!("[DEBUG] read_metadata_from_bytes: head_bytes={}, tail_bytes={}, file_size={}, file_name={}", head_bytes.len(), tail_bytes.len(), file_size, file_name));
+
+    // 根据文件扩展名推断 FileType
+    let file_type = Path::new(&file_name)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .and_then(|ext| FileType::from_ext(ext));
+
+    log_to_dart(format!("[DEBUG] read_metadata_from_bytes: inferred file_type={:?} from extension", file_type));
+
+    // FLAC 元数据块全部在文件头部，不需要零填充+尾部的方式
+    // 零填充会导致 FLAC 解析器将零误读为元数据块，产生 "invalid item size" 错误
+    let buffer = match file_type {
+        Some(FileType::Flac) => construct_flac_virtual_file(head_bytes),
+        _ => construct_full_virtual_file(head_bytes, tail_bytes, file_size),
+    };
+
+    log_to_dart(format!("[DEBUG] read_metadata_from_bytes: virtual file size={}", buffer.len()));
 
     let mut cursor = Cursor::new(buffer);
 
-    // 使用 lofty::Probe 从 Cursor 读取
-    let tagged_file = match lofty::probe::Probe::new(&mut cursor).read() {
-        Ok(val) => val,
-        Err(err) => {
-            log_to_dart(format!("read_metadata_from_bytes lofty error: {}", err));
-            return None;
-        }
+    // 使用 lofty::Probe 从 Cursor 读取，优先使用推断的文件类型
+    let tagged_file = match file_type {
+        Some(ft) => match lofty::probe::Probe::with_file_type(&mut cursor, ft).read() {
+            Ok(val) => val,
+            Err(err) => {
+                log_to_dart(format!("[DEBUG] read_metadata_from_bytes Probe::with_file_type({:?}) error: {}, falling back to Probe::new", ft, err));
+                // 回退：不指定类型重试
+                cursor.set_position(0);
+                match lofty::probe::Probe::new(&mut cursor).read() {
+                    Ok(val) => val,
+                    Err(err2) => {
+                        log_to_dart(format!("[DEBUG] read_metadata_from_bytes Probe::new fallback error: {}", err2));
+                        return None;
+                    }
+                }
+            }
+        },
+        None => match lofty::probe::Probe::new(&mut cursor).read() {
+            Ok(val) => val,
+            Err(err) => {
+                log_to_dart(format!("[DEBUG] read_metadata_from_bytes lofty error: {}", err));
+                return None;
+            }
+        },
     };
 
+    let file_type = tagged_file.file_type();
     let properties = tagged_file.properties();
     let duration = properties.duration().as_secs();
     let bitrate = properties.audio_bitrate();
     let sample_rate = properties.sample_rate();
+
+    log_to_dart(format!("[DEBUG] read_metadata_from_bytes: file_type={:?}, duration={}s, bitrate={:?}, sample_rate={:?}", file_type, duration, bitrate, sample_rate));
 
     let (title, artist, album, track) = if let Some(tag) = tagged_file
         .primary_tag()
@@ -897,6 +1000,7 @@ pub fn read_metadata_from_bytes(
             tag.track(),
         )
     } else {
+        log_to_dart("[DEBUG] read_metadata_from_bytes: no tag found in file".to_string());
         (file_name.clone(), String::new(), String::new(), None)
     };
 
@@ -909,6 +1013,8 @@ pub fn read_metadata_from_bytes(
         "bitrate": bitrate,
         "sample_rate": sample_rate,
     });
+
+    log_to_dart(format!("[DEBUG] read_metadata_from_bytes: result={}", result));
 
     Some(result.to_string())
 }

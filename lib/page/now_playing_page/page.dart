@@ -1,10 +1,12 @@
 // ignore_for_file: camel_case_types
 
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/play_service/engine/player_engine_type.dart';
+import 'package:coriander_player/component/auto_scroll_text.dart';
 import 'package:coriander_player/component/title_bar.dart';
 import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/utils.dart';
@@ -17,6 +19,7 @@ import 'package:coriander_player/page/now_playing_page/component/vertical_lyric_
 import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/play_service/playback_service.dart';
+import 'package:coriander_player/lyric/lyric.dart';
 import 'package:coriander_player/src/bass/bass_player.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -63,8 +66,17 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   bool _isDragging = false;
 
   void updateCover() {
-    playbackService.nowPlaying?.cover.then((cover) {
-      if (mounted) {
+    final audio = playbackService.nowPlaying;
+    if (audio == null) {
+      if (nowPlayingCover != null && mounted) {
+        setState(() {
+          nowPlayingCover = null;
+        });
+      }
+      return;
+    }
+    audio.cover.then((cover) {
+      if (mounted && !identical(cover, nowPlayingCover)) {
         setState(() {
           nowPlayingCover = cover;
         });
@@ -200,15 +212,15 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
 
     // 桌面端：保留 AppBar
     return Scaffold(
-      appBar: const PreferredSize(
-        preferredSize: Size.fromHeight(56.0),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(56.0),
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
           child: Row(
             children: [
-              NavBackBtn(),
-              Expanded(child: DragToMoveArea(child: SizedBox.expand())),
-              WindowControlls(),
+              const NavBackBtn(),
+              const Expanded(child: DragToMoveArea(child: SizedBox.expand())),
+              if (!PlatformHelper.isMacOS) const WindowControlls(),
             ],
           ),
         ),
@@ -710,11 +722,36 @@ class _NowPlayingInfo extends StatefulWidget {
 
 class __NowPlayingInfoState extends State<_NowPlayingInfo> {
   final playbackService = PlayService.instance.playbackService;
+  final lyricService = PlayService.instance.lyricService;
   Future<ImageProvider<Object>?>? nowPlayingCover;
+  String? _currentLyricText;
+  StreamSubscription? _lyricLineSub;
 
   void updateCover() {
+    final newCover = playbackService.nowPlaying?.largeCover;
+    if (identical(newCover, nowPlayingCover)) return;
     setState(() {
-      nowPlayingCover = playbackService.nowPlaying?.largeCover;
+      nowPlayingCover = newCover;
+    });
+  }
+
+  void _onLyricLineChanged(int lineIndex) {
+    lyricService.currLyricFuture.then((lyric) {
+      if (lyric == null || lineIndex < 0 || lineIndex >= lyric.lines.length) {
+        if (_currentLyricText != null) {
+          setState(() => _currentLyricText = null);
+        }
+        return;
+      }
+      final line = lyric.lines[lineIndex];
+      final text = line is SyncLyricLine
+          ? line.content
+          : (line is UnsyncLyricLine ? line.content : '');
+      if (text.isNotEmpty && text != _currentLyricText) {
+        setState(() => _currentLyricText = text);
+      } else if (text.isEmpty && _currentLyricText != null) {
+        setState(() => _currentLyricText = null);
+      }
     });
   }
 
@@ -723,6 +760,14 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
     super.initState();
     playbackService.addListener(updateCover);
     nowPlayingCover = playbackService.nowPlaying?.largeCover;
+    _lyricLineSub = lyricService.lyricLineStream.listen(_onLyricLineChanged);
+  }
+
+  @override
+  void dispose() {
+    playbackService.removeListener(updateCover);
+    _lyricLineSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -730,85 +775,127 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
     final scheme = Theme.of(context).colorScheme;
     final nowPlaying = playbackService.nowPlaying;
 
-    final placeholder = FittedBox(
-      child: Icon(
-        Symbols.broken_image,
-        size: 400.0,
-        color: scheme.onSecondaryContainer,
-      ),
-    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        final availableHeight = constraints.maxHeight;
 
-    const loadingWidget = Center(
-      child: SizedBox(
-        width: 24,
-        height: 24,
-        child: CircularProgressIndicator(),
-      ),
-    );
+        final coverSize = (availableWidth * 0.72).clamp(200.0, 320.0);
+        final titleFontSize = (availableWidth * 0.055).clamp(18.0, 26.0);
+        const artistFontSize = 14.0;
 
-    return Center(
-      child: SizedBox(
-        width: 400.0,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              nowPlaying == null ? "Coriander Music" : nowPlaying.title,
-              maxLines: 1,
-              style: TextStyle(
-                color: scheme.onSecondaryContainer,
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-              ),
-            ),
-            Text(
-              nowPlaying == null ? "Enjoy Music" : nowPlaying.subtitleText,
-              maxLines: 1,
-              style: TextStyle(color: scheme.onSecondaryContainer),
-            ),
-            // 音频格式、码率和采样率
-            if (nowPlaying != null) _buildAudioMeta(nowPlaying, scheme),
-            const SizedBox(height: 16),
-            Expanded(
-              child: Center(
-                child: RepaintBoundary(
-                  child: nowPlayingCover == null
-                      ? placeholder
-                      : FutureBuilder(
-                          future: nowPlayingCover,
-                          builder: (context, snapshot) =>
-                              switch (snapshot.connectionState) {
-                            ConnectionState.done => snapshot.data == null
-                                ? placeholder
-                                : FittedBox(
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(8.0),
-                                      child: Image(
-                                        image: snapshot.data!,
-                                        width: 400.0,
-                                        height: 400.0,
-                                        errorBuilder: (_, __, ___) =>
-                                            placeholder,
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: availableHeight),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: coverSize,
+                    height: coverSize,
+                    child: RepaintBoundary(
+                      child: nowPlayingCover == null
+                          ? _buildPlaceholder(scheme, coverSize)
+                          : FutureBuilder(
+                              future: nowPlayingCover,
+                              builder: (context, snapshot) {
+                                return switch (snapshot.connectionState) {
+                                  ConnectionState.done => snapshot.data == null
+                                      ? _buildPlaceholder(scheme, coverSize)
+                                      : ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(16.0),
+                                          child: Image(
+                                            image: snapshot.data!,
+                                            width: coverSize,
+                                            height: coverSize,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) =>
+                                                _buildPlaceholder(
+                                                    scheme, coverSize),
+                                          ),
+                                        ),
+                                  _ => Center(
+                                      child: SizedBox(
+                                        width: coverSize * 0.15,
+                                        height: coverSize * 0.15,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.0,
+                                          color: scheme.onSecondaryContainer,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                            _ => loadingWidget,
-                          },
+                                };
+                              },
+                            ),
+                    ),
+                  ),
+                  SizedBox(height: availableHeight * 0.04),
+                  Padding(
+                    padding:
+                        EdgeInsets.symmetric(horizontal: availableWidth * 0.08),
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: titleFontSize * 1.25 + 4,
+                          child: AutoScrollText(
+                            text: nowPlaying == null
+                                ? "Coriander Music"
+                                : (_currentLyricText ?? nowPlaying.title),
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontWeight: FontWeight.bold,
+                              fontSize: titleFontSize,
+                              height: 1.25,
+                            ),
+                          ),
                         ),
-                ),
+                        const SizedBox(height: 4),
+                        SizedBox(
+                          height: artistFontSize + 2,
+                          child: AutoScrollText(
+                            text: nowPlaying == null
+                                ? "Enjoy Music"
+                                : (_currentLyricText != null
+                                    ? '${nowPlaying.title} - ${nowPlaying.artist}'
+                                    : nowPlaying.subtitleText),
+                            style: TextStyle(
+                              color: scheme.onSurfaceVariant,
+                              fontSize: artistFontSize,
+                            ),
+                          ),
+                        ),
+                        if (nowPlaying != null) ...[
+                          const SizedBox(height: 6),
+                          _buildAudioMeta(nowPlaying, scheme),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            )
-          ],
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  @override
-  void dispose() {
-    playbackService.removeListener(updateCover);
-    super.dispose();
+  Widget _buildPlaceholder(ColorScheme scheme, double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16.0),
+        color: scheme.surfaceContainerHighest,
+      ),
+      child: Icon(
+        Symbols.music_note,
+        size: size * 0.35,
+        color: scheme.onSurfaceVariant,
+      ),
+    );
   }
 
   /// 构建音频元信息（格式、码率、采样率）

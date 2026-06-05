@@ -93,6 +93,15 @@ class _SettingsIssuePageState extends State<SettingsIssuePage> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            if (context.canPop())
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  tooltip: "返回",
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Symbols.arrow_back),
+                ),
+              ),
             Row(
               children: [
                 Expanded(

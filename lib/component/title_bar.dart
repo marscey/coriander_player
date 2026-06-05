@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/component/horizontal_lyric_view.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
@@ -15,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:window_manager/window_manager.dart';
+
 class TitleBar extends StatelessWidget {
   const TitleBar({super.key});
 
@@ -53,7 +55,6 @@ class _TitleBar_Small extends StatelessWidget {
           children: [
             const _OpenDrawerBtn(),
             const SizedBox(width: 8.0),
-            const NavBackBtn(),
             Expanded(
               child: DragToMoveArea(
                 child: Padding(
@@ -65,7 +66,8 @@ class _TitleBar_Small extends StatelessWidget {
                 ),
               ),
             ),
-            const WindowControlls(),
+            if (!PlatformHelper.isMacOS) const WindowControlls(),
+            if (PlatformHelper.isMacOS) const _TitleBarSearchBtn(),
           ],
         ),
       ),
@@ -82,10 +84,6 @@ class _TitleBar_Medium extends StatelessWidget {
 
     return Row(
       children: [
-        const SizedBox(
-          width: 80,
-          child: Center(child: NavBackBtn()),
-        ),
         Expanded(
           child: DragToMoveArea(
             child: Row(
@@ -107,8 +105,11 @@ class _TitleBar_Medium extends StatelessWidget {
             ),
           ),
         ),
-        const WindowControlls(),
-        const SizedBox(width: 8.0),
+        if (!PlatformHelper.isMacOS) ...[
+          const WindowControlls(),
+          const SizedBox(width: 8.0),
+        ],
+        if (PlatformHelper.isMacOS) const _TitleBarSearchBtn(),
       ],
     );
   }
@@ -122,34 +123,35 @@ class _TitleBar_Large extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          const NavBackBtn(),
-          const SizedBox(width: 8.0),
           Expanded(
             child: DragToMoveArea(
               child: Row(
                 children: [
                   SizedBox(
                     width: 248,
-                    child: Row(
-                      children: [
-                        Image.asset("app_icon.ico", width: 24, height: 24),
-                        const SizedBox(width: 8.0),
-                        Text(
-                          "Coriander Player",
-                          style: TextStyle(
-                            color: scheme.onSurface,
-                            fontSize: 16,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Row(
+                        children: [
+                          Image.asset("app_icon.ico", width: 24, height: 24),
+                          const SizedBox(width: 8.0),
+                          Text(
+                            "Coriander Player",
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontSize: 16,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   const Expanded(
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(0, 8.0, 16.0, 8.0),
+                      padding: EdgeInsets.fromLTRB(40.0, 8.0, 16.0, 8.0),
                       child: HorizontalLyricView(),
                     ),
                   ),
@@ -157,9 +159,23 @@ class _TitleBar_Large extends StatelessWidget {
               ),
             ),
           ),
-          const WindowControlls(),
+          if (!PlatformHelper.isMacOS) const WindowControlls(),
+          if (PlatformHelper.isMacOS) const _TitleBarSearchBtn(),
         ],
       ),
+    );
+  }
+}
+
+class _TitleBarSearchBtn extends StatelessWidget {
+  const _TitleBarSearchBtn();
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: "搜索",
+      onPressed: () => context.go(app_paths.SEARCH_PAGE),
+      icon: const Icon(Symbols.search),
     );
   }
 }

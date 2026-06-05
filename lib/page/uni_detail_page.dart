@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/page/uni_page_components.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -298,6 +299,15 @@ class _UniDetailPageHeader extends StatelessWidget {
             filter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
             child: const ColoredBox(color: Colors.transparent),
           ),
+          if (context.canPop())
+            Positioned(
+              top: 8.0,
+              left: 8.0,
+              child: IconButton(
+                icon: Icon(Symbols.arrow_back, color: scheme.onSurface),
+                onPressed: () => context.pop(),
+              ),
+            ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [

@@ -1,6 +1,7 @@
 import 'package:coriander_player/metadata/metadata_store.dart';
 import 'package:coriander_player/metadata/scraper_orchestrator.dart';
 import 'package:coriander_player/component/settings_tile.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -67,8 +68,8 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
         borderRadius: BorderRadius.circular(12.0),
       ),
       child: SizedBox(
-        width: 420.0,
-        height: 450.0,
+        width: PlatformHelper.isMobile ? double.infinity : 420.0,
+        height: PlatformHelper.isMobile ? MediaQuery.of(context).size.height * 0.7 : 450.0,
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(

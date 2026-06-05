@@ -68,6 +68,7 @@ class _AudiosPageState extends State<AudiosPage> {
       locateTo: widget.locateTo,
       multiSelectController: multiSelectController,
       multiSelectViewActions: [
+        BatchScrapeMetadata(multiSelectController: multiSelectController),
         AddAllToPlaylist(multiSelectController: multiSelectController),
         RemoveFromLibrary(multiSelectController: multiSelectController),
         MultiSelectSelectOrClearAll(

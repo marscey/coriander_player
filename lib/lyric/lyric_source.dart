@@ -22,32 +22,39 @@ class LyricSource {
   String? kugouSongHash;
   String? neteaseSongId;
 
+  /// 歌词时间偏移（毫秒），正值=歌词提前显示，负值=歌词延后显示
+  int offsetMs;
+
   LyricSource(this.source,
-      {this.qqSongId, this.kugouSongHash, this.neteaseSongId});
+      {this.qqSongId, this.kugouSongHash, this.neteaseSongId, this.offsetMs = 0});
 
   static LyricSource fromMap(Map map) {
+    final offsetMs = map["offsetMs"] as int? ?? 0;
     if (map["source"] == "qq") {
-      return LyricSource(LyricSourceType.qq, qqSongId: map["id"]);
+      final id = map["id"];
+      return LyricSource(LyricSourceType.qq,
+          qqSongId: id is int ? id : int.tryParse(id?.toString() ?? ''),
+          offsetMs: offsetMs);
     } else if (map["source"] == "kugou") {
-      return LyricSource(LyricSourceType.kugou, kugouSongHash: map["id"]);
+      return LyricSource(LyricSourceType.kugou,
+          kugouSongHash: map["id"]?.toString(), offsetMs: offsetMs);
     } else if (map["source"] == "netease") {
-      return LyricSource(LyricSourceType.netease, neteaseSongId: map["id"]);
+      return LyricSource(LyricSourceType.netease,
+          neteaseSongId: map["id"]?.toString(), offsetMs: offsetMs);
     } else {
-      return LyricSource(LyricSourceType.local);
+      return LyricSource(LyricSourceType.local, offsetMs: offsetMs);
     }
   }
 
   Map toMap() {
-    switch (source) {
-      case LyricSourceType.qq:
-        return {"source": source.name, "id": qqSongId};
-      case LyricSourceType.kugou:
-        return {"source": source.name, "id": kugouSongHash};
-      case LyricSourceType.netease:
-        return {"source": source.name, "id": neteaseSongId};
-      case LyricSourceType.local:
-        return {"source": source.name, "id": null};
-    }
+    final base = switch (source) {
+      LyricSourceType.qq => {"source": source.name, "id": qqSongId},
+      LyricSourceType.kugou => {"source": source.name, "id": kugouSongHash},
+      LyricSourceType.netease => {"source": source.name, "id": neteaseSongId},
+      LyricSourceType.local => {"source": source.name, "id": null},
+    };
+    if (offsetMs != 0) base["offsetMs"] = offsetMs;
+    return base;
   }
 }
 
@@ -62,8 +69,11 @@ Future<void> readLyricSources() async {
     final Map lyricSourceJson = json.decode(lyricSourceStr);
 
     for (final item in lyricSourceJson.entries) {
-      if (File(item.key).existsSync() == false) continue;
-      LYRIC_SOURCES[item.key] = LyricSource.fromMap(item.value);
+      final path = item.key as String;
+      // 云音频路径不是本地文件路径，跳过文件存在性检查
+      final isCloudPath = !path.startsWith('/') && !path.contains(':\\');
+      if (!isCloudPath && !File(path).existsSync()) continue;
+      LYRIC_SOURCES[path] = LyricSource.fromMap(item.value);
     }
   } catch (err, trace) {
     LOGGER.e(err, stackTrace: trace);

@@ -104,7 +104,11 @@ class _NowPlayingPage_SmallState extends State<_NowPlayingPage_Small> {
                 const _NowPlayingShuffleSwitch(),
                 const _NowPlayingPlayModeSwitch(),
                 if (!PlatformHelper.isMobile) const _NowPlayingVolDspSlider(),
-                if (!PlatformHelper.isMobile) const _ExclusiveModeSwitch(),
+                if (!PlatformHelper.isMobile &&
+                    (AppSettings.instance.playerEngineType ??
+                            PlayerEngineType.defaultForPlatform) ==
+                        PlayerEngineType.bass)
+                  const _ExclusiveModeSwitch(),
                 if (!PlatformHelper.isMobile) const _DesktopLyricSwitch(),
                 const _NowPlayingMoreAction(),
                 const PlayerEngineIndicator(),

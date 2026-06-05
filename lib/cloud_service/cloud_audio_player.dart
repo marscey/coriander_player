@@ -22,7 +22,8 @@ class ResolvedStreaming {
 
 class CloudAudioPlayer {
   static bool get _supportsStreaming {
-    final engineType = AppSettings.instance.playerEngineType ?? PlayerEngineType.defaultForPlatform;
+    final engineType = AppSettings.instance.playerEngineType ??
+        PlayerEngineType.defaultForPlatform;
     return engineType == PlayerEngineType.mediaKit;
   }
 
@@ -130,6 +131,7 @@ class CloudAudioPlayer {
       now,
       'Cloud',
       connectionId: connectionId,
+      fileSize: file.size > 0 ? file.size : null,
     );
   }
 
@@ -256,6 +258,7 @@ class CloudAudioPlayer {
         if (meta['sample_rate'] != null) {
           np.sampleRate = meta['sample_rate'] as int?;
         }
+        np.fileSize = fileSize;
 
         // 尝试从缓存文件获取封面
         try {
@@ -539,6 +542,142 @@ class CloudAudioPlayer {
     }
   }
 
+  /// 通过 HTTP Range 请求快速获取云音频元数据并创建 Audio 对象（仅下载头尾约 192KB）。
+  /// 失败时回退到文件名解析。
+  static Future<Audio> _createAudioViaRange(
+    webdav.WebDavService service,
+    webdav.WebDavFile file, {
+    String? connectionId,
+  }) async {
+    final webdavPath = file.path;
+    final parsed = _parseFileName(file.name);
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    final knownFileSize = file.size > 0 ? file.size : null;
+    LOGGER.i(
+        '[DEBUG] _createAudioViaRange: path=$webdavPath, fileName=${file.name}, file.size=${file.size}, knownFileSize=$knownFileSize');
+
+    final fallbackAudio = Audio(
+      parsed.title,
+      parsed.artist,
+      '',
+      0,
+      0,
+      null,
+      null,
+      webdavPath,
+      now,
+      now,
+      'Cloud',
+      connectionId: connectionId,
+      fileSize: knownFileSize,
+    );
+
+    try {
+      final fileSize = knownFileSize ?? await service.getFileSize(webdavPath);
+      LOGGER.i(
+          '[DEBUG] _createAudioViaRange: fileSize=$fileSize (from ${knownFileSize != null ? "PROPFIND" : "HEAD"})');
+      if (fileSize == null || fileSize < 128) {
+        LOGGER.w(
+            '[CloudAudioPlayer] cannot get file size for Range request: $webdavPath');
+        return fallbackAudio;
+      }
+
+      final headSize = (64 * 1024).clamp(0, fileSize);
+      final tailSize = (128 * 1024).clamp(0, fileSize);
+      final tailStart = (fileSize - tailSize).clamp(0, fileSize - 1);
+      LOGGER.i(
+          '[DEBUG] _createAudioViaRange: headSize=$headSize, tailSize=$tailSize, tailStart=$tailStart, fileSize=$fileSize');
+
+      final results = await Future.wait([
+        service.downloadRange(webdavPath, 0, headSize - 1),
+        service.downloadRange(webdavPath, tailStart, fileSize - 1),
+      ]);
+
+      final headBytes = results[0];
+      final tailBytes = results[1];
+      LOGGER.i(
+          '[DEBUG] _createAudioViaRange: headBytes=${headBytes != null ? headBytes.length : "null"}, tailBytes=${tailBytes != null ? tailBytes.length : "null"}');
+
+      if (headBytes == null || tailBytes == null) {
+        LOGGER.w('[CloudAudioPlayer] Range request failed for: $webdavPath');
+        return fallbackAudio;
+      }
+
+      LOGGER.i(
+          '[DEBUG] _createAudioViaRange: calling readMetadataFromBytes(headBytes=${headBytes.length}, tailBytes=${tailBytes.length}, fileSize=$fileSize, fileName=${file.name})');
+      final jsonStr = await readMetadataFromBytes(
+        headBytes: headBytes,
+        tailBytes: tailBytes,
+        fileSize: fileSize,
+        fileName: file.name,
+      );
+
+      LOGGER.i(
+          '[DEBUG] _createAudioViaRange: readMetadataFromBytes result=${jsonStr != null ? jsonStr : "NULL"}');
+      if (jsonStr == null) {
+        LOGGER.w(
+            '[CloudAudioPlayer] readMetadataFromBytes returned null for: $webdavPath');
+        return fallbackAudio;
+      }
+
+      final Map<String, dynamic> meta = json.decode(jsonStr);
+      final metaTitle = meta['title'] as String?;
+      final metaArtist = meta['artist'] as String?;
+      final metaAlbum = meta['album'] as String?;
+      final metaTrack = meta['track'] as int?;
+      final metaDuration = meta['duration'] as int?;
+      final metaBitrate = meta['bitrate'] as int?;
+      final metaSampleRate = meta['sample_rate'] as int?;
+
+      LOGGER.i(
+          '[DEBUG] _createAudioViaRange: parsed meta => title=$metaTitle, artist=$metaArtist, album=$metaAlbum, track=$metaTrack, duration=$metaDuration, bitrate=$metaBitrate, sampleRate=$metaSampleRate');
+
+      int duration = metaDuration ?? 0;
+      int? bitrate = metaBitrate;
+      int? sampleRate = metaSampleRate;
+
+      // duration=0 时用 fileSize/bitrate 估算
+      if (duration == 0 && bitrate != null && bitrate > 0) {
+        duration = ((fileSize * 8) / (bitrate * 1000)).round();
+        LOGGER.i(
+            '[DEBUG] _createAudioViaRange: estimated duration from fileSize/bitrate: ${duration}s');
+      }
+
+      // bitrate=0 时用 fileSize/duration 估算（FLAC 虚拟文件无音频帧，lofty 返回 bitrate=0）
+      if ((bitrate == null || bitrate == 0) && duration > 0) {
+        bitrate = ((fileSize * 8) / (duration * 1000)).round();
+        LOGGER.i(
+            '[DEBUG] _createAudioViaRange: estimated bitrate from fileSize/duration: ${bitrate}kbps');
+      }
+
+      LOGGER.i(
+          '[DEBUG] _createAudioViaRange: final Audio => duration=$duration, bitrate=$bitrate, sampleRate=$sampleRate, fileSize=$fileSize');
+
+      return Audio(
+        (metaTitle != null && metaTitle.isNotEmpty) ? metaTitle : parsed.title,
+        (metaArtist != null && metaArtist.isNotEmpty)
+            ? metaArtist
+            : parsed.artist,
+        (metaAlbum != null && metaAlbum.isNotEmpty) ? metaAlbum : '',
+        metaTrack ?? 0,
+        duration,
+        bitrate,
+        sampleRate,
+        webdavPath,
+        now,
+        now,
+        'Cloud',
+        connectionId: connectionId,
+        fileSize: fileSize,
+      );
+    } catch (e, stackTrace) {
+      LOGGER
+          .w('[DEBUG] _createAudioViaRange: exception caught: $e\n$stackTrace');
+      return fallbackAudio;
+    }
+  }
+
   static Future<Audio> _createAudioWithMetadata(File downloadedFile) async {
     try {
       final metaIndexDir = Directory(path.join(
@@ -793,41 +932,26 @@ class CloudAudioPlayer {
       onStatus?.call('正在扫描音频文件...');
 
       final audioFiles = await service.scanAudioFiles(folderPath);
-      onStatus?.call('找到 ${audioFiles.length} 个音频文件，正在下载并读取元数据...');
+      onStatus?.call('找到 ${audioFiles.length} 个音频文件，正在读取元数据...');
 
       final library = AudioLibrary.instance;
       final cloudAudios = <Audio>[];
 
-      // 逐个下载文件并同步读取元数据
       for (int i = 0; i < audioFiles.length; i++) {
         final file = audioFiles[i];
         try {
-          // 跳过已在音乐库中的
           if (library.audioCollection.any((a) => a.path == file.path)) continue;
 
           registerPath(file.path, service);
           onStatus?.call('正在处理 (${i + 1}/${audioFiles.length}): ${file.name}');
 
-          // 下载文件到临时目录
-          final downloadedFile =
-              await _downloadToTempDir(service, file.path, file.name);
-          // 从本地文件读取完整元数据
-          final audio = await _createAudioWithMetadata(downloadedFile);
-          // 将路径改回 WebDAV 路径
-          audio.path = file.path;
-          audio.by = 'Cloud';
-          if (connectionId != null) audio.connectionId = connectionId;
+          final audio = await _createAudioViaRange(service, file,
+              connectionId: connectionId);
 
           cloudAudios.add(audio);
           onProgress?.call(cloudAudios.length);
-
-          // 清理临时文件
-          try {
-            await downloadedFile.parent.delete(recursive: true);
-          } catch (_) {}
         } catch (e) {
           LOGGER.e('[CloudAudioPlayer] 处理文件失败: ${file.path} - $e');
-          // 回退：使用文件名解析
           final parsed = _parseFileName(file.name);
           final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
           cloudAudios.add(Audio(
@@ -843,6 +967,7 @@ class CloudAudioPlayer {
             now,
             'Cloud',
             connectionId: connectionId,
+            fileSize: file.size > 0 ? file.size : null,
           ));
           onProgress?.call(cloudAudios.length);
         }
@@ -887,32 +1012,18 @@ class CloudAudioPlayer {
       for (int i = 0; i < audioFiles.length; i++) {
         final file = audioFiles[i];
         try {
-          // 跳过已在音乐库中的
           if (library.audioCollection.any((a) => a.path == file.path)) continue;
 
           registerPath(file.path, service);
           onStatus?.call('正在处理 (${i + 1}/${audioFiles.length}): ${file.name}');
 
-          // 下载文件到临时目录
-          final downloadedFile =
-              await _downloadToTempDir(service, file.path, file.name);
-          // 从本地文件读取完整元数据
-          final audio = await _createAudioWithMetadata(downloadedFile);
-          // 将路径改回 WebDAV 路径
-          audio.path = file.path;
-          audio.by = 'Cloud';
-          if (connectionId != null) audio.connectionId = connectionId;
+          final audio = await _createAudioViaRange(service, file,
+              connectionId: connectionId);
 
           cloudAudios.add(audio);
           onProgress?.call(cloudAudios.length);
-
-          // 清理临时文件
-          try {
-            await downloadedFile.parent.delete(recursive: true);
-          } catch (_) {}
         } catch (e) {
           LOGGER.e('[CloudAudioPlayer] 处理文件失败: ${file.path} - $e');
-          // 回退：使用文件名解析
           final parsed = _parseFileName(file.name);
           final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
           cloudAudios.add(Audio(
@@ -928,6 +1039,7 @@ class CloudAudioPlayer {
             now,
             'Cloud',
             connectionId: connectionId,
+            fileSize: file.size > 0 ? file.size : null,
           ));
           onProgress?.call(cloudAudios.length);
         }

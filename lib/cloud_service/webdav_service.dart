@@ -176,6 +176,22 @@ class WebDavService {
           LOGGER.w('[WebDAV] URL解码失败: $href');
         }
 
+        // XML 中的 HTML 实体解码（如 &amp; → &）
+        href = href
+            .replaceAll('&amp;', '&')
+            .replaceAll('&lt;', '<')
+            .replaceAll('&gt;', '>')
+            .replaceAll('&quot;', '"')
+            .replaceAll('&apos;', "'");
+
+        // displayname 也可能包含 HTML 实体
+        name = name
+            .replaceAll('&amp;', '&')
+            .replaceAll('&lt;', '<')
+            .replaceAll('&gt;', '>')
+            .replaceAll('&quot;', '"')
+            .replaceAll('&apos;', "'");
+
         String cleanPath = href;
 
         if (cleanPath.startsWith(serverUrl)) {

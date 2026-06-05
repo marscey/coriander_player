@@ -7,6 +7,7 @@ import '../../cloud_service/cloud_service_manager.dart';
 import '../../cloud_service/webdav_service.dart' as webdav;
 import '../../cloud_service/cloud_utils.dart' as cloud_utils;
 import '../../play_service/play_service.dart';
+import '../../platform_helper.dart';
 import 'dart:io';
 import '../../cloud_service/cloud_audio_player.dart';
 import 'package:coriander_player/component/playing_indicator.dart';
@@ -309,7 +310,9 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = constraints.maxWidth;
-        final crossAxisCount = (screenWidth / 160).floor().clamp(2, 10);
+        final minCellWidth = PlatformHelper.isMobile ? 110.0 : 160.0;
+        final crossAxisCount =
+            (screenWidth / minCellWidth).floor().clamp(2, 10);
         final crossAxisSpacing = 8.0;
         final runSpacing = 8.0;
         final padding = 8.0;
@@ -420,8 +423,8 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(
-                width: 48,
-                height: 48,
+                width: 55,
+                height: 55,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -452,6 +455,12 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
                             },
                           ),
                         ),
+                      ),
+                    if (!_isSelectionMode)
+                      Positioned(
+                        right: -12,
+                        bottom: -10,
+                        child: _buildGridMenuButton(file, currentAudioFiles),
                       ),
                   ],
                 ),
@@ -484,6 +493,38 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
       return Icon(Icons.insert_drive_file,
           size: 48, color: scheme.onSurfaceVariant);
     }
+  }
+
+  Widget _buildGridMenuButton(
+      webdav.WebDavFile file, List<webdav.WebDavFile> currentAudioFiles) {
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: PopupMenuButton<String>(
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+        iconSize: 18,
+        icon: const Icon(Icons.more_horiz),
+        tooltip: '更多',
+        itemBuilder: (context) => [
+          if (file.isAudioFile)
+            const PopupMenuItem(value: 'play', child: Text('播放')),
+          if (file.isAudioFile)
+            const PopupMenuItem(
+                value: 'add_to_playlist', child: Text('添加到播放列表')),
+          if (file.isAudioFile)
+            const PopupMenuItem(value: 'add_to_library', child: Text('添加到音乐库')),
+          if (_isImageFile(file.name))
+            const PopupMenuItem(value: 'preview', child: Text('预览图片')),
+          if (file.isDirectory)
+            const PopupMenuItem(
+                value: 'scan_folder_to_library', child: Text('扫描到音乐库')),
+          const PopupMenuItem(value: 'download', child: Text('下载')),
+        ],
+        onSelected: (value) =>
+            _handleFileAction(file, value, currentAudioFiles),
+      ),
+    );
   }
 
   // ==================== 列表项 ====================

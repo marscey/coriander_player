@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/lyric/lrc.dart';
 import 'package:coriander_player/lyric/lyric.dart';
@@ -12,6 +12,7 @@ import 'package:coriander_player/metadata/metadata_store.dart';
 import 'package:coriander_player/music_matcher.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/src/rust/api/tag_reader.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/foundation.dart';
 
@@ -22,12 +23,13 @@ class LyricService extends ChangeNotifier {
   late StreamSubscription _positionStreamSubscription;
   LyricService(this.playService) {
     _positionStreamSubscription =
-        playService.playbackService.positionStream.listen((pos) {
+        playService.playbackService.positionMsStream.listen((posInMs) {
       currLyricFuture.then((value) {
         if (value == null) return;
         if (_nextLyricLine >= value.lines.length) return;
 
-        if ((pos * 1000) > value.lines[_nextLyricLine].start.inMilliseconds) {
+        final adjustedPos = posInMs + _lyricOffsetMs;
+        if (adjustedPos > value.lines[_nextLyricLine].start.inMilliseconds) {
           _nextLyricLine += 1;
 
           final currLineIndex = _nextLyricLine - 1;
@@ -40,15 +42,14 @@ class LyricService extends ChangeNotifier {
             playService.desktopLyricService.sendLyricLineMessage(currLine);
           });
 
-          // iOS: 更新蓝牙歌词（封面图+歌词合成）
-          if (PlatformHelper.isIOS) {
+          // macOS/iOS: 更新蓝牙歌词（封面图+歌词合成）
+          if (PlatformHelper.isIOS || PlatformHelper.isMacOS) {
             final currLine = value.lines[currLineIndex];
             final lyricText = currLine is SyncLyricLine
                 ? currLine.content
                 : (currLine is UnsyncLyricLine ? currLine.content : '');
-            final translation = currLine is SyncLyricLine
-                ? currLine.translation
-                : null;
+            final translation =
+                currLine is SyncLyricLine ? currLine.translation : null;
             if (lyricText.isNotEmpty) {
               playService.playbackService
                   .updateBluetoothLyric(lyricText, translation: translation);
@@ -60,6 +61,31 @@ class LyricService extends ChangeNotifier {
   }
 
   Audio? _getNowPlaying() => playService.playbackService.nowPlaying;
+
+  /// 当前音频的歌词时间偏移（毫秒），正值=歌词提前，负值=歌词延后
+  int _lyricOffsetMs = 0;
+  int get lyricOffsetMs => _lyricOffsetMs;
+
+  void setLyricOffset(int offsetMs) {
+    _lyricOffsetMs = offsetMs;
+    final nowPlaying = _getNowPlaying();
+    if (nowPlaying == null) return;
+
+    final source = LYRIC_SOURCES[nowPlaying.path];
+    if (source != null) {
+      source.offsetMs = offsetMs;
+    } else {
+      LYRIC_SOURCES[nowPlaying.path] =
+          LyricSource(LyricSourceType.local, offsetMs: offsetMs);
+    }
+    saveLyricSources();
+    findCurrLyricLine();
+    notifyListeners();
+  }
+
+  void resetLyricOffset() {
+    setLyricOffset(0);
+  }
 
   /// 供 widget 使用
   Future<Lyric?> currLyricFuture = Future.value(null);
@@ -79,10 +105,10 @@ class LyricService extends ChangeNotifier {
     currLyricFuture.then((value) {
       if (value == null) return;
 
+      final posMs =
+          playService.playbackService.position * 1000 + _lyricOffsetMs;
       final next = value.lines.indexWhere(
-        (element) =>
-            element.start.inMilliseconds / 1000 >
-            playService.playbackService.position,
+        (element) => element.start.inMilliseconds > posMs,
       );
       _nextLyricLine = next == -1 ? value.lines.length : next;
       _lyricLineStreamController.add(max(_nextLyricLine - 1, 0));
@@ -93,16 +119,29 @@ class LyricService extends ChangeNotifier {
     final nowPlaying = _getNowPlaying();
     if (nowPlaying == null) return Future.value(null);
 
-    // 优先从 MetadataService 缓存获取歌词
+    // 内嵌歌词始终最优先（主流播放器标准：文件内嵌数据 > 在线缓存）
+    // 云音频：有本地缓存文件时从缓存文件读内嵌，无缓存文件跳过
+    if (!nowPlaying.isCloudAudio) {
+      final embeddedLyric = await Lrc.fromAudioPath(nowPlaying);
+      if (embeddedLyric != null) return embeddedLyric;
+    } else {
+      final cachedPath =
+          CloudCacheManager.instance.getCachedFilePath(nowPlaying.path);
+      if (cachedPath != null) {
+        final lyricText = await getLyricFromPath(path: cachedPath);
+        if (lyricText != null) {
+          final lyric = Lrc.fromLrcText(lyricText, LrcSource.local);
+          if (lyric != null) return lyric;
+        }
+      }
+    }
+
+    // 内嵌歌词不存在时，从缓存获取
     final cachedLyric = await _getLyricFromCache(nowPlaying);
     if (cachedLyric != null) return cachedLyric;
 
-    if (localFirst) {
-      return (await Lrc.fromAudioPath(nowPlaying)) ??
-          (await getMostMatchedLyric(nowPlaying));
-    }
-    return (await getMostMatchedLyric(nowPlaying)) ??
-        (await Lrc.fromAudioPath(nowPlaying));
+    // 缓存也没有时，在线获取
+    return (await getMostMatchedLyric(nowPlaying));
   }
 
   /// 从 MetadataService 缓存获取歌词
@@ -118,7 +157,8 @@ class LyricService extends ChangeNotifier {
         // 解析歌词文本为 Lyric 对象
         final lyric = Lrc.fromLrcText(lyricText, LrcSource.local);
         if (lyric != null) {
-          LOGGER.i("[LyricService] Loaded lyric from cache for: ${audio.title}");
+          LOGGER
+              .i("[LyricService] Loaded lyric from cache for: ${audio.title}");
           return lyric;
         }
       }
@@ -130,7 +170,9 @@ class LyricService extends ChangeNotifier {
         if (lyric != null) {
           // 同步缓存到文件
           await MediaCache.instance.saveLyric(
-            audioId, metadata.lyricText!, synced: metadata.lyricSynced ?? false,
+            audioId,
+            metadata.lyricText!,
+            synced: metadata.lyricSynced ?? false,
           );
           LOGGER.i("[LyricService] Loaded lyric from DB for: ${audio.title}");
           return lyric;
@@ -152,18 +194,21 @@ class LyricService extends ChangeNotifier {
     currLyricFuture.ignore();
 
     final lyricSource = LYRIC_SOURCES[nowPlaying.path];
+    _lyricOffsetMs = lyricSource?.offsetMs ?? 0;
+
     if (lyricSource == null) {
-      currLyricFuture = _getLyricDefault(AppSettings.instance.localLyricFirst);
+      currLyricFuture = _getLyricDefault(true);
+    } else if (lyricSource.source == LyricSourceType.local) {
+      currLyricFuture = _getLyricDefault(true);
     } else {
-      if (lyricSource.source == LyricSourceType.local) {
-        currLyricFuture = Lrc.fromAudioPath(nowPlaying);
-      } else {
-        currLyricFuture = getOnlineLyric(
-          qqSongId: lyricSource.qqSongId,
-          kugouSongHash: lyricSource.kugouSongHash,
-          neteaseSongId: lyricSource.neteaseSongId,
-        );
-      }
+      currLyricFuture = getOnlineLyric(
+        qqSongId: lyricSource.qqSongId,
+        kugouSongHash: lyricSource.kugouSongHash,
+        neteaseSongId: lyricSource.neteaseSongId,
+      ).then((lyric) async {
+        if (lyric != null) return lyric;
+        return _getLyricDefault(true);
+      });
     }
 
     currLyricFuture.then((value) {
@@ -191,7 +236,8 @@ class LyricService extends ChangeNotifier {
       final lyricText = _lyricToText(lyric);
       if (lyricText.isNotEmpty) {
         await MediaCache.instance.saveLyric(audioId, lyricText, synced: true);
-        await MetadataStore.instance.updateLyric(audioId, lyricText, synced: true);
+        await MetadataStore.instance
+            .updateLyric(audioId, lyricText, synced: true);
         LOGGER.i("[LyricService] Auto-cached lyric for: ${audio.title}");
       }
     } catch (e) {

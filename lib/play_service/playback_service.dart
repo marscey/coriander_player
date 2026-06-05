@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:audio_session/audio_session.dart';
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/library/audio_library.dart';
@@ -46,6 +47,10 @@ class PlaybackService extends ChangeNotifier {
 
   MacosMediaControlService? _macosMediaControlService;
   StreamSubscription? _positionStreamForMacosMediaControl;
+
+  StreamSubscription? _interruptionSub;
+  StreamSubscription? _becomingNoisySub;
+  bool _interrupted = false;
 
   late PlayerEngine _player;
 
@@ -100,6 +105,8 @@ class PlaybackService extends ChangeNotifier {
       await _initMediaControlService();
     }
 
+    _listenAudioInterruption();
+
     LOGGER.i("[DEBUG] PlaybackService-initialize: DONE");
   }
 
@@ -110,7 +117,7 @@ class PlaybackService extends ChangeNotifier {
       _macosMediaControlService!.setPlaybackService(this);
 
       // 同步蓝牙歌词设置
-      if (PlatformHelper.isIOS) {
+      if (PlatformHelper.isIOS || PlatformHelper.isMacOS) {
         _macosMediaControlService!.bluetoothLyricEnabled =
             AppSettings.instance.bluetoothLyric;
       }
@@ -147,6 +154,34 @@ class PlaybackService extends ChangeNotifier {
       LOGGER.i("[DEBUG] PlaybackService-_initMediaControlService: DONE");
     } catch (e) {
       LOGGER.e("[DEBUG] PlaybackService-_initMediaControlService: FAILED: $e");
+    }
+  }
+
+  void _listenAudioInterruption() {
+    try {
+      AudioSession.instance.then((session) {
+        _interruptionSub = session.interruptionEventStream.listen((event) {
+          if (event.begin) {
+            if (playerState == PlayerState.playing) {
+              _interrupted = true;
+              pause();
+            }
+          } else {
+            if (_interrupted) {
+              _interrupted = false;
+              start();
+            }
+          }
+        });
+
+        _becomingNoisySub = session.becomingNoisyEventStream.listen((_) {
+          if (playerState == PlayerState.playing) {
+            pause();
+          }
+        });
+      });
+    } catch (e) {
+      LOGGER.e("[PlaybackService] Failed to listen audio interruption: $e");
     }
   }
 
@@ -198,8 +233,13 @@ class PlaybackService extends ChangeNotifier {
     }
   }
 
+  /// 秒级精度的播放位置流（用于进度条、时间显示、歌词行切换等）
   Stream<double> get positionStream =>
       _player.positionStream.map((duration) => duration.inSeconds.toDouble());
+
+  /// 毫秒级精度的播放位置流（用于逐字歌词渲染等需要高精度的场景）
+  Stream<double> get positionMsStream =>
+      _player.positionStream.map((duration) => duration.inMilliseconds.toDouble());
 
   Stream<double> get bufferStream =>
       _player.bufferStream.map((duration) => duration.inSeconds.toDouble());
@@ -504,10 +544,12 @@ class PlaybackService extends ChangeNotifier {
           playing: false,
           position: _player.position,
         );
-        // 暂停时清除封面歌词
-        if (PlatformHelper.isIOS) {
+        // 暂停时清除歌词标题
+        if (PlatformHelper.isIOS || PlatformHelper.isMacOS) {
           _macosMediaControlService?.clearLyricFromCover();
-          NowPlayingWidget.update();
+          if (PlatformHelper.isIOS) {
+            NowPlayingWidget.update();
+          }
         }
       }
 
@@ -527,6 +569,7 @@ class PlaybackService extends ChangeNotifier {
   }
 
   void start() {
+    if (nowPlaying == null) return;
     try {
       _player.play();
 
@@ -564,17 +607,17 @@ class PlaybackService extends ChangeNotifier {
 
   void playAgain() => _nextAudio_singleLoop();
 
-  /// 更新蓝牙歌词（iOS 封面图+歌词合成）
+  /// 更新蓝牙歌词（macOS/iOS 封面图+歌词合成）
   /// 由 LyricService 在歌词行变化时调用
   void updateBluetoothLyric(String lyricText, {String? translation}) {
-    if (!PlatformHelper.isIOS) return;
+    if (!PlatformHelper.isIOS && !PlatformHelper.isMacOS) return;
     _macosMediaControlService?.updateLyricOnCover(lyricText,
         translation: translation);
   }
 
   /// 设置蓝牙歌词开关
   void setBluetoothLyricEnabled(bool enabled) {
-    if (!PlatformHelper.isIOS) return;
+    if (!PlatformHelper.isIOS && !PlatformHelper.isMacOS) return;
     _macosMediaControlService?.bluetoothLyricEnabled = enabled;
   }
 
@@ -595,6 +638,8 @@ class PlaybackService extends ChangeNotifier {
     _playerStateStreamSub.cancel();
     _positionStreamSub?.cancel();
     _smtcEventStreamSub?.cancel();
+    _interruptionSub?.cancel();
+    _becomingNoisySub?.cancel();
 
     if (PlatformHelper.isMacOS || PlatformHelper.isIOS) {
       _positionStreamForMacosMediaControl?.cancel();

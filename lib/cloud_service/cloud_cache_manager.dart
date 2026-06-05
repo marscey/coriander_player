@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/utils.dart';
 
 class _CacheEntry {
@@ -69,23 +71,26 @@ class CloudCacheManager {
   }
 
   static Future<String> _getAppDataDir() async {
-    final dir = Directory(path.join(
-      Platform.environment['USERPROFILE'] ?? 'C:\\Users',
-      'Documents',
-      'coriander_player',
-    ));
-    if (await dir.exists()) return dir.path;
-    return Directory.systemTemp.path;
+    if (PlatformHelper.isWindows) {
+      final dir = Directory(path.join(
+        Platform.environment['USERPROFILE'] ?? 'C:\\Users',
+        'Documents',
+        'coriander_player',
+      ));
+      if (await dir.exists()) return dir.path;
+    }
+
+    final appDir = await getApplicationSupportDirectory();
+    return appDir.path;
   }
 
-  static File _getConfigFile() {
-    final appData = Platform.environment['USERPROFILE'] ?? 'C:\\Users';
-    return File(path.join(appData, 'Documents', 'coriander_player',
-        'cloud_cache_config.json'));
+  static Future<File> _getConfigFile() async {
+    final appDir = await getApplicationSupportDirectory();
+    return File(path.join(appDir.path, 'cloud_cache_config.json'));
   }
 
   static Future<void> _loadCustomDirConfig() async {
-    final configFile = _getConfigFile();
+    final configFile = await _getConfigFile();
     if (await configFile.exists()) {
       try {
         final content = await configFile.readAsString();
@@ -103,7 +108,7 @@ class CloudCacheManager {
   }
 
   static Future<void> _saveCustomDirConfig() async {
-    final configFile = _getConfigFile();
+    final configFile = await _getConfigFile();
     await configFile.parent.create(recursive: true);
     await configFile.writeAsString(jsonEncode({'cacheDir': _customCacheDir}));
   }

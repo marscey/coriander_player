@@ -1,5 +1,6 @@
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 /// title, actions, body
@@ -15,12 +16,14 @@ class PageScaffold extends StatelessWidget {
     this.subtitle,
     required this.actions,
     required this.body,
+    this.showBackButton = true,
   });
 
   final String title;
   final String? subtitle;
   final List<Widget> actions;
   final Widget body;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -29,9 +32,28 @@ class PageScaffold extends StatelessWidget {
     return ResponsiveBuilder(builder: (context, screenType) {
       List<Widget> rowChildren;
 
+      final canPop = showBackButton && context.canPop();
+      final backBtn = canPop
+          ? Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: IconButton(
+                tooltip: "返回",
+                onPressed: () => context.pop(),
+                icon: const Icon(Symbols.arrow_back),
+              ),
+            )
+          : null;
+
       if (actions.isEmpty) {
-        rowChildren =
-            subtitle == null ? [onlyTitle(scheme)] : [withSubtitle(scheme)];
+        rowChildren = subtitle == null
+            ? [
+                if (backBtn != null) backBtn,
+                onlyTitle(scheme)
+              ]
+            : [
+                if (backBtn != null) backBtn,
+                withSubtitle(scheme)
+              ];
       } else {
         switch (screenType) {
           case ScreenType.small:
@@ -69,6 +91,7 @@ class PageScaffold extends StatelessWidget {
               );
 
               rowChildren = [
+                if (backBtn != null) backBtn,
                 subtitle == null ? onlyTitle(scheme) : withSubtitle(scheme),
                 const SizedBox(width: 16.0),
                 actions.first,
@@ -96,6 +119,7 @@ class PageScaffold extends StatelessWidget {
           case ScreenType.large:
             {
               rowChildren = [
+                if (backBtn != null) backBtn,
                 subtitle == null ? onlyTitle(scheme) : withSubtitle(scheme),
                 const SizedBox(width: 16.0),
                 Wrap(spacing: 8.0, children: actions)

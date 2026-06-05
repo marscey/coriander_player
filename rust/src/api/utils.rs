@@ -78,9 +78,28 @@ pub mod windows_impl {
 
 #[cfg(not(target_os = "windows"))]
 pub mod non_windows_impl {
-    /// 在非Windows平台上，该函数直接返回false
-    pub fn show_in_explorer(_path: String) -> bool {
-        false
+    /// 在非Windows平台上，使用系统命令打开文件管理器
+    pub fn show_in_explorer(path: String) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            std::process::Command::new("open")
+                .arg("-R")
+                .arg(&path)
+                .spawn()
+                .is_ok()
+        }
+        #[cfg(target_os = "linux")]
+        {
+            std::process::Command::new("xdg-open")
+                .arg(&path)
+                .spawn()
+                .is_ok()
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            let _ = path;
+            false
+        }
     }
 
     /// 在非Windows平台上，该函数直接返回None

@@ -59,8 +59,8 @@ class PlayerEngineIndicator extends StatelessWidget {
 
   IconData _getEngineIcon(PlayerEngineType type) {
     return switch (type) {
-      PlayerEngineType.bass => Icons.speaker,
-      PlayerEngineType.mediaKit => Icons.play_circle,
+      PlayerEngineType.bass => Symbols.music_note,
+      PlayerEngineType.mediaKit => Symbols.speaker_group,
     };
   }
 }

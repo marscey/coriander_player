@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/music_matcher.dart' show buildSearchQuery;
 import 'package:coriander_player/metadata/media_cache.dart';
 import 'package:coriander_player/metadata/metadata_scraper.dart';
 import 'package:coriander_player/metadata/metadata_store.dart';
@@ -89,7 +91,8 @@ class MetadataService {
       coverData: coverData,
       mimeType: mimeType,
     );
-    LOGGER.i("[MetadataService] Cover written to: $path, size=${coverData.length} bytes");
+    LOGGER.i(
+        "[MetadataService] Cover written to: $path, size=${coverData.length} bytes");
   }
 
   /// 写入歌词到音频文件
@@ -117,7 +120,8 @@ class MetadataService {
     String? artist,
     String? album,
   }) async {
-    return ScraperOrchestrator.instance.search(query, artist: artist, album: album);
+    return ScraperOrchestrator.instance
+        .search(query, artist: artist, album: album);
   }
 
   /// 刮削并应用元数据
@@ -141,7 +145,7 @@ class MetadataService {
 
     final output = await ScraperOrchestrator.instance.scrape(
       audioId: audioId,
-      query: audio.title,
+      query: buildSearchQuery(audio),
       artist: audio.artist,
       album: audio.album,
       fetchLyric: fetchLyric,
@@ -212,12 +216,27 @@ class MetadataService {
     return null;
   }
 
-  /// 获取缓存的歌词（优先从缓存读取，未命中则刮削）
-  Future<String?> getOrScrapeLyric(Audio audio, {bool autoScrape = true}) async {
+  /// 获取歌词（内嵌优先，缓存次之，未命中则刮削）
+  /// 云音频：有本地缓存文件时从缓存文件读内嵌，无缓存文件跳过内嵌
+  Future<String?> getOrScrapeLyric(Audio audio,
+      {bool autoScrape = true}) async {
     final audioId = await computeAudioId(audio);
     if (audioId == null) return null;
 
-    // 先查缓存
+    // 内嵌歌词最优先
+    if (!audio.isCloudAudio) {
+      final embedded = await rust_api.getLyricFromPath(path: audio.path);
+      if (embedded != null) return embedded;
+    } else {
+      final cachedPath =
+          CloudCacheManager.instance.getCachedFilePath(audio.path);
+      if (cachedPath != null) {
+        final embedded = await rust_api.getLyricFromPath(path: cachedPath);
+        if (embedded != null) return embedded;
+      }
+    }
+
+    // 内嵌不存在时查缓存
     final cached = await MediaCache.instance.getLyric(audioId);
     if (cached != null) return cached.$1;
 
@@ -231,12 +250,35 @@ class MetadataService {
     return null;
   }
 
-  /// 获取缓存的封面（优先从缓存读取，未命中则刮削）
-  Future<Uint8List?> getOrScrapeCover(Audio audio, {bool autoScrape = true}) async {
+  /// 获取封面（内嵌优先，缓存次之，未命中则刮削）
+  /// 云音频：有本地缓存文件时从缓存文件读内嵌，无缓存文件跳过内嵌
+  Future<Uint8List?> getOrScrapeCover(Audio audio,
+      {bool autoScrape = true}) async {
     final audioId = await computeAudioId(audio);
     if (audioId == null) return null;
 
-    // 先查缓存
+    // 内嵌封面最优先
+    if (!audio.isCloudAudio) {
+      final embedded = await rust_api.getPictureFromPath(
+        path: audio.path,
+        width: 400,
+        height: 400,
+      );
+      if (embedded != null) return embedded;
+    } else {
+      final cachedPath =
+          CloudCacheManager.instance.getCachedFilePath(audio.path);
+      if (cachedPath != null) {
+        final embedded = await rust_api.getPictureFromPath(
+          path: cachedPath,
+          width: 400,
+          height: 400,
+        );
+        if (embedded != null) return embedded;
+      }
+    }
+
+    // 内嵌不存在时查缓存
     final cached = await MediaCache.instance.getCover(audioId);
     if (cached != null) return cached.$1;
 
@@ -256,15 +298,23 @@ class MetadataService {
       return 'image/jpeg';
     }
     if (data.length >= 8 &&
-        data[4] == 0x66 && data[5] == 0x74 && data[6] == 0x79 && data[7] == 0x70) {
+        data[4] == 0x66 &&
+        data[5] == 0x74 &&
+        data[6] == 0x79 &&
+        data[7] == 0x70) {
       return 'image/jpeg'; // JP2
     }
     if (data.length >= 4 &&
-        data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47) {
+        data[0] == 0x89 &&
+        data[1] == 0x50 &&
+        data[2] == 0x4E &&
+        data[3] == 0x47) {
       return 'image/png';
     }
     if (data.length >= 4 &&
-        data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46) {
+        data[0] == 0x47 &&
+        data[1] == 0x49 &&
+        data[2] == 0x46) {
       return 'image/gif';
     }
     return 'image/jpeg'; // 默认
@@ -287,13 +337,15 @@ class MetadataService {
     if (audioTitle != resultTitle) return false;
 
     // 艺术家匹配（允许刮削结果包含更多艺术家，但主要艺术家必须匹配）
-    if (!resultArtist.contains(audioArtist) && !audioArtist.contains(resultArtist)) {
+    if (!resultArtist.contains(audioArtist) &&
+        !audioArtist.contains(resultArtist)) {
       return false;
     }
 
     // 专辑匹配（如果音频有专辑信息）
     if (audioAlbum.isNotEmpty && resultAlbum.isNotEmpty) {
-      if (!resultAlbum.contains(audioAlbum) && !audioAlbum.contains(resultAlbum)) {
+      if (!resultAlbum.contains(audioAlbum) &&
+          !audioAlbum.contains(resultAlbum)) {
         return false;
       }
     }
@@ -305,7 +357,8 @@ class MetadataService {
   /// 只有当刮削结果与音频元数据完全匹配时，才会自动保存
   /// [audio] 音频对象
   /// [onScraped] 刮削完成回调，返回是否完全匹配和刮削结果
-  Future<void> autoScrape(Audio audio, {
+  Future<void> autoScrape(
+    Audio audio, {
     Function(bool isExactMatch, ScrapeOutput? output)? onScraped,
   }) async {
     try {
@@ -330,7 +383,7 @@ class MetadataService {
       // 执行刮削
       final output = await ScraperOrchestrator.instance.scrape(
         audioId: audioId,
-        query: audio.title,
+        query: buildSearchQuery(audio),
         artist: audio.artist,
         album: audio.album,
         fetchLyric: true,
@@ -347,7 +400,8 @@ class MetadataService {
       final exactMatch = isExactMatch(audio, output.bestMatch);
 
       if (exactMatch) {
-        LOGGER.i("[MetadataService] Exact match found for: ${audio.title}, auto-saving");
+        LOGGER.i(
+            "[MetadataService] Exact match found for: ${audio.title}, auto-saving");
         // 完全匹配，自动保存到缓存
         await MetadataStore.instance.upsertMetadata(MetadataRecord(
           audioId: audioId,

@@ -3,13 +3,23 @@ import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/component/album_tile.dart';
 import 'package:coriander_player/component/artist_tile.dart';
 import 'package:coriander_player/src/rust/api/utils.dart';
+import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:coriander_player/page/cloud_service/cloud_file_browser.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class AudioDetailPage extends StatelessWidget {
   const AudioDetailPage({super.key, required this.audio});
 
   final Audio audio;
+
+  static String _getShowInExplorerLabel() {
+    if (PlatformHelper.isMacOS) return "在 Finder 中显示";
+    if (PlatformHelper.isLinux) return "在文件管理器中显示";
+    return "在文件资源管理器中显示";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +48,15 @@ class AudioDetailPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (context.canPop())
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: IconButton(
+                  tooltip: "返回",
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Symbols.arrow_back),
+                ),
+              ),
             Wrap(
               spacing: 16.0,
               runSpacing: 16.0,
@@ -119,16 +138,34 @@ class AudioDetailPage extends StatelessWidget {
               spacing: 8.0,
               children: [
                 Text("路径", style: styleTitle),
-                TextButton(
-                  onPressed: () async {
-                    final result = await showInExplorer(path: audio.path);
+                if (audio.isCloudAudio)
+                  TextButton(
+                    onPressed: () {
+                      final connectionId = audio.connectionId;
+                      if (connectionId == null) return;
+                      final playingPath = audio.path;
+                      final dirPath = playingPath.contains('/')
+                          ? playingPath.substring(
+                              0, playingPath.lastIndexOf('/'))
+                          : '';
+                      context.push(
+                        '${app_paths.CLOUD_BROWSER_PAGE}/$connectionId',
+                        extra: CloudBrowserArgs(dirPath, playingPath),
+                      );
+                    },
+                    child: const Text("在云服务中显示"),
+                  )
+                else
+                  TextButton(
+                    onPressed: () async {
+                      final result = await showInExplorer(path: audio.path);
 
-                    if (!result && context.mounted) {
-                      showTextOnSnackBar("打开失败");
-                    }
-                  },
-                  child: const Text("在文件资源管理器中显示"),
-                )
+                      if (!result && context.mounted) {
+                        showTextOnSnackBar("打开失败");
+                      }
+                    },
+                    child: Text(_getShowInExplorerLabel()),
+                  ),
               ],
             ),
             const SizedBox(height: 8),

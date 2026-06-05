@@ -40,7 +40,7 @@ Future<Directory> getAppDataDir() async {
       .create(recursive: true);
 }
 
-class AppSettings {
+class AppSettings extends ChangeNotifier {
   static final github = GitHub();
   static const String version = "1.8.0";
 
@@ -83,6 +83,16 @@ class AppSettings {
 
   /// 云音频缓存容量上限（MB），-1 表示无限制，默认 2048MB (2GB)
   int cloudCacheMaxSizeMB = 2048;
+
+  bool _showTrackIndex = !PlatformHelper.isMobile;
+
+  bool get showTrackIndex => _showTrackIndex;
+
+  set showTrackIndex(bool value) {
+    if (_showTrackIndex == value) return;
+    _showTrackIndex = value;
+    notifyListeners();
+  }
 
   late String artistSplitPattern = artistSeparator.join("|");
 
@@ -261,6 +271,11 @@ class AppSettings {
       if (ccms != null) {
         _instance.cloudCacheMaxSizeMB = ccms;
       }
+
+      final sti = settingsMap["ShowTrackIndex"];
+      if (sti != null) {
+        _instance._showTrackIndex = sti;
+      }
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -297,6 +312,7 @@ class AppSettings {
         "CloseToTray": closeToTray,
         "HasShownTrayTip": hasShownTrayTip,
         "CloudCacheMaxSizeMB": cloudCacheMaxSizeMB,
+        "ShowTrackIndex": showTrackIndex,
       };
 
       // 只有桌面端保存窗口尺寸

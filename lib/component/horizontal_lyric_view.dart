@@ -80,7 +80,7 @@ class _LyricHorizontalScrollAreaState
     }
 
     lyricLineStreamSubscription = lyricService.lyricLineStream.listen((line) {
-      if (widget.lyric.lines.isEmpty) return;
+      if (line < 0 || line >= widget.lyric.lines.length) return;
       final currLine = widget.lyric.lines[line];
 
       setState(() {

@@ -1,11 +1,15 @@
 import 'dart:typed_data';
 
+import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/metadata/media_cache.dart';
 import 'package:coriander_player/metadata/metadata_scraper.dart';
 import 'package:coriander_player/metadata/metadata_service.dart';
 import 'package:coriander_player/metadata/metadata_store.dart';
 import 'package:coriander_player/metadata/scraper_orchestrator.dart';
+import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/rust/api/tag_reader.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
@@ -81,12 +85,35 @@ class _EditTagDialogState extends State<EditTagDialog> {
 
       Uint8List? coverBytes;
 
-      if (audioId != null) {
+      // 内嵌封面始终最优先
+      // 云音频：有本地缓存文件时从缓存文件读内嵌，无缓存文件跳过
+      if (!widget.audio.isCloudAudio) {
+        coverBytes = await getPictureFromPath(
+          path: widget.audio.path,
+          width: 400,
+          height: 400,
+        );
+      } else {
+        final cachedPath =
+            CloudCacheManager.instance.getCachedFilePath(widget.audio.path);
+        if (cachedPath != null) {
+          coverBytes = await getPictureFromPath(
+            path: cachedPath,
+            width: 400,
+            height: 400,
+          );
+        }
+      }
+
+      // 内嵌封面不存在时，从缓存获取
+      if (coverBytes == null && audioId != null) {
         final cached = await MediaCache.instance.getCover(audioId);
         if (cached != null) {
           coverBytes = cached.$1;
         }
+      }
 
+      if (audioId != null) {
         final record = await MetadataStore.instance.getMetadata(audioId);
         if (record != null) {
           if (record.year != null && _yearController.text.isEmpty) {
@@ -96,14 +123,6 @@ class _EditTagDialogState extends State<EditTagDialog> {
             _genreController.text = record.genre!;
           }
         }
-      }
-
-      if (coverBytes == null && !widget.audio.isCloudAudio) {
-        coverBytes = await getPictureFromPath(
-          path: widget.audio.path,
-          width: 400,
-          height: 400,
-        );
       }
 
       if (coverBytes != null && mounted) {
@@ -133,6 +152,43 @@ class _EditTagDialogState extends State<EditTagDialog> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isMobile = PlatformHelper.isMobile;
+
+    if (isMobile) {
+      return Dialog(
+        insetPadding: const EdgeInsets.all(12.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.85,
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(scheme),
+                const SizedBox(height: 12.0),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildCoverSection(scheme),
+                        const SizedBox(height: 12.0),
+                        _buildTagFields(scheme),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12.0),
+                _buildFooter(scheme),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Dialog(
       insetPadding: const EdgeInsets.all(24.0),
@@ -271,6 +327,8 @@ class _EditTagDialogState extends State<EditTagDialog> {
   }
 
   Widget _buildCoverSection(ColorScheme scheme) {
+    final isMobile = PlatformHelper.isMobile;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -284,7 +342,7 @@ class _EditTagDialogState extends State<EditTagDialog> {
         ),
         const SizedBox(height: 8.0),
         AspectRatio(
-          aspectRatio: 1.0,
+          aspectRatio: isMobile ? 2.0 : 1.0,
           child: Container(
             decoration: BoxDecoration(
               color: scheme.surfaceContainerHighest,
@@ -529,7 +587,8 @@ class _EditTagDialogState extends State<EditTagDialog> {
     setState(() => _isSaving = true);
 
     try {
-      final path = widget.audio.path;
+      final audio = widget.audio;
+      final path = audio.path;
       int? track;
       int? year;
 
@@ -540,27 +599,60 @@ class _EditTagDialogState extends State<EditTagDialog> {
         year = int.tryParse(_yearController.text);
       }
 
-      await MetadataService.instance.writeTags(
-        path: path,
-        title: _titleController.text,
-        artist: _artistController.text,
-        album: _albumController.text,
-        track: track,
-        year: year,
-        genre: _genreController.text.isNotEmpty ? _genreController.text : null,
-      );
-
-      if (_selectedCoverData != null &&
-          _selectedCoverData != _currentCoverData) {
-        await MetadataService.instance.writeCover(
+      // 本地音频：写入文件 + 缓存；云音频：仅写入缓存
+      if (!audio.isCloudAudio) {
+        await MetadataService.instance.writeTags(
           path: path,
-          coverData: _selectedCoverData!,
-          mimeType: _selectedCoverMimeType ?? 'image/jpeg',
+          title: _titleController.text,
+          artist: _artistController.text,
+          album: _albumController.text,
+          track: track,
+          year: year,
+          genre:
+              _genreController.text.isNotEmpty ? _genreController.text : null,
         );
+
+        if (_selectedCoverData != null &&
+            _selectedCoverData != _currentCoverData) {
+          await MetadataService.instance.writeCover(
+            path: path,
+            coverData: _selectedCoverData!,
+            mimeType: _selectedCoverMimeType ?? 'image/jpeg',
+          );
+        }
+      } else {
+        // 云音频：如果有本地缓存文件，写入缓存文件的内嵌标签
+        final cachedPath = CloudCacheManager.instance.getCachedFilePath(path);
+        if (cachedPath != null) {
+          try {
+            await MetadataService.instance.writeTags(
+              path: cachedPath,
+              title: _titleController.text,
+              artist: _artistController.text,
+              album: _albumController.text,
+              track: track,
+              year: year,
+              genre: _genreController.text.isNotEmpty
+                  ? _genreController.text
+                  : null,
+            );
+            if (_selectedCoverData != null &&
+                _selectedCoverData != _currentCoverData) {
+              await MetadataService.instance.writeCover(
+                path: cachedPath,
+                coverData: _selectedCoverData!,
+                mimeType: _selectedCoverMimeType ?? 'image/jpeg',
+              );
+            }
+          } catch (e) {
+            LOGGER.w(
+                "[EditTagDialog] Failed to write tags to cloud cache file: $e");
+          }
+        }
       }
 
-      final audioId =
-          await MetadataService.instance.computeAudioId(widget.audio);
+      // 统一写入缓存（本地音频和云音频都需要）
+      final audioId = await MetadataService.instance.computeAudioId(audio);
       if (audioId != null) {
         await MetadataStore.instance.upsertMetadata(MetadataRecord(
           audioId: audioId,
@@ -585,6 +677,17 @@ class _EditTagDialogState extends State<EditTagDialog> {
           );
         }
       }
+
+      audio.title = _titleController.text;
+      audio.artist = _artistController.text;
+      audio.album = _albumController.text;
+      audio.splitedArtists = audio.artist.split(
+        RegExp(AppSettings.instance.artistSplitPattern),
+      );
+      if (track != null) audio.track = track;
+      audio.clearCoverCache();
+      AudioLibrary.instance.notifyUpdated();
+      PlayService.instance.playbackService.refreshNowPlaying();
 
       if (mounted) {
         Navigator.pop(context, true);

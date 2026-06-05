@@ -43,7 +43,7 @@ class Krc extends Lyric {
         }
       }
       int linesIt = 0, transIt = 0;
-      while ((linesIt < lines.length) || (transIt < trans.length)) {
+      while (linesIt < lines.length && transIt < trans.length) {
         lines[linesIt].translation = trans[transIt];
         linesIt += 1;
         transIt += 1;

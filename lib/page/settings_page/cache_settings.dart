@@ -335,25 +335,26 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
             ],
           ),
           const SizedBox(height: 8.0),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Symbols.folder_open, size: 18.0),
-                  label: const Text('更改目录'),
-                  onPressed: _clearing ? null : _changeCloudCacheDir,
+          if (PlatformHelper.isDesktop)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Symbols.folder_open, size: 18.0),
+                    label: const Text('更改目录'),
+                    onPressed: _clearing ? null : _changeCloudCacheDir,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8.0),
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Symbols.folder_open, size: 18.0),
-                  label: const Text('打开目录'),
-                  onPressed: () => _openDirectory(cache.cacheDir),
+                const SizedBox(width: 8.0),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Symbols.folder_open, size: 18.0),
+                    label: const Text('打开目录'),
+                    onPressed: () => _openDirectory(cache.cacheDir),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -393,11 +394,12 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
                 },
               ),
               const SizedBox(height: 8.0),
-              OutlinedButton.icon(
-                icon: const Icon(Symbols.folder_open, size: 18.0),
-                label: const Text('打开目录'),
-                onPressed: () => _openDirectory(dirPath),
-              ),
+              if (PlatformHelper.isDesktop)
+                OutlinedButton.icon(
+                  icon: const Icon(Symbols.folder_open, size: 18.0),
+                  label: const Text('打开目录'),
+                  onPressed: () => _openDirectory(dirPath),
+                ),
             ],
           ),
         );
@@ -439,11 +441,12 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
                 },
               ),
               const SizedBox(height: 8.0),
-              OutlinedButton.icon(
-                icon: const Icon(Symbols.folder_open, size: 18.0),
-                label: const Text('打开目录'),
-                onPressed: () => _openDirectory(dirPath),
-              ),
+              if (PlatformHelper.isDesktop)
+                OutlinedButton.icon(
+                  icon: const Icon(Symbols.folder_open, size: 18.0),
+                  label: const Text('打开目录'),
+                  onPressed: () => _openDirectory(dirPath),
+                ),
             ],
           ),
         );

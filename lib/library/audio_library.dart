@@ -96,7 +96,8 @@ class AudioLibrary extends ChangeNotifier {
 
       if (cloudAudios.isNotEmpty) {
         final existingPaths = audioCollection.map((a) => a.path).toSet();
-        final newAudios = cloudAudios.where((a) => !existingPaths.contains(a.path)).toList();
+        final newAudios =
+            cloudAudios.where((a) => !existingPaths.contains(a.path)).toList();
         if (newAudios.isNotEmpty) {
           audioCollection.addAll(newAudios);
           for (Audio audio in newAudios) {
@@ -129,7 +130,8 @@ class AudioLibrary extends ChangeNotifier {
               }
             }
           }
-          LOGGER.i('[AudioLibrary] loaded ${newAudios.length} cloud audios from persistence');
+          LOGGER.i(
+              '[AudioLibrary] loaded ${newAudios.length} cloud audios from persistence');
         }
       }
     } catch (e) {
@@ -143,7 +145,8 @@ class AudioLibrary extends ChangeNotifier {
       final filePath = await _getCloudAudiosFilePath();
       final jsonList = cloudAudios.map((a) => a.toMap()).toList();
       await File(filePath).writeAsString(jsonEncode(jsonList));
-      LOGGER.i('[AudioLibrary] saved ${cloudAudios.length} cloud audios to persistence');
+      LOGGER.i(
+          '[AudioLibrary] saved ${cloudAudios.length} cloud audios to persistence');
     } catch (e) {
       LOGGER.e('[AudioLibrary] failed to save cloud audios: $e');
     }
@@ -191,7 +194,8 @@ class AudioLibrary extends ChangeNotifier {
 
   Future<void> addCloudAudios(List<Audio> cloudAudios) async {
     final existingPaths = audioCollection.map((a) => a.path).toSet();
-    final newAudios = cloudAudios.where((a) => !existingPaths.contains(a.path)).toList();
+    final newAudios =
+        cloudAudios.where((a) => !existingPaths.contains(a.path)).toList();
     if (newAudios.isEmpty) return;
 
     audioCollection.addAll(newAudios);
@@ -377,6 +381,9 @@ class Audio {
 
   int? sampleRate;
 
+  /// 文件大小（字节），云音频从 WebDAV 获取，本地音频从文件读取
+  int? fileSize;
+
   /// absolute path
   String path;
 
@@ -395,6 +402,8 @@ class Audio {
 
   ImageProvider? get coverImage => _cover;
 
+  Future<ImageProvider?>? _largeCoverFuture;
+
   Audio(
     this.title,
     this.artist,
@@ -408,23 +417,25 @@ class Audio {
     this.created,
     this.by, {
     this.connectionId,
+    this.fileSize,
   }) : splitedArtists = artist.split(
           RegExp(AppSettings.instance.artistSplitPattern),
         );
 
   factory Audio.fromMap(Map map) => Audio(
-        map["title"],
-        map["artist"],
-        map["album"],
+        map["title"]?.toString() ?? '',
+        map["artist"]?.toString() ?? '',
+        map["album"]?.toString() ?? '',
         map["track"] ?? 0,
         map["duration"] ?? 0,
         map["bitrate"],
         map["sample_rate"],
-        map["path"],
-        map["modified"],
-        map["created"],
-        map["by"],
-        connectionId: map["connection_id"],
+        map["path"]?.toString() ?? '',
+        map["modified"] ?? 0,
+        map["created"] ?? 0,
+        map["by"]?.toString(),
+        connectionId: map["connection_id"]?.toString(),
+        fileSize: map["file_size"],
       );
 
   Map toMap() => {
@@ -435,6 +446,7 @@ class Audio {
         "duration": duration,
         "bitrate": bitrate,
         "sample_rate": sampleRate,
+        "file_size": fileSize,
         "path": path,
         "modified": modified,
         "created": created,
@@ -458,11 +470,41 @@ class Audio {
           path: cachedPath,
           width: (width * ratio).round(),
           height: (height * ratio).round(),
-        ).then((pic) {
-          if (pic == null) return null;
-          _cover = MemoryImage(pic);
-          return _cover;
+        ).then((pic) async {
+          if (pic != null) {
+            _cover = MemoryImage(pic);
+            return _cover;
+          }
+
+          // 缓存文件无内嵌封面，尝试从 MediaCache 获取刮削的封面
+          try {
+            final audioId = await MetadataService.instance.computeAudioId(this);
+            if (audioId != null) {
+              final cached = await MediaCache.instance.getCover(audioId);
+              if (cached != null) {
+                _cover = MemoryImage(cached.$1);
+                return _cover;
+              }
+            }
+          } catch (e) {
+            LOGGER.e("[Audio] Failed to get cover from MediaCache: $e");
+          }
+          return null;
         });
+      }
+
+      // 无本地缓存文件，直接从 MediaCache 获取刮削的封面
+      try {
+        final audioId = await MetadataService.instance.computeAudioId(this);
+        if (audioId != null) {
+          final cached = await MediaCache.instance.getCover(audioId);
+          if (cached != null) {
+            _cover = MemoryImage(cached.$1);
+            return _cover;
+          }
+        }
+      } catch (e) {
+        LOGGER.e("[Audio] Failed to get cover from MediaCache: $e");
       }
       return null;
     }
@@ -514,6 +556,7 @@ class Audio {
   /// 清除封面缓存，下次访问时重新加载
   void clearCoverCache() {
     _cover = null;
+    _largeCoverFuture = null;
   }
 
   bool get isCloudAudio => by == 'Cloud';
@@ -531,10 +574,11 @@ class Audio {
   Future<ImageProvider?> get mediumCover =>
       _getResizedPic(width: 200, height: 200);
 
-  /// now playing 不需要频繁调用，所以不缓存图片
+  /// now playing 封面，缓存 Future 避免播放/暂停时重复加载
   /// size: 400 * devicePixelRatio（屏幕缩放大小）
-  Future<ImageProvider?> get largeCover =>
-      _getResizedPic(width: 400, height: 400);
+  Future<ImageProvider?> get largeCover {
+    return _largeCoverFuture ??= _getResizedPic(width: 400, height: 400);
+  }
 
   @override
   String toString() {

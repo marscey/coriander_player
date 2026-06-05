@@ -1,5 +1,6 @@
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/playlist.dart';
+import 'package:coriander_player/metadata/metadata_service.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/utils.dart';
@@ -294,9 +295,9 @@ class MultiSelectSelectOrClearAll<T> extends StatelessWidget {
 }
 
 class MultiSelectExit<T> extends StatelessWidget {
-  final MultiSelectController<T> multiSelectController;
-
   const MultiSelectExit({super.key, required this.multiSelectController});
+
+  final MultiSelectController<T> multiSelectController;
 
   @override
   Widget build(BuildContext context) {
@@ -308,5 +309,81 @@ class MultiSelectExit<T> extends StatelessWidget {
       },
       icon: const Icon(Symbols.cancel),
     );
+  }
+}
+
+class BatchScrapeMetadata extends StatelessWidget {
+  const BatchScrapeMetadata({super.key, required this.multiSelectController});
+
+  final MultiSelectController<Audio> multiSelectController;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListenableBuilder(
+      listenable: multiSelectController,
+      builder: (context, _) {
+        final selected = multiSelectController.selected;
+        return FilledButton.tonalIcon(
+          onPressed: selected.isEmpty
+              ? null
+              : () => _startBatchScrape(context, selected),
+          icon: const Icon(Symbols.search),
+          label: Text('刮削 (${selected.length})'),
+          style: const ButtonStyle(
+            fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
+          ),
+        );
+      },
+    );
+  }
+
+  void _startBatchScrape(BuildContext context, Set<Audio> audios) {
+    final scheme = Theme.of(context).colorScheme;
+    int completed = 0;
+    final total = audios.length;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text("批量刮削元数据"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                LinearProgressIndicator(value: total > 0 ? completed / total : 0),
+                const SizedBox(height: 12),
+                Text("已完成 $completed / $total"),
+              ],
+            ),
+            actions: [
+              if (completed >= total)
+                TextButton(
+                  onPressed: () {
+                    AudioLibrary.instance.notifyUpdated();
+                    PlayService.instance.playbackService.refreshNowPlaying();
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text("完成"),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+
+    for (final audio in audios) {
+      MetadataService.instance.scrapeAndApply(audio: audio).then((_) {
+        completed++;
+        audio.clearCoverCache();
+        if (completed >= total) {
+          showTextOnSnackBar("批量刮削完成：$total 首音频");
+        }
+      }).catchError((_) {
+        completed++;
+      });
+    }
   }
 }
