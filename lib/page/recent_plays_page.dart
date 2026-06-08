@@ -78,29 +78,10 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
         final contentList = RecentPlayService.instance.recentAudios;
         final multiSelectController = MultiSelectController<Audio>();
 
-        if (contentList.isEmpty) {
-          return Scaffold(
-            appBar: AppBar(title: const Text('最近播放')),
-            body: const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Symbols.history, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('暂无播放记录', style: TextStyle(color: Colors.grey)),
-                  SizedBox(height: 8),
-                  Text('播放音乐后会自动记录在这里',
-                      style: TextStyle(color: Colors.grey, fontSize: 13)),
-                ],
-              ),
-            ),
-          );
-        }
-
         return UniPage<Audio>(
           pref: AppPreference.instance.recentPlaysPagePref,
           title: "最近播放",
-          subtitle: "${contentList.length} 首乐曲",
+          subtitle: contentList.isEmpty ? null : "${contentList.length} 首乐曲",
           contentList: contentList,
           contentBuilder: (context, item, i, multiSelectController) =>
               AudioTile(
@@ -116,6 +97,22 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
             hasPlayingAudio: _hasPlayingAudioInRecent,
             onLocate: _locatePlaying,
           ),
+          emptyStateBuilder: (context) {
+            final scheme = Theme.of(context).colorScheme;
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Symbols.history, size: 64, color: scheme.outline),
+                  const SizedBox(height: 16),
+                  Text('暂无播放记录', style: TextStyle(color: scheme.onSurfaceVariant)),
+                  const SizedBox(height: 8),
+                  Text('播放音乐后会自动记录在这里',
+                      style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
+                ],
+              ),
+            );
+          },
           multiSelectController: multiSelectController,
           multiSelectViewActions: [
             AddAllToPlaylist(multiSelectController: multiSelectController),

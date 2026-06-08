@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/cloud_service/cloud_audio_player.dart';
+import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
@@ -58,10 +60,46 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
       readPlaylists(),
       readLyricSources(),
     ]);
+
+    // TODO: 测试用自动扫描，稳定后移除
+    _autoScanTestFolder();
+
     _subscription?.cancel();
     final ctx = context;
     if (ctx.mounted) {
       ctx.go(app_paths.START_PAGES[AppPreference.instance.startPage]);
+    }
+  }
+
+  /// 测试用：音乐库为空时自动扫描云连接中的测试文件夹
+  void _autoScanTestFolder() async {
+    final library = AudioLibrary.instance;
+    if (library.audioCollection.isNotEmpty) return;
+
+    try {
+      await CloudServiceManager.instance.ready;
+      final manager = CloudServiceManager.instance;
+      if (manager.connections.isEmpty) return;
+
+      final connection = manager.connections.first;
+      final service = manager.getService(connection.id);
+      if (service == null) return;
+
+      LOGGER.i('[Test] Auto-scanning test folder into library...');
+      await CloudAudioPlayer.addCloudFolderToLibrary(
+        service: service,
+        folderPath: '歌单/《爱情神话插曲》',
+        connectionId: connection.id,
+        onProgress: (count) {
+          LOGGER.i('[Test] Auto-scan progress: $count files added');
+        },
+        onStatus: (status) {
+          LOGGER.i('[Test] Auto-scan status: $status');
+        },
+      );
+      LOGGER.i('[Test] Auto-scan completed');
+    } catch (e) {
+      LOGGER.e('[Test] Auto-scan failed: $e');
     }
   }
 

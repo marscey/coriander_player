@@ -197,7 +197,7 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
     });
   }
 
-  /// 当前歌词行100%不透明度，其他歌词行18%透明度
+  /// 当前歌词行100%不透明度，其他歌词行30%透明度
   /// 把[currentLyricTileKey]绑在当前歌词行上
   List<LyricViewTile> _generateLyricTiles(int mainLine) {
     return List.generate(
@@ -206,7 +206,7 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
         double opacity = 1.0;
         if ((mainLine >= 1 && i <= mainLine - 1) ||
             (mainLine < widget.lyric.lines.length - 1 && i >= mainLine + 1)) {
-          opacity = 0.18;
+          opacity = 0.30;
         }
         return LyricViewTile(
           key: i == mainLine ? currentLyricTileKey : null,
@@ -246,9 +246,12 @@ class _VerticalLyricScrollViewState extends State<_VerticalLyricScrollView> {
       slivers: [
         const SliverFillRemaining(),
         SliverToBoxAdapter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: lyricTiles,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 48.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: lyricTiles,
+            ),
           ),
         ),
         const SliverFillRemaining(),

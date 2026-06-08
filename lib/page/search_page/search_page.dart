@@ -1,6 +1,7 @@
 import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/hotkeys_helper.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/page/page_scaffold.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -50,53 +51,53 @@ class SearchPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return ColoredBox(
-      color: scheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              "搜索",
-              style: TextStyle(
-                color: scheme.onSurface,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const Padding(padding: EdgeInsets.only(bottom: 32.0)),
-            SizedBox(
-              width: 400,
-              child: Focus(
-                onFocusChange: HotkeysHelper.onFocusChanges,
-                child: Hero(
-                  tag: SEARCH_BAR_KEY,
-                  child: TextField(
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      suffixIcon: Padding(
-                        padding: EdgeInsets.only(right: 12.0),
-                        child: Icon(Symbols.search),
+    return PageScaffold(
+      title: "搜索",
+      actions: const [],
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Symbols.search, size: 64, color: Theme.of(context).colorScheme.outline),
+              const SizedBox(height: 24),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Focus(
+                  onFocusChange: HotkeysHelper.onFocusChanges,
+                  child: Hero(
+                    tag: SEARCH_BAR_KEY,
+                    child: TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        suffixIcon: Padding(
+                          padding: EdgeInsets.only(right: 12.0),
+                          child: Icon(Symbols.search),
+                        ),
+                        hintText: "搜索歌曲、艺术家、专辑",
+                        border: OutlineInputBorder(),
                       ),
-                      hintText: "搜索歌曲、艺术家、专辑",
-                      border: OutlineInputBorder(),
+                      onSubmitted: (String query) {
+                        context.push(
+                          app_paths.SEARCH_RESULT_PAGE,
+                          extra: UnionSearchResult.search(query),
+                        );
+                      },
                     ),
-
-                    /// when 'enter' is pressed
-                    onSubmitted: (String query) {
-                      context.push(
-                        app_paths.SEARCH_RESULT_PAGE,
-                        extra: UnionSearchResult.search(query),
-                      );
-                    },
                   ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              Text(
+                "输入关键词后按回车搜索",
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

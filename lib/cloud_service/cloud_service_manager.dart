@@ -158,6 +158,22 @@ class CloudServiceManager extends ChangeNotifier {
         await _saveConnections();
         notifyListeners();
       }
+
+      // TODO: 测试用硬编码连接，稳定后移除
+      if (_connections.isEmpty) {
+        _connections.add(CloudConnection(
+          id: 'test-webdav-default',
+          name: '测试音乐',
+          type: CloudServiceType.webdav,
+          serverUrl: 'http://106.13.25.163:5244/dav',
+          username: 'musicyep',
+          password: 'Muy@s-0122',
+          displayName: '测试音乐',
+          lastSync: DateTime.now(),
+        ));
+        await _saveConnections();
+        notifyListeners();
+      }
     } finally {
       if (!_readyCompleter.isCompleted) _readyCompleter.complete();
     }

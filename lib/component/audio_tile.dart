@@ -240,8 +240,10 @@ class _AudioTileState extends State<AudioTile> {
           color: scheme.onSurface,
         );
 
-        return Ink(
-          height: 64.0,
+        return Semantics(
+          identifier: 'audio_tile_${widget.audioIndex}',
+          child: Ink(
+            height: 64.0,
           decoration: BoxDecoration(
             color: widget.multiSelectController == null
                 ? Colors.transparent
@@ -442,8 +444,9 @@ class _AudioTileState extends State<AudioTile> {
               ]),
             ),
           ),
+        ),
         );
-      },
+        },
     );
   }
 
@@ -527,6 +530,7 @@ class _AudioTileState extends State<AudioTile> {
     HapticFeedback.mediumImpact();
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -577,9 +581,11 @@ class _AudioTileState extends State<AudioTile> {
               title: const Text("编辑标签"),
               onTap: () {
                 Navigator.pop(ctx);
-                showDialog(
-                  context: context,
-                  builder: (context) => EditTagDialog(audio: audio),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditTagDialog(audio: audio),
+                  ),
                 ).then((saved) {
                   if (saved == true) {
                     audio.clearCoverCache();
@@ -594,10 +600,12 @@ class _AudioTileState extends State<AudioTile> {
               title: const Text("刮削元数据"),
               onTap: () {
                 Navigator.pop(ctx);
-                showDialog(
-                  context: context,
-                  builder: (context) =>
-                      EditTagDialog(audio: audio, autoSearch: true),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        EditTagDialog(audio: audio, autoSearch: true),
+                  ),
                 ).then((saved) {
                   if (saved == true) {
                     audio.clearCoverCache();

@@ -56,14 +56,14 @@ class NowPlayingPage extends StatefulWidget {
   State<NowPlayingPage> createState() => _NowPlayingPageState();
 }
 
-class _NowPlayingPageState extends State<NowPlayingPage> {
+class _NowPlayingPageState extends State<NowPlayingPage>
+    with TickerProviderStateMixin {
   final playbackService = PlayService.instance.playbackService;
   ImageProvider<Object>? nowPlayingCover;
 
-  // 移动端手势相关
+  // 移动端手势相关：向下滑动收起
   double _dragOffsetY = 0.0;
-  double _dragOffsetX = 0.0;
-  bool _isDragging = false;
+  AnimationController? _dismissAnimCtrl;
 
   void updateCover() {
     final audio = playbackService.nowPlaying;
@@ -87,6 +87,14 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   @override
   void initState() {
     super.initState();
+    _dismissAnimCtrl = AnimationController(
+      vsync: this,
+      upperBound: 800,
+    )..addListener(() {
+        setState(() {
+          _dragOffsetY = _dismissAnimCtrl!.value;
+        });
+      });
     playbackService.addListener(updateCover);
     updateCover();
   }
@@ -94,13 +102,13 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   @override
   void dispose() {
     playbackService.removeListener(updateCover);
+    _dismissAnimCtrl?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final brightness = theme.brightness;
     final scheme = theme.colorScheme;
 
     final body = Stack(
@@ -113,12 +121,35 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const SizedBox.shrink(),
           ),
-          switch (brightness) {
-            Brightness.dark => const ColoredBox(color: Colors.black45),
-            Brightness.light => const ColoredBox(color: Colors.white54),
-          },
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  scheme.secondaryContainer.withValues(alpha: 0.5),
+                  scheme.secondaryContainer.withValues(alpha: 0.85),
+                  scheme.surface.withValues(alpha: 0.95),
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+            ),
+          ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.18),
+                  Colors.black.withValues(alpha: 0.05),
+                ],
+                stops: const [0.0, 1.0],
+              ),
+            ),
+          ),
           BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 250, sigmaY: 250),
+            filter: ImageFilter.blur(sigmaX: 120, sigmaY: 120),
             child: const ColoredBox(color: Colors.transparent),
           ),
         ],
@@ -143,69 +174,58 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     if (PlatformHelper.isMobile) {
       return Scaffold(
         backgroundColor: scheme.secondaryContainer,
-        body: GestureDetector(
-          onVerticalDragStart: (_) {
-            _isDragging = true;
-          },
-          onVerticalDragUpdate: (details) {
-            // 只允许向下拖动
-            if (details.delta.dy > 0) {
-              setState(() {
-                _dragOffsetY += details.delta.dy;
-              });
-            }
-          },
-          onVerticalDragEnd: (details) {
-            // 下拉超过 150px 或速度足够快，关闭页面
-            if (_dragOffsetY > 150 ||
-                (details.primaryVelocity != null &&
-                    details.primaryVelocity! > 500)) {
-              if (context.canPop()) {
-                context.pop();
-                return;
-              }
-            }
-            setState(() {
-              _dragOffsetY = 0.0;
-              _isDragging = false;
-            });
-          },
-          onHorizontalDragStart: (_) {
-            _isDragging = true;
-          },
-          onHorizontalDragUpdate: (details) {
-            // 只允许向右拖动
-            if (details.delta.dx > 0) {
-              setState(() {
-                _dragOffsetX += details.delta.dx;
-              });
-            }
-          },
-          onHorizontalDragEnd: (details) {
-            // 右滑超过 150px 或速度足够快，关闭页面
-            if (_dragOffsetX > 150 ||
-                (details.primaryVelocity != null &&
-                    details.primaryVelocity! > 500)) {
-              if (context.canPop()) {
-                context.pop();
-                return;
-              }
-            }
-            setState(() {
-              _dragOffsetX = 0.0;
-              _isDragging = false;
-            });
-          },
-          child: Transform.translate(
-            offset: Offset(_dragOffsetX, _dragOffsetY),
-            child: Transform.scale(
-              scale: _isDragging
-                  ? (1.0 - (_dragOffsetY + _dragOffsetX) * 0.0005)
-                      .clamp(0.85, 1.0)
-                  : 1.0,
-              child: body,
+        body: Stack(
+          children: [
+            // 内容区（占满整个屏幕）
+            Positioned.fill(
+              child: GestureDetector(
+                onVerticalDragStart: (_) {
+                  _dismissAnimCtrl?.stop();
+                  _dragOffsetY = _dismissAnimCtrl?.value ?? 0.0;
+                },
+                onVerticalDragUpdate: (details) {
+                  if (details.delta.dy > 0) {
+                    setState(() {
+                      _dragOffsetY += details.delta.dy;
+                    });
+                  }
+                },
+                onVerticalDragEnd: (details) {
+                  if (_dragOffsetY > 150 ||
+                      (details.primaryVelocity != null &&
+                          details.primaryVelocity! > 500)) {
+                    if (context.canPop()) {
+                      context.pop();
+                      return;
+                    }
+                  }
+                  // 弹回动画
+                  _dismissAnimCtrl?.animateTo(
+                    0.0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                  );
+                },
+                child: Transform.translate(
+                  offset: Offset(0, _dragOffsetY),
+                  child: body,
+                ),
+              ),
             ),
-          ),
+            // 顶部栏（始终在最上层）
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: ChangeNotifierProvider.value(
+                  value: PlayService.instance.playbackService,
+                  child: const _NowPlayingMobileTopBar(),
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -281,7 +301,7 @@ class _NowPlayingMoreAction extends StatelessWidget {
               onPressed: () {
                 final Artist artist = AudioLibrary
                     .instance.artistCollection[nowPlaying.splitedArtists[i]]!;
-                context.pushReplacement(
+                context.push(
                   app_paths.ARTIST_DETAIL_PAGE,
                   extra: artist,
                 );
@@ -296,15 +316,14 @@ class _NowPlayingMoreAction extends StatelessWidget {
           onPressed: () {
             final Album album =
                 AudioLibrary.instance.albumCollection[nowPlaying.album]!;
-            context.pushReplacement(app_paths.ALBUM_DETAIL_PAGE, extra: album);
+            context.push(app_paths.ALBUM_DETAIL_PAGE, extra: album);
           },
           leadingIcon: const Icon(Symbols.album),
           child: Text(nowPlaying.album),
         ),
         MenuItemButton(
           onPressed: () {
-            context.pushReplacement(app_paths.AUDIO_DETAIL_PAGE,
-                extra: nowPlaying);
+            context.push(app_paths.AUDIO_DETAIL_PAGE, extra: nowPlaying);
           },
           leadingIcon: const Icon(Symbols.info),
           child: const Text("详细信息"),
@@ -780,7 +799,7 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
         final availableWidth = constraints.maxWidth;
         final availableHeight = constraints.maxHeight;
 
-        final coverSize = (availableWidth * 0.72).clamp(200.0, 320.0);
+        final coverSize = (availableWidth * 0.80).clamp(220.0, 380.0);
         final titleFontSize = (availableWidth * 0.055).clamp(18.0, 26.0);
         const artistFontSize = 14.0;
 
@@ -805,7 +824,7 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
                                       ? _buildPlaceholder(scheme, coverSize)
                                       : ClipRRect(
                                           borderRadius:
-                                              BorderRadius.circular(16.0),
+                                              BorderRadius.circular(20.0),
                                           child: Image(
                                             image: snapshot.data!,
                                             width: coverSize,
@@ -831,7 +850,7 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
                             ),
                     ),
                   ),
-                  SizedBox(height: availableHeight * 0.04),
+                  SizedBox(height: availableHeight * 0.03),
                   Padding(
                     padding:
                         EdgeInsets.symmetric(horizontal: availableWidth * 0.08),
@@ -887,7 +906,7 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16.0),
+        borderRadius: BorderRadius.circular(20.0),
         color: scheme.surfaceContainerHighest,
       ),
       child: Icon(

@@ -122,6 +122,7 @@ class _UniDetailPageState<P, S, T> extends State<UniDetailPage<P, S, T>> {
 
     final List<Widget> actions = [];
     if (widget.enableShufflePlay) {
+      actions.add(SequentialPlay<S>(contentList: widget.secondaryContent));
       actions.add(ShufflePlay<S>(contentList: widget.secondaryContent));
     }
     if (widget.enableSortMethod) {
@@ -159,10 +160,14 @@ class _UniDetailPageState<P, S, T> extends State<UniDetailPage<P, S, T>> {
 
   Widget result(MultiSelectController<S>? multiSelectController,
       List<Widget> actions, ColorScheme scheme) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+    final outerPadding = isMobile ? 8.0 : 16.0;
+
     return ColoredBox(
       color: scheme.surface,
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: EdgeInsets.all(outerPadding),
         child: Column(
           children: [
             // head
@@ -274,8 +279,14 @@ class _UniDetailPageHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final brightness = theme.brightness;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+    final picSize = isMobile ? 130.0 : 200.0;
+    final headerHeight = isMobile ? 190.0 : 200.0;
+    final titleFontSize = isMobile ? 20.0 : 22.0;
+
     return SizedBox(
-      height: 200,
+      height: headerHeight,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -301,22 +312,31 @@ class _UniDetailPageHeader extends StatelessWidget {
           ),
           if (context.canPop())
             Positioned(
-              top: 8.0,
+              top: 16.0,
               left: 8.0,
-              child: IconButton(
-                icon: Icon(Symbols.arrow_back, color: scheme.onSurface),
-                onPressed: () => context.pop(),
+              child: SafeArea(
+                bottom: false,
+                child: IconButton(
+                  icon: Icon(Symbols.arrow_back, color: scheme.onSurface),
+                  onPressed: () => context.pop(),
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                    backgroundColor: scheme.surfaceContainerHighest.withOpacity(0.6),
+                  ),
+                ),
               ),
             ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 56.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
               FutureBuilder(
                 future: pic,
                 builder: (context, snapshot) {
                   final placeholder = Icon(
                     Symbols.broken_image,
-                    size: 200.0,
+                    size: picSize,
                     color: scheme.onSurface,
                   );
                   return switch (snapshot.connectionState) {
@@ -326,8 +346,8 @@ class _UniDetailPageHeader extends StatelessWidget {
                             PicShape.oval => ClipOval(
                                 child: Image(
                                   image: snapshot.data!,
-                                  width: 200.0,
-                                  height: 200.0,
+                                  width: picSize,
+                                  height: picSize,
                                   errorBuilder: (_, __, ___) => placeholder,
                                 ),
                               ),
@@ -335,23 +355,23 @@ class _UniDetailPageHeader extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(8.0),
                                 child: Image(
                                   image: snapshot.data!,
-                                  width: 200.0,
-                                  height: 200.0,
+                                  width: picSize,
+                                  height: picSize,
                                   errorBuilder: (_, __, ___) => placeholder,
                                 ),
                               ),
                           },
-                    _ => const SizedBox(
-                        width: 200,
-                        height: 200,
-                        child: Center(
+                    _ => SizedBox(
+                        width: picSize,
+                        height: picSize,
+                        child: const Center(
                           child: CircularProgressIndicator(),
                         ),
                       ),
                   };
                 },
               ),
-              const SizedBox(width: 16.0),
+              const SizedBox(width: 12.0),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -361,7 +381,7 @@ class _UniDetailPageHeader extends StatelessWidget {
                       child: Text(
                         title,
                         style: TextStyle(
-                          fontSize: 22.0,
+                          fontSize: titleFontSize,
                           color: scheme.onSurface,
                           fontWeight: FontWeight.bold,
                         ),
@@ -370,14 +390,14 @@ class _UniDetailPageHeader extends StatelessWidget {
                     Text(
                       subtitle,
                       style: TextStyle(
-                        fontSize: 14.0,
+                        fontSize: 13.0,
                         color: scheme.onSurface,
                       ),
                     ),
-                    const SizedBox(height: 8.0),
+                    const SizedBox(height: 4.0),
                     Wrap(
-                      spacing: 8.0,
-                      runSpacing: 8.0,
+                      spacing: 6.0,
+                      runSpacing: 4.0,
                       children: multiSelectController == null
                           ? actions
                           : multiSelectController!.enableMultiSelectView
@@ -388,6 +408,7 @@ class _UniDetailPageHeader extends StatelessWidget {
                 ),
               ),
             ],
+          ),
           ),
         ],
       ),

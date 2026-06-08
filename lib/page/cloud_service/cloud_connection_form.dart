@@ -46,6 +46,7 @@ class _CloudConnectionFormState extends State<CloudConnectionForm> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildTextField(
+                  fieldKey: const Key('cloud_name'),
                   label: '连接名称',
                   hint: '例如：我的WebDAV',
                   initialValue: _name,
@@ -64,6 +65,7 @@ class _CloudConnectionFormState extends State<CloudConnectionForm> {
                   onSaved: (value) => _displayName = value!,
                 ),
                 _buildTextField(
+                  fieldKey: const Key('cloud_url'),
                   label: '服务器地址',
                   hint: '例如：https://cloud.example.com/webdav',
                   initialValue: _serverUrl,
@@ -79,6 +81,7 @@ class _CloudConnectionFormState extends State<CloudConnectionForm> {
                   },
                 ),
                 _buildTextField(
+                  fieldKey: const Key('cloud_user'),
                   label: '用户名',
                   hint: 'WebDAV用户名',
                   initialValue: _username,
@@ -91,6 +94,7 @@ class _CloudConnectionFormState extends State<CloudConnectionForm> {
                   },
                 ),
                 _buildTextField(
+                  fieldKey: const Key('cloud_pass'),
                   label: '密码',
                   hint: 'WebDAV密码',
                   initialValue: _password,
@@ -141,10 +145,12 @@ class _CloudConnectionFormState extends State<CloudConnectionForm> {
     required void Function(String?) onSaved,
     String? Function(String?)? validator,
     bool obscureText = false,
+    Key? fieldKey,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: TextFormField(
+        key: fieldKey,
         initialValue: initialValue,
         decoration: InputDecoration(
           labelText: label,

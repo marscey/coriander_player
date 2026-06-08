@@ -264,11 +264,15 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
       return const Center(child: Text('连接不存在'));
     }
 
-    return Column(
-      children: [
-        _buildBreadcrumb(connection),
-        Expanded(
-          child: FutureBuilder<List<webdav.WebDavFile>>(
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _buildBreadcrumb(connection),
+            Expanded(
+              child: FutureBuilder<List<webdav.WebDavFile>>(
             future: _filesFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -292,6 +296,8 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
           ),
         ),
       ],
+    ),
+    ),
     );
   }
 
@@ -804,7 +810,7 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.only(left: 4.0, right: 8.0, top: 4.0, bottom: 4.0),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
         border: Border(
@@ -832,8 +838,7 @@ class _CloudFileBrowserState extends State<CloudFileBrowser> {
               }
             },
           ),
-          const SizedBox(width: 8),
-          // 搜索栏 或 面包屑
+          const SizedBox(width: 4),
           Expanded(
             child: _isSearching
                 ? TextField(

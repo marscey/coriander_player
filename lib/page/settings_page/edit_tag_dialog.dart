@@ -155,37 +155,38 @@ class _EditTagDialogState extends State<EditTagDialog> {
     final isMobile = PlatformHelper.isMobile;
 
     if (isMobile) {
-      return Dialog(
-        insetPadding: const EdgeInsets.all(12.0),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12.0),
-        ),
-        child: SizedBox(
-          height: MediaQuery.of(context).size.height * 0.85,
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(scheme),
-                const SizedBox(height: 12.0),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildCoverSection(scheme),
-                        const SizedBox(height: 12.0),
-                        _buildTagFields(scheme),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12.0),
-                _buildFooter(scheme),
-              ],
-            ),
+      return Scaffold(
+        backgroundColor: scheme.surface,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Symbols.arrow_back),
+            onPressed: () => Navigator.pop(context, false),
           ),
+          title: Text(widget.autoSearch ? "刮削元数据" : "编辑标签"),
+          actions: [
+            TextButton(
+              onPressed: _isSaving ? null : _saveTags,
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text("保存"),
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            // 固定标签编辑区（不滚动）
+            _buildMobileTagSection(scheme),
+            // 搜索按钮 + 提示文字（固定行）
+            _buildSearchBarRow(scheme),
+            // 搜索结果（可滚动）
+            Expanded(
+              child: _buildSearchResultsList(scheme),
+            ),
+          ],
         ),
       );
     }
@@ -230,6 +231,216 @@ class _EditTagDialogState extends State<EditTagDialog> {
     );
   }
 
+  /// 移动端固定标签编辑区：封面左对齐 + 标签字段右对齐
+  Widget _buildMobileTagSection(ColorScheme scheme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 封面图片（左对齐，点击可查看大图）
+          GestureDetector(
+            onTap: _selectedCoverData != null
+                ? () => _showCoverPreview(context, scheme)
+                : null,
+            child: Semantics(
+              identifier: "cover_image",
+              button: true,
+              child: SizedBox(
+                width: 96.0,
+                height: 96.0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8.0),
+                    border: Border.all(color: scheme.outlineVariant),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8.0),
+                    child: _buildCoverPreview(scheme),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12.0),
+          // 标签字段（右侧紧凑排列）
+          Expanded(
+            child: Column(
+              children: [
+                _buildCompactField(_titleController, "标题", scheme,
+                    icon: Symbols.music_note),
+                const SizedBox(height: 6.0),
+                _buildCompactField(_artistController, "艺术家", scheme,
+                    icon: Symbols.person),
+                const SizedBox(height: 6.0),
+                _buildCompactField(_albumController, "专辑", scheme,
+                    icon: Symbols.album),
+                const SizedBox(height: 6.0),
+                // 轨道号 / 年份 / 流派 三列紧凑行
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildCompactField(
+                        _trackController,
+                        "#",
+                        scheme,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 6.0),
+                    Expanded(
+                      child: _buildCompactField(
+                        _yearController,
+                        "年份",
+                        scheme,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 6.0),
+                    Expanded(
+                      child: _buildCompactField(
+                        _genreController,
+                        "流派",
+                        scheme,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 紧凑输入框（移动端专用，高度更小）
+  Widget _buildCompactField(
+    TextEditingController controller,
+    String label,
+    ColorScheme scheme, {
+    TextInputType? keyboardType,
+    IconData? icon,
+  }) {
+    return SizedBox(
+      height: 40.0,
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        style: const TextStyle(fontSize: 13),
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: icon != null
+              ? Padding(
+                  padding: const EdgeInsets.only(left: 8.0, right: 4.0),
+                  child: Icon(icon, size: 14.0),
+                )
+              : null,
+          prefixIconConstraints:
+              const BoxConstraints(minWidth: 28.0, minHeight: 0),
+          labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+          border: const OutlineInputBorder(),
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+        ),
+      ),
+    );
+  }
+
+  /// 搜索按钮 + 提示文字同一行
+  Widget _buildSearchBarRow(ColorScheme scheme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      child: Row(
+        children: [
+          // 在线搜索按钮（缩小）
+          SizedBox(
+            height: 32.0,
+            child: FilledButton.tonalIcon(
+              onPressed: _isSearching ? null : _searchOnline,
+              icon: _isSearching
+                  ? const SizedBox(
+                      width: 14.0,
+                      height: 14.0,
+                      child: CircularProgressIndicator(strokeWidth: 2.0),
+                    )
+                  : const Icon(Symbols.search, size: 16.0),
+              label: const Text("在线搜索", style: TextStyle(fontSize: 13)),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8.0),
+          // 提示文字
+          Expanded(
+            child: Text(
+              "搜索结果点击回显到标签栏",
+              style: TextStyle(
+                color: scheme.onSurfaceVariant,
+                fontSize: 12.0,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 搜索结果列表（可滚动区域）
+  Widget _buildSearchResultsList(ColorScheme scheme) {
+    if (_searchError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            _searchError!,
+            style: TextStyle(color: scheme.error, fontSize: 13.0),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    if (_searchResults.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Symbols.search,
+                size: 32.0,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.3),
+              ),
+              const SizedBox(height: 8.0),
+              Text(
+                _isSearching ? "搜索中..." : "点击「在线搜索」查找元数据",
+                style: TextStyle(
+                  color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  fontSize: 13.0,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+      itemCount: _searchResults.length,
+      itemBuilder: (context, index) {
+        return _buildResultItem(_searchResults[index], scheme);
+      },
+    );
+  }
+
   Widget _buildHeader(ColorScheme scheme) {
     return Row(
       children: [
@@ -254,12 +465,12 @@ class _EditTagDialogState extends State<EditTagDialog> {
         children: [
           _buildTextField(_titleController, "标题", scheme,
               icon: Symbols.music_note),
-          const SizedBox(height: 12.0),
+          const SizedBox(height: 8.0),
           _buildTextField(_artistController, "艺术家", scheme,
               icon: Symbols.person),
-          const SizedBox(height: 12.0),
+          const SizedBox(height: 8.0),
           _buildTextField(_albumController, "专辑", scheme, icon: Symbols.album),
-          const SizedBox(height: 12.0),
+          const SizedBox(height: 8.0),
           Row(
             children: [
               Expanded(
@@ -271,7 +482,7 @@ class _EditTagDialogState extends State<EditTagDialog> {
                   icon: Symbols.numbers,
                 ),
               ),
-              const SizedBox(width: 12.0),
+              const SizedBox(width: 8.0),
               Expanded(
                 child: _buildTextField(
                   _yearController,
@@ -283,9 +494,9 @@ class _EditTagDialogState extends State<EditTagDialog> {
               ),
             ],
           ),
-          const SizedBox(height: 12.0),
+          const SizedBox(height: 8.0),
           _buildTextField(_genreController, "流派", scheme, icon: Symbols.genres),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 12.0),
           FilledButton.icon(
             onPressed: _isSearching ? null : _searchOnline,
             icon: _isSearching
@@ -327,37 +538,31 @@ class _EditTagDialogState extends State<EditTagDialog> {
   }
 
   Widget _buildCoverSection(ColorScheme scheme) {
-    final isMobile = PlatformHelper.isMobile;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "封面",
-          style: TextStyle(
-            color: scheme.onSurfaceVariant,
-            fontSize: 13.0,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8.0),
-        AspectRatio(
-          aspectRatio: isMobile ? 2.0 : 1.0,
-          child: Container(
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8.0),
-              border: Border.all(color: scheme.outlineVariant),
+        Center(
+          child: SizedBox(
+            width: 140,
+            height: 140,
+            child: Container(
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8.0),
+                border: Border.all(color: scheme.outlineVariant),
+              ),
+              child: _buildCoverPreview(scheme),
             ),
-            child: _buildCoverPreview(scheme),
           ),
         ),
-        const SizedBox(height: 8.0),
         if (_selectedCoverData != null &&
             _selectedCoverData != _currentCoverData)
-          Text(
-            "封面已更新（来自搜索结果）",
-            style: TextStyle(color: scheme.primary, fontSize: 11.0),
+          Padding(
+            padding: const EdgeInsets.only(top: 4.0),
+            child: Text(
+              "封面已更新（来自搜索结果）",
+              style: TextStyle(color: scheme.primary, fontSize: 11.0),
+            ),
           ),
       ],
     );
@@ -369,11 +574,15 @@ class _EditTagDialogState extends State<EditTagDialog> {
     }
 
     if (_selectedCoverData != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8.0),
-        child: Image.memory(
-          _selectedCoverData!,
-          fit: BoxFit.cover,
+      return SizedBox(
+        width: double.infinity,
+        height: double.infinity,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8.0),
+          child: Image.memory(
+            _selectedCoverData!,
+            fit: BoxFit.cover,
+          ),
         ),
       );
     }
@@ -384,18 +593,44 @@ class _EditTagDialogState extends State<EditTagDialog> {
         children: [
           Icon(
             Symbols.album,
-            size: 48.0,
+            size: 32.0,
             color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
           ),
-          const SizedBox(height: 8.0),
+          const SizedBox(height: 4.0),
           Text(
             "暂无封面",
             style: TextStyle(
               color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
-              fontSize: 12.0,
+              fontSize: 11.0,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 点击查看封面大图
+  void _showCoverPreview(BuildContext context, ColorScheme scheme) {
+    if (_selectedCoverData == null) return;
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16.0),
+        child: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8.0),
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Image.memory(
+                _selectedCoverData!,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -410,14 +645,15 @@ class _EditTagDialogState extends State<EditTagDialog> {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: icon != null ? Icon(icon, size: 20.0) : null,
-        labelStyle: TextStyle(color: scheme.onSurfaceVariant),
+        prefixIcon: icon != null ? Icon(icon, size: 18.0) : null,
+        labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
         border: const OutlineInputBorder(),
         isDense: true,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
+            const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
       ),
     );
   }
@@ -426,19 +662,20 @@ class _EditTagDialogState extends State<EditTagDialog> {
     final isSelected = _selectedResult == result;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 4.0),
+      margin: const EdgeInsets.only(bottom: 8.0),
       color:
           isSelected ? scheme.primaryContainer : scheme.surfaceContainerLowest,
       child: ListTile(
         dense: true,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
+            const EdgeInsets.symmetric(horizontal: 10.0, vertical: 2.0),
         title: Text(
           result.title ?? '',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13.0,
             color: isSelected ? scheme.onPrimaryContainer : scheme.onSurface,
           ),
         ),
@@ -451,7 +688,7 @@ class _EditTagDialogState extends State<EditTagDialog> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            fontSize: 12.0,
+            fontSize: 11.0,
             color: isSelected
                 ? scheme.onPrimaryContainer.withValues(alpha: 0.7)
                 : scheme.onSurfaceVariant,
@@ -499,8 +736,8 @@ class _EditTagDialogState extends State<EditTagDialog> {
           onPressed: _isSaving ? null : _saveTags,
           icon: _isSaving
               ? const SizedBox(
-                  width: 16.0,
-                  height: 16.0,
+                  width: 16,
+                  height: 16,
                   child: CircularProgressIndicator(
                       strokeWidth: 2.0, color: Colors.white),
                 )

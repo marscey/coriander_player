@@ -75,7 +75,7 @@ class _SyncLineContent extends StatelessWidget {
       }
 
       final List<Text> contents = [
-        buildPrimaryText(syncLine.content, scheme, alignment, lyricFontSize),
+        buildPrimaryText(syncLine.content, scheme, alignment, lyricFontSize, isMainLine),
       ];
       if (syncLine.translation != null) {
         contents.add(buildSecondaryText(
@@ -179,6 +179,7 @@ class _SyncLineContent extends StatelessWidget {
     ColorScheme scheme,
     LyricTextAlign align,
     double fontSize,
+    bool isMainLine,
   ) {
     return Text(
       text,
@@ -188,7 +189,7 @@ class _SyncLineContent extends StatelessWidget {
         LyricTextAlign.right => TextAlign.right,
       },
       style: TextStyle(
-        color: scheme.onSecondaryContainer,
+        color: isMainLine ? scheme.primary : scheme.onSecondaryContainer,
         fontSize: fontSize,
         fontWeight: FontWeight.bold,
       ),
@@ -238,7 +239,7 @@ class _LrcLineContent extends StatelessWidget {
 
     final splited = lrcLine.content.split("┃");
     final List<Text> contents = [
-      buildPrimaryText(splited.first, scheme, alignment, lyricFontSize),
+      buildPrimaryText(splited.first, scheme, alignment, lyricFontSize, isMainLine),
     ];
     for (var i = 1; i < splited.length; i++) {
       contents.add(buildSecondaryText(
@@ -267,6 +268,7 @@ class _LrcLineContent extends StatelessWidget {
     ColorScheme scheme,
     LyricTextAlign align,
     double fontSize,
+    bool isMainLine,
   ) {
     return Text(
       text,
@@ -276,7 +278,7 @@ class _LrcLineContent extends StatelessWidget {
         LyricTextAlign.right => TextAlign.right,
       },
       style: TextStyle(
-        color: scheme.onSecondaryContainer,
+        color: isMainLine ? scheme.primary : scheme.onSecondaryContainer,
         fontSize: fontSize,
         fontWeight: FontWeight.bold,
       ),

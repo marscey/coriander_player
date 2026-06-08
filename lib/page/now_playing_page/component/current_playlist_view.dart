@@ -41,14 +41,16 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final topPadding = MediaQuery.of(context).padding.top;
 
     return Material(
       type: MaterialType.transparency,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SizedBox(height: topPadding + 56.0),
           Padding(
-            padding: const EdgeInsets.all(8.0),
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
             child: Row(
               children: [
                 Text(
@@ -73,6 +75,7 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
               builder: (context, _) {
                 return ListView.builder(
                   controller: scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   itemCount: playbackService.playlist.value.length,
                   itemExtent: 56.0,
                   itemBuilder: (context, index) {

@@ -1,0 +1,34 @@
+appId: com.senyepss.corianderPlayer
+---
+# 测试编辑标签页面布局
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "音乐库"
+
+# 长按第一首歌打开上下文菜单（使用 Semantics identifier）
+- longPressOn:
+    id: "audio_tile_0"
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# 截图查看上下文菜单
+- takeScreenshot: test/reports/screenshots/edit-tag-01-context-menu
+
+# 点击编辑标签
+- tapOn: "编辑标签"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# 截图查看编辑标签页面
+- takeScreenshot: test/reports/screenshots/edit-tag-02-page-layout
+
+# 验证页面元素
+- assertVisible: "编辑标签"
+- assertVisible: "标题"
+- assertVisible: "艺术家"
+- assertVisible: "专辑"
+- assertVisible: "在线搜索"
+
+# 截图最终布局
+- takeScreenshot: test/reports/screenshots/edit-tag-03-final-layout

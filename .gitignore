@@ -50,9 +50,12 @@ app.*.map.json
 /.fvm
 lib/page/settings_page/cpfeedback_key.dart
 
-# 测试相关
-test/CODE_WIKI.md
+# Claude
+CLAUDE.md
+.claude/
 
 # Maestro 测试产物
 report.xml
-test/maestro/screenshots/
+/test/maestro/screenshots/
+
+test/report/screenshots/

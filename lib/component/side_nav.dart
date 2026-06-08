@@ -108,6 +108,9 @@ final _mobileDestinations = <DestinationDesc>[
   destinations[8], // 设置
 ];
 
+/// Maestro 自动化测试用的语义标识符
+const _mobileTabIds = ['tab_library', 'tab_recent', 'tab_cloud', 'tab_search', 'tab_settings'];
+
 class MobileBottomNav extends StatelessWidget {
   const MobileBottomNav({super.key, required this.navigationShell});
 
@@ -143,7 +146,11 @@ class MobileBottomNav extends StatelessWidget {
       destinations: List.generate(
         _mobileDestinations.length,
         (i) => NavigationDestination(
-          icon: Icon(_mobileDestinations[i].icon),
+          key: ValueKey('nav-tab-$i'),
+          icon: Semantics(
+            identifier: _mobileTabIds[i],
+            child: Icon(_mobileDestinations[i].icon),
+          ),
           label: _mobileDestinations[i].label,
         ),
       ),

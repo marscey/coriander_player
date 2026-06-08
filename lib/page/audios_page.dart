@@ -67,6 +67,18 @@ class _AudiosPageState extends State<AudiosPage> {
       enableContentViewSwitch: true,
       locateTo: widget.locateTo,
       multiSelectController: multiSelectController,
+      emptyStateBuilder: (context) => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Symbols.library_music, size: 64, color: Theme.of(context).colorScheme.outline),
+            const SizedBox(height: 16),
+            Text('音乐库为空', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 8),
+            Text('从云服务扫描音频或添加本地文件夹', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
+          ],
+        ),
+      ),
       multiSelectViewActions: [
         BatchScrapeMetadata(multiSelectController: multiSelectController),
         AddAllToPlaylist(multiSelectController: multiSelectController),

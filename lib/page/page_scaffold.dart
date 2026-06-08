@@ -1,3 +1,4 @@
+import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -33,7 +34,12 @@ class PageScaffold extends StatelessWidget {
       List<Widget> rowChildren;
 
       final canPop = showBackButton && context.canPop();
-      final backBtn = canPop
+      // 一级页面（Tab 根页面）不显示返回按钮
+      final currentPath = GoRouterState.of(context).uri.toString();
+      final isRootPage = app_paths.START_PAGES.any(
+        (p) => currentPath == p || currentPath == '$p/',
+      );
+      final backBtn = (canPop && !isRootPage)
           ? Padding(
               padding: const EdgeInsets.only(right: 8.0),
               child: IconButton(
@@ -58,27 +64,27 @@ class PageScaffold extends StatelessWidget {
         switch (screenType) {
           case ScreenType.small:
             {
-              final List<Widget> foldedRow1 = [];
-              int count = 0;
-              for (int i = actions.length - 1;
-                  i > 0 && count < 2;
-                  --i, ++count) {
-                if (count == 1) foldedRow1.add(const SizedBox(width: 8.0));
-
-                foldedRow1.add(actions[i]);
+              // 小屏：定位按钮、随机播放、顺序播放始终可见，其余折叠
+              final alwaysVisible = <int>[];
+              for (int i = 0; i < actions.length; i++) {
+                final typeName = actions[i].runtimeType.toString();
+                if (typeName.contains('SequentialPlay') ||
+                    typeName.contains('ShufflePlay') ||
+                    typeName.contains('LocatePlaying')) {
+                  alwaysVisible.add(i);
+                }
+              }
+              // fallback：如果没有找到播放按钮，显示前两个
+              if (alwaysVisible.isEmpty) {
+                for (int i = 0; i < actions.length && i < 2; i++) {
+                  alwaysVisible.add(i);
+                }
               }
 
-              final List<Widget> foldedColumn = [];
-              if (foldedRow1.isNotEmpty) {
-                foldedColumn.add(Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: foldedRow1,
-                ));
-              }
-
-              if (actions.length >= 4) {
-                for (var i = actions.length - 1 - count; i > 0; --i) {
-                  foldedColumn.add(actions[i]);
+              final foldedActions = <Widget>[];
+              for (int i = 0; i < actions.length; i++) {
+                if (!alwaysVisible.contains(i)) {
+                  foldedActions.add(actions[i]);
                 }
               }
 
@@ -93,14 +99,15 @@ class PageScaffold extends StatelessWidget {
               rowChildren = [
                 if (backBtn != null) backBtn,
                 subtitle == null ? onlyTitle(scheme) : withSubtitle(scheme),
-                const SizedBox(width: 16.0),
-                actions.first,
-                if (foldedColumn.isNotEmpty)
+                const SizedBox(width: 12.0),
+                // 始终显示随机播放和顺序播放按钮
+                for (final i in alwaysVisible) actions[i],
+                if (foldedActions.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(left: 16.0),
+                    padding: const EdgeInsets.only(left: 8.0),
                     child: MenuAnchor(
                       style: menuStyle,
-                      menuChildren: foldedColumn,
+                      menuChildren: foldedActions,
                       builder: (_, controller, __) => IconButton.filledTonal(
                         tooltip: "更多",
                         onPressed: () {
@@ -139,7 +146,7 @@ class PageScaffold extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.only(top: 4.0, bottom: 8.0),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: rowChildren,
@@ -157,7 +164,11 @@ class PageScaffold extends StatelessWidget {
     return Expanded(
       child: Text(
         title,
-        style: TextStyle(fontSize: 32.0, color: scheme.onSurface),
+        style: TextStyle(
+          fontSize: 24.0,
+          fontWeight: FontWeight.bold,
+          color: scheme.onSurface,
+        ),
         overflow: TextOverflow.ellipsis,
       ),
     );
@@ -167,15 +178,20 @@ class PageScaffold extends StatelessWidget {
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             title,
-            style: TextStyle(fontSize: 28.0, color: scheme.onSurface),
+            style: TextStyle(
+              fontSize: 24.0,
+              fontWeight: FontWeight.bold,
+              color: scheme.onSurface,
+            ),
             overflow: TextOverflow.ellipsis,
           ),
           Text(
             subtitle!,
-            style: TextStyle(fontSize: 14.0, color: scheme.onSurface),
+            style: TextStyle(fontSize: 13.0, color: scheme.onSurfaceVariant),
             overflow: TextOverflow.ellipsis,
           )
         ],

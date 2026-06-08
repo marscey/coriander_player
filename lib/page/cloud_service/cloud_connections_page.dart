@@ -1,3 +1,4 @@
+import 'package:coriander_player/page/page_scaffold.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -71,85 +72,62 @@ class _CloudConnectionsPageState extends State<CloudConnectionsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     return Consumer<CloudServiceManager>(
       builder: (context, manager, child) {
         final connections = manager.connections;
 
-        if (connections.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.cloud_off, size: 64, color: scheme.outline),
-                const SizedBox(height: 16),
-                Text('暂无云服务连接',
-                    style: TextStyle(color: scheme.onSurfaceVariant)),
-                const SizedBox(height: 8),
-                Text('点击下方按钮添加连接',
-                    style: TextStyle(
-                        color: scheme.onSurfaceVariant, fontSize: 13)),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: () => _showAddConnectionDialog(context),
-                  icon: const Icon(Icons.add),
-                  label: const Text('添加连接'),
-                ),
-              ],
-            ),
-          );
+        final List<Widget> actions = [];
+        if (_hasPlayingCloudAudio) {
+          actions.add(LocatePlayingButton(
+            hasPlayingAudio: _hasPlayingCloudAudio,
+            onLocate: _locatePlayingConnection,
+          ));
         }
+        actions.add(FilledButton.icon(
+          onPressed: () => _showAddConnectionDialog(context),
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('添加连接'),
+          style: const ButtonStyle(
+            fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
+          ),
+        ));
 
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0),
-              child: Row(
-                children: [
-                  Text(
-                    '云服务连接',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: scheme.onSurface,
-                    ),
+        return PageScaffold(
+          title: "云服务连接",
+          subtitle: connections.isEmpty ? null : "${connections.length} 个连接",
+          actions: actions,
+          body: connections.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.cloud_off,
+                          size: 64,
+                          color: Theme.of(context).colorScheme.outline),
+                      const SizedBox(height: 16),
+                      Text('暂无云服务连接',
+                          style: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant)),
+                      const SizedBox(height: 8),
+                      Text('点击上方按钮添加连接',
+                          style: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              fontSize: 13)),
+                    ],
                   ),
-                  const Spacer(),
-                  if (_hasPlayingCloudAudio)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: IconButton.filledTonal(
-                        onPressed: _locatePlayingConnection,
-                        icon: const Icon(Icons.my_location, size: 20),
-                        tooltip: '定位正在播放的云音频',
-                      ),
-                    ),
-                  FilledButton.tonal(
-                    onPressed: () => _showAddConnectionDialog(context),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.add, size: 18),
-                        SizedBox(width: 4),
-                        Text('添加连接'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.only(top: 8.0),
-                itemCount: connections.length,
-                itemBuilder: (context, index) {
-                  final connection = connections[index];
-                  return _buildConnectionItem(context, connection, manager);
-                },
-              ),
-            ),
-          ],
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 96.0),
+                  itemCount: connections.length,
+                  itemBuilder: (context, index) {
+                    final connection = connections[index];
+                    return _buildConnectionItem(context, connection, manager);
+                  },
+                ),
         );
       },
     );
@@ -163,7 +141,7 @@ class _CloudConnectionsPageState extends State<CloudConnectionsPage> {
     final isPlaying = _isConnectionPlaying(connection);
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
         leading: PlayingIndicatorOverlay(
           size: PlayingIndicatorSize.medium,
@@ -233,8 +211,6 @@ class _CloudConnectionsPageState extends State<CloudConnectionsPage> {
     switch (type) {
       case CloudServiceType.webdav:
         return 'WebDAV';
-      default:
-        return '未知';
     }
   }
 

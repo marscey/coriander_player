@@ -13,15 +13,29 @@ class ShufflePlay<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.icon(
+    return IconButton.filledTonal(
+      tooltip: "随机播放",
       onPressed: () => PlayService.instance.playbackService.shuffleAndPlay(
         contentList as List<Audio>,
       ),
       icon: const Icon(Symbols.shuffle),
-      label: const Text("随机播放"),
-      style: const ButtonStyle(
-        fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
+    );
+  }
+}
+
+class SequentialPlay<T> extends StatelessWidget {
+  final List<T> contentList;
+  const SequentialPlay({super.key, required this.contentList});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton.filledTonal(
+      tooltip: "顺序播放",
+      onPressed: () => PlayService.instance.playbackService.play(
+        0,
+        contentList as List<Audio>,
       ),
+      icon: const Icon(Symbols.repeat),
     );
   }
 }

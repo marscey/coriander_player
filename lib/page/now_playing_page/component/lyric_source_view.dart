@@ -82,10 +82,13 @@ class _SetLyricSourceBtn extends StatelessWidget {
                 Navigator.pop(context);
                 final nowPlaying =
                     PlayService.instance.playbackService.nowPlaying;
-                showDialog<String>(
-                  context: context,
-                  builder: (context) =>
-                      _SetLyricSourceDialog(audio: nowPlaying!),
+                final scaffoldContext = context;
+                Navigator.of(scaffoldContext).push(
+                  MaterialPageRoute(
+                    fullscreenDialog: true,
+                    builder: (_) =>
+                        _SetLyricSourcePage(audio: nowPlaying!),
+                  ),
                 );
               },
             ),
@@ -181,6 +184,24 @@ class _SetLyricSourceBtn extends StatelessWidget {
   }
 }
 
+/// 移动端全屏页面：歌词检索与选择
+class _SetLyricSourcePage extends StatelessWidget {
+  const _SetLyricSourcePage({required this.audio});
+
+  final Audio audio;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('默认歌词'),
+      ),
+      body: _SetLyricSourceBody(audio: audio),
+    );
+  }
+}
+
+/// 桌面端弹窗：歌词检索与选择
 class _SetLyricSourceDialog extends StatefulWidget {
   const _SetLyricSourceDialog({required this.audio});
 
@@ -191,6 +212,32 @@ class _SetLyricSourceDialog extends StatefulWidget {
 }
 
 class _SetLyricSourceDialogState extends State<_SetLyricSourceDialog> {
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 384, maxWidth: 600),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: _SetLyricSourceBody(audio: widget.audio),
+        ),
+      ),
+    );
+  }
+}
+
+/// 歌词检索与选择的通用内容组件（被全屏页面和桌面弹窗共用）
+class _SetLyricSourceBody extends StatefulWidget {
+  const _SetLyricSourceBody({required this.audio});
+
+  final Audio audio;
+
+  @override
+  State<_SetLyricSourceBody> createState() => _SetLyricSourceBodyState();
+}
+
+class _SetLyricSourceBodyState extends State<_SetLyricSourceBody> {
   final TextEditingController _searchController = TextEditingController();
   String? _customQuery;
   late Future<List<SongSearchResult>> _searchFuture;
@@ -244,102 +291,82 @@ class _SetLyricSourceDialogState extends State<_SetLyricSourceDialog> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 384, maxWidth: 600),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 当前音频信息，方便与搜索结果对比
+        Container(
+          padding: const EdgeInsets.all(12.0),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(8.0),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Text(
-                  "默认歌词",
-                  style: TextStyle(
-                    color: scheme.onSurface,
-                    fontSize: 18.0,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              // 当前音频信息，方便与搜索结果对比
-              Container(
-                padding: const EdgeInsets.all(12.0),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildInfoRow("歌名", widget.audio.title, scheme),
-                    if (widget.audio.artist.isNotEmpty)
-                      _buildInfoRow("艺术家", widget.audio.artist, scheme),
-                    if (widget.audio.album.isNotEmpty)
-                      _buildInfoRow("专辑", widget.audio.album, scheme),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12.0),
-              TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  labelText: "搜索关键词",
-                  hintText: "输入歌词搜索关键词",
-                  suffixIcon: IconButton(
-                    icon: const Icon(Symbols.search),
-                    onPressed: _performSearch,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                ),
-                onSubmitted: (_) => _performSearch(),
-              ),
-              const SizedBox(height: 16.0),
-              ListTile(
-                title: const Text("使用本地歌词"),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                onTap: () {
-                  LYRIC_SOURCES[widget.audio.path] = 
-                      LyricSource(LyricSourceType.local);
-                  saveLyricSources();
-                  PlayService.instance.lyricService.useLocalLyric();
-                  Navigator.pop(context);
-                },
-              ),
-              const Divider(),
-              Expanded(
-                child: FutureBuilder(
-                  future: _searchFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.data == null) {
-                      return const Center(
-                        child: SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(),
-                        ),
-                      );
-                    }
-                    return ListView.builder(
-                      itemCount: snapshot.data!.length,
-                      itemBuilder: (context, i) => _LyricSourceTile(
-                        audio: widget.audio,
-                        searchResult: snapshot.data![i],
-                      ),
-                    );
-                  },
-                ),
-              ),
+              _buildInfoRow("歌名", widget.audio.title, scheme),
+              if (widget.audio.artist.isNotEmpty)
+                _buildInfoRow("艺术家", widget.audio.artist, scheme),
+              if (widget.audio.album.isNotEmpty)
+                _buildInfoRow("专辑", widget.audio.album, scheme),
             ],
           ),
         ),
-      ),
+        const SizedBox(height: 12.0),
+        TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            labelText: "搜索关键词",
+            hintText: "输入歌词搜索关键词",
+            suffixIcon: IconButton(
+              icon: const Icon(Symbols.search),
+              onPressed: _performSearch,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8.0),
+            ),
+          ),
+          onSubmitted: (_) => _performSearch(),
+        ),
+        const SizedBox(height: 16.0),
+        ListTile(
+          title: const Text("使用本地歌词"),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          onTap: () {
+            LYRIC_SOURCES[widget.audio.path] =
+                LyricSource(LyricSourceType.local);
+            saveLyricSources();
+            PlayService.instance.lyricService.useLocalLyric();
+            Navigator.of(context).pop();
+          },
+        ),
+        const Divider(),
+        Expanded(
+          child: FutureBuilder(
+            future: _searchFuture,
+            builder: (context, snapshot) {
+              if (snapshot.data == null) {
+                return const Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+              return ListView.builder(
+                itemCount: snapshot.data!.length,
+                itemBuilder: (context, i) => _LyricSourceTile(
+                  audio: widget.audio,
+                  searchResult: snapshot.data![i],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -420,7 +447,7 @@ class _LyricSourceTileState extends State<_LyricSourceTile> {
         // 同步缓存歌词到 MetadataStore（下次播放可直接从缓存加载）
         _cacheLyricForAudio(audio, lyric);
 
-        Navigator.pop(context);
+        Navigator.of(context).pop();
       },
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8.0),

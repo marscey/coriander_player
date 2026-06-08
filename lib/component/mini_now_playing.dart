@@ -1,3 +1,4 @@
+import 'package:coriander_player/component/app_shell.dart';
 import 'package:coriander_player/component/rectangle_progress_indicator.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:coriander_player/component/playlist_audio_item.dart';
@@ -10,13 +11,34 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-class MiniNowPlaying extends StatelessWidget {
-  const MiniNowPlaying({
-    super.key,
-  });
+class MiniNowPlaying extends StatefulWidget {
+  const MiniNowPlaying({super.key});
+
+  @override
+  State<MiniNowPlaying> createState() => _MiniNowPlayingState();
+}
+
+class _MiniNowPlayingState extends State<MiniNowPlaying> {
+  @override
+  void initState() {
+    super.initState();
+    miniPlayerVisibleNotifier.addListener(_onVisibilityChanged);
+  }
+
+  @override
+  void dispose() {
+    miniPlayerVisibleNotifier.removeListener(_onVisibilityChanged);
+    super.dispose();
+  }
+
+  void _onVisibilityChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (!miniPlayerVisibleNotifier.value) return const SizedBox.shrink();
+
     final isMobile = PlatformHelper.isMobile;
     return ResponsiveBuilder(builder: (context, screenType) {
       return Align(
@@ -60,6 +82,7 @@ class _NowPlayingForeground extends StatelessWidget {
     final playbackService = PlayService.instance.playbackService;
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -147,7 +170,11 @@ class _NowPlayingForeground extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return Material(
+    final nowPlaying = PlayService.instance.playbackService.nowPlaying;
+    return Semantics(
+      label: '迷你播放器 - ${nowPlaying != null ? nowPlaying.title : "Coriander Player"}',
+      button: true,
+      child: Material(
       type: MaterialType.transparency,
       borderRadius: BorderRadius.circular(8.0),
       child: InkWell(
@@ -257,6 +284,7 @@ class _NowPlayingForeground extends StatelessWidget {
           ),
         ),
       ),
+      ),  // Semantics
     );
   }
 }

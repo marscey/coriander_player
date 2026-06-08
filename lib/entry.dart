@@ -153,9 +153,8 @@ class Entry extends StatelessWidget {
               routes: [
                 GoRoute(
                   path: "detail",
-                  pageBuilder: (context, state) => SlideTransitionPage(
-                    child: AudioDetailPage(audio: state.extra as Audio),
-                  ),
+                  builder: (context, state) =>
+                      AudioDetailPage(audio: state.extra as Audio),
                 ),
               ],
             ),
@@ -177,9 +176,8 @@ class Entry extends StatelessWidget {
               routes: [
                 GoRoute(
                   path: "detail",
-                  pageBuilder: (context, state) => SlideTransitionPage(
-                    child: ArtistDetailPage(artist: state.extra as Artist),
-                  ),
+                  builder: (context, state) =>
+                      ArtistDetailPage(artist: state.extra as Artist),
                 ),
               ],
             ),
@@ -193,9 +191,8 @@ class Entry extends StatelessWidget {
               routes: [
                 GoRoute(
                   path: "detail",
-                  pageBuilder: (context, state) => SlideTransitionPage(
-                    child: AlbumDetailPage(album: state.extra as Album),
-                  ),
+                  builder: (context, state) =>
+                      AlbumDetailPage(album: state.extra as Album),
                 ),
               ],
             ),
@@ -209,12 +206,10 @@ class Entry extends StatelessWidget {
               routes: [
                 GoRoute(
                   path: "detail",
-                  pageBuilder: (context, state) {
+                  builder: (context, state) {
                     final args = state.extra as FolderDetailArgs;
-                    return SlideTransitionPage(
-                      child: FolderDetailPage(
-                          folder: args.folder, locateToPath: args.locateToPath),
-                    );
+                    return FolderDetailPage(
+                        folder: args.folder, locateToPath: args.locateToPath);
                   },
                 ),
               ],
@@ -229,15 +224,13 @@ class Entry extends StatelessWidget {
               routes: [
                 GoRoute(
                   path: "browser/:connectionId",
-                  pageBuilder: (context, state) {
+                  builder: (context, state) {
                     final connectionId = state.pathParameters['connectionId']!;
                     final args = state.extra as CloudBrowserArgs?;
-                    return SlideTransitionPage(
-                      child: CloudFileBrowser(
-                        connectionId: connectionId,
-                        initialPath: args?.initialPath ?? '',
-                        locateToPath: args?.locateToPath,
-                      ),
+                    return CloudFileBrowser(
+                      connectionId: connectionId,
+                      initialPath: args?.initialPath ?? '',
+                      locateToPath: args?.locateToPath,
                     );
                   },
                 ),
@@ -253,11 +246,9 @@ class Entry extends StatelessWidget {
               routes: [
                 GoRoute(
                   path: "detail",
-                  pageBuilder: (context, state) {
+                  builder: (context, state) {
                     final playlist = state.extra as Playlist;
-                    return SlideTransitionPage(
-                      child: PlaylistDetailPage(playlist: playlist),
-                    );
+                    return PlaylistDetailPage(playlist: playlist);
                   },
                 ),
               ],
@@ -272,11 +263,9 @@ class Entry extends StatelessWidget {
               routes: [
                 GoRoute(
                   path: "result",
-                  pageBuilder: (context, state) {
+                  builder: (context, state) {
                     final result = state.extra as UnionSearchResult;
-                    return SlideTransitionPage(
-                      child: SearchResultPage(searchResult: result),
-                    );
+                    return SearchResultPage(searchResult: result);
                   },
                 ),
               ],
@@ -291,9 +280,7 @@ class Entry extends StatelessWidget {
               routes: [
                 GoRoute(
                   path: "issue",
-                  pageBuilder: (context, state) => const SlideTransitionPage(
-                    child: SettingsIssuePage(),
-                  ),
+                  builder: (context, state) => const SettingsIssuePage(),
                 ),
               ],
             ),
