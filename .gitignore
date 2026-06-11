@@ -54,8 +54,12 @@ lib/page/settings_page/cpfeedback_key.dart
 CLAUDE.md
 .claude/
 
-# Maestro 测试产物
-report.xml
-/test/maestro/screenshots/
+# Codex
+AGENTS.md
 
-test/report/screenshots/
+# 测试相关
+# Maestro 测试产物
+/test/maestro/
+/test/reports/
+
+docs/image/

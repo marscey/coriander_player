@@ -25,6 +25,26 @@ const List<String> _shellRootPages = [
 /// AppShell 根据当前路由自动更新，MiniNowPlaying 监听此通知器
 final ValueNotifier<bool> miniPlayerVisibleNotifier = ValueNotifier<bool>(true);
 
+/// 侧边导航栏展开/折叠状态管理
+/// 大屏/中屏模式下控制侧边导航栏的显示与隐藏
+class SideNavController extends ChangeNotifier {
+  static final SideNavController instance = SideNavController();
+
+  bool _expanded = true;
+  bool get expanded => _expanded;
+
+  void toggle() {
+    _expanded = !_expanded;
+    notifyListeners();
+  }
+
+  void setExpanded(bool value) {
+    if (_expanded == value) return;
+    _expanded = value;
+    notifyListeners();
+  }
+}
+
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.navigationShell});
 
@@ -45,8 +65,9 @@ class _AppShellState extends State<AppShell> {
   void _updateVisibility() {
     final path = GoRouterState.of(context).uri.path;
     // 去除尾部斜杠进行比较
-    final normalizedPath =
-        path.endsWith('/') && path.length > 1 ? path.substring(0, path.length - 1) : path;
+    final normalizedPath = path.endsWith('/') && path.length > 1
+        ? path.substring(0, path.length - 1)
+        : path;
     miniPlayerVisibleNotifier.value = _shellRootPages.contains(normalizedPath);
   }
 
@@ -103,21 +124,34 @@ class _AppShell_Large extends StatelessWidget {
         preferredSize: Size.fromHeight(48.0),
         child: TitleBar(),
       ),
-      body: Row(
-        children: [
-          SideNav(navigationShell: navigationShell),
-          Expanded(
-            child: Stack(children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(8.0),
-                ),
-                child: navigationShell,
+      body: ListenableBuilder(
+        listenable: SideNavController.instance,
+        builder: (context, _) {
+          final expanded = SideNavController.instance.expanded;
+          return Row(
+            children: [
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                alignment: Alignment.centerLeft,
+                child: expanded
+                    ? SideNav(navigationShell: navigationShell)
+                    : const SizedBox.shrink(),
               ),
-              const MiniNowPlaying()
-            ]),
-          ),
-        ],
+              Expanded(
+                child: Stack(children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(expanded ? 8.0 : 0),
+                    ),
+                    child: navigationShell,
+                  ),
+                  const MiniNowPlaying()
+                ]),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

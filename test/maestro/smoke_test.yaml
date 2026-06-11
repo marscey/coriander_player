@@ -1,4 +1,0 @@
-appId: com.senyepss.corianderPlayer
----
-- launchApp
-- assertVisible: "音乐库"

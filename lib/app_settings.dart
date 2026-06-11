@@ -84,6 +84,9 @@ class AppSettings extends ChangeNotifier {
   /// 云音频缓存容量上限（MB），-1 表示无限制，默认 2048MB (2GB)
   int cloudCacheMaxSizeMB = 2048;
 
+  /// 测试配置：自动配置云服务和导入音频（仅移动端 debug 模式）
+  bool autoTestConfig = false;
+
   bool _showTrackIndex = !PlatformHelper.isMobile;
 
   bool get showTrackIndex => _showTrackIndex;
@@ -276,6 +279,11 @@ class AppSettings extends ChangeNotifier {
       if (sti != null) {
         _instance._showTrackIndex = sti;
       }
+
+      final atc = settingsMap["AutoTestConfig"];
+      if (atc != null) {
+        _instance.autoTestConfig = atc;
+      }
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -313,6 +321,7 @@ class AppSettings extends ChangeNotifier {
         "HasShownTrayTip": hasShownTrayTip,
         "CloudCacheMaxSizeMB": cloudCacheMaxSizeMB,
         "ShowTrackIndex": showTrackIndex,
+        "AutoTestConfig": autoTestConfig,
       };
 
       // 只有桌面端保存窗口尺寸

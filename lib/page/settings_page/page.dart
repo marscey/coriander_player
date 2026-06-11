@@ -1,3 +1,5 @@
+import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/component/settings_tile.dart';
 import 'package:coriander_player/page/page_scaffold.dart';
 import 'package:coriander_player/page/settings_page/artist_separator_editor.dart';
 import 'package:coriander_player/page/settings_page/cache_settings.dart';
@@ -7,6 +9,8 @@ import 'package:coriander_player/page/settings_page/other_settings.dart';
 import 'package:coriander_player/page/settings_page/player_engine_selector.dart';
 import 'package:coriander_player/page/settings_page/scraper_settings.dart';
 import 'package:coriander_player/page/settings_page/theme_settings.dart';
+import 'package:coriander_player/platform_helper.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class _SectionHeader extends StatelessWidget {
@@ -35,6 +39,8 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showTestConfig = PlatformHelper.isMobile && kDebugMode;
+
     return PageScaffold(
       title: "设置",
       actions: const [],
@@ -76,12 +82,45 @@ class SettingsPage extends StatelessWidget {
           const ShowTrackIndexSwitch(),
           const SizedBox(height: 12.0),
           const PlayerEngineSelector(),
+          if (showTestConfig) ...[
+            const SizedBox(height: 8.0),
+            const _SectionHeader(title: "测试配置"),
+            const AutoTestConfigSwitch(),
+          ],
           const SizedBox(height: 8.0),
           const _SectionHeader(title: "关于"),
           const CreateIssueTile(),
           const SizedBox(height: 12.0),
           const CheckForUpdate(),
         ],
+      ),
+    );
+  }
+}
+
+/// 测试配置开关（仅移动端 debug 模式可见）
+class AutoTestConfigSwitch extends StatefulWidget {
+  const AutoTestConfigSwitch({super.key});
+
+  @override
+  State<AutoTestConfigSwitch> createState() => _AutoTestConfigSwitchState();
+}
+
+class _AutoTestConfigSwitchState extends State<AutoTestConfigSwitch> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: "自动配置测试云服务和导入音频",
+      action: Switch(
+        value: settings.autoTestConfig,
+        onChanged: (value) async {
+          setState(() {
+            settings.autoTestConfig = value;
+          });
+          await settings.saveSettings();
+        },
       ),
     );
   }

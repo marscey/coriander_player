@@ -59,10 +59,10 @@ class AudioDetailPage extends StatelessWidget {
                     IconButton.filledTonal(
                       tooltip: "返回",
                       onPressed: () => context.pop(),
-                      icon: const Icon(Symbols.arrow_back),
+                      icon: const Icon(Symbols.arrow_back, size: 20.0),
                       style: IconButton.styleFrom(
-                        minimumSize: const Size(48, 48),
-                        backgroundColor: scheme.surfaceContainerHighest.withOpacity(0.6),
+                        minimumSize: const Size(40, 40),
+                        backgroundColor: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
                       ),
                     ),
                   const SizedBox(width: 8),

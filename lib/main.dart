@@ -231,7 +231,8 @@ Future<void> main() async {
     await AppSettings.readFromJson();
 
     await CloudCacheManager.init();
-    CloudCacheManager.instance.setMaxCacheSizeMB(AppSettings.instance.cloudCacheMaxSizeMB);
+    CloudCacheManager.instance
+        .setMaxCacheSizeMB(AppSettings.instance.cloudCacheMaxSizeMB);
 
     await PlatformDependencyManager.instance.initialize();
 
@@ -252,7 +253,8 @@ Future<void> main() async {
   }
   final welcome = PlatformHelper.isMobile
       ? false
-      : !File(PlatformHelper.joinPaths([supportPath, "index.json"])).existsSync();
+      : !File(PlatformHelper.joinPaths([supportPath, "index.json"]))
+          .existsSync();
 
   await initWindow();
 

@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/component/app_shell.dart';
 import 'package:coriander_player/platform_helper.dart';
-import 'package:coriander_player/page/album_detail_page.dart';
+import 'package:coriander_player/page/album_detail_page_new.dart';
 import 'package:coriander_player/page/albums_page.dart';
 import 'package:coriander_player/page/artist_detail_page.dart';
 import 'package:coriander_player/page/artists_page.dart';
@@ -192,7 +192,7 @@ class Entry extends StatelessWidget {
                 GoRoute(
                   path: "detail",
                   builder: (context, state) =>
-                      AlbumDetailPage(album: state.extra as Album),
+                      AlbumDetailPageNew(album: state.extra as Album),
                 ),
               ],
             ),

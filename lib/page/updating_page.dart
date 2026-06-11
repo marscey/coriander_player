@@ -8,6 +8,7 @@ import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
+import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/rust/api/tag_reader.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
@@ -62,7 +63,9 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
     ]);
 
     // TODO: 测试用自动扫描，稳定后移除
-    _autoScanTestFolder();
+    if (AppSettings.instance.autoTestConfig) {
+      _autoScanTestFolder();
+    }
 
     _subscription?.cancel();
     final ctx = context;
@@ -85,19 +88,50 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
       final service = manager.getService(connection.id);
       if (service == null) return;
 
-      LOGGER.i('[Test] Auto-scanning test folder into library...');
-      await CloudAudioPlayer.addCloudFolderToLibrary(
-        service: service,
-        folderPath: '歌单/《爱情神话插曲》',
-        connectionId: connection.id,
-        onProgress: (count) {
-          LOGGER.i('[Test] Auto-scan progress: $count files added');
-        },
-        onStatus: (status) {
-          LOGGER.i('[Test] Auto-scan status: $status');
-        },
-      );
+      LOGGER.i('[Test] Auto-scanning test folders into library...');
+      // 扫描周杰伦专辑
+      final testFolders = [
+        '歌单/周杰伦Hi-Res全集（2024年环球音乐官方新版）/[2004-08-03] 周杰伦《七里香》[Hi-Res／44.1kHz／24bit／FLAC]',
+        '歌单/周杰伦Hi-Res全集（2024年环球音乐官方新版）/[2016-06-24] 周杰伦《周杰伦的床边故事》[Hi-Res／96kHz／24bit／FLAC]',
+      ];
+      for (final folderPath in testFolders) {
+        LOGGER.i('[Test] Scanning: $folderPath');
+        await CloudAudioPlayer.addCloudFolderToLibrary(
+          service: service,
+          folderPath: folderPath,
+          connectionId: connection.id,
+          onProgress: (count) {
+            LOGGER.i('[Test] Auto-scan progress: $count files added');
+          },
+          onStatus: (status) {
+            LOGGER.i('[Test] Auto-scan status: $status');
+          },
+        );
+      }
       LOGGER.i('[Test] Auto-scan completed');
+
+      // 后台更新元数据（封面等），不阻塞主线程
+      final cloudAudios = library.audioCollection
+          .where((a) => a.isCloudAudio)
+          .toList();
+      if (cloudAudios.isNotEmpty) {
+        LOGGER.i('[Test] Starting background metadata update for ${cloudAudios.length} audios...');
+        CloudAudioPlayer.updateAudioMetadataInBackground(
+          audios: cloudAudios,
+          onProgress: (completed, total) {
+            if (completed % 5 == 0 || completed == total) {
+              LOGGER.i('[Test] Metadata update progress: $completed/$total');
+            }
+          },
+          onComplete: () {
+            LOGGER.i('[Test] Background metadata update completed');
+          },
+        );
+
+        // 自动播放第一首歌曲
+        LOGGER.i('[Test] Auto-playing first song...');
+        PlayService.instance.playbackService.play(0, cloudAudios);
+      }
     } catch (e) {
       LOGGER.e('[Test] Auto-scan failed: $e');
     }
@@ -137,7 +171,7 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
               ),
               const SizedBox(height: 8.0),
               Text(
-                "${snapshot.data?.message}",
+                snapshot.data?.message ?? "正在更新音乐索引...",
                 style: TextStyle(color: scheme.onSurface),
               ),
             ],

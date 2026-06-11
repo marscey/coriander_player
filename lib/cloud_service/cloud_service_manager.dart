@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:coriander_player/app_settings.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -160,14 +161,14 @@ class CloudServiceManager extends ChangeNotifier {
       }
 
       // TODO: 测试用硬编码连接，稳定后移除
-      if (_connections.isEmpty) {
+      if (_connections.isEmpty && AppSettings.instance.autoTestConfig) {
         _connections.add(CloudConnection(
           id: 'test-webdav-default',
           name: '测试音乐',
           type: CloudServiceType.webdav,
           serverUrl: 'http://106.13.25.163:5244/dav',
-          username: 'musicyep',
-          password: 'Muy@s-0122',
+          username: 'musictest',
+          password: 'Lkh&@002',
           displayName: '测试音乐',
           lastSync: DateTime.now(),
         ));

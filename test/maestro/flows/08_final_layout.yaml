@@ -1,8 +1,0 @@
-appId: com.senyepss.corianderPlayer
----
-- launchApp
-- waitForAnimationToEnd:
-    timeout: 3000
-- assertVisible: "音乐库"
-- assertVisible: "Coriander Player"
-- takeScreenshot: test/reports/screenshots/maestro-08-final-layout

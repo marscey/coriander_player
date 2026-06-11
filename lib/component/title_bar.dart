@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:coriander_player/component/app_shell.dart';
 import 'package:coriander_player/component/horizontal_lyric_view.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
@@ -53,21 +54,29 @@ class _TitleBar_Small extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8.0),
         child: Row(
           children: [
-            const _OpenDrawerBtn(),
-            const SizedBox(width: 8.0),
+            // ===== 左侧：内容区（应用标识，可拖拽） =====
             Expanded(
               child: DragToMoveArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: Text(
-                    "Coriander Player",
-                    style: TextStyle(color: scheme.onSurface, fontSize: 16),
-                  ),
+                child: Row(
+                  children: [
+                    Image.asset("app_icon.ico", width: 20, height: 20),
+                    const SizedBox(width: 8.0),
+                    Text(
+                      "Coriander Player",
+                      style: TextStyle(color: scheme.onSurface, fontSize: 14),
+                    ),
+                  ],
                 ),
               ),
             ),
-            if (!PlatformHelper.isMacOS) const WindowControlls(),
-            if (PlatformHelper.isMacOS) const _TitleBarSearchBtn(),
+            // ===== 右侧：操作区（搜索 / 导航切换 / 窗口控制） =====
+            const _TitleBarSearchBtn(),
+            const SizedBox(width: 2.0),
+            const _OpenDrawerBtn(),
+            if (!PlatformHelper.isMacOS) ...[
+              const SizedBox(width: 4.0),
+              const WindowControlls(),
+            ],
           ],
         ),
       ),
@@ -80,24 +89,21 @@ class _TitleBar_Medium extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
     return Row(
       children: [
+        // ===== 左侧：内容区（应用图标 + 水平歌词，可拖拽） =====
         Expanded(
           child: DragToMoveArea(
             child: Row(
               children: [
-                Text(
-                  "Coriander Player",
-                  style: TextStyle(color: scheme.onSurface, fontSize: 16),
+                Padding(
+                  padding: const EdgeInsets.only(left: 28.0, right: 16.0),
+                  child: Image.asset("app_icon.ico", width: 24, height: 24),
                 ),
+                const SizedBox(width: 12.0),
                 const Expanded(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 8.0,
-                    ),
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
                     child: HorizontalLyricView(),
                   ),
                 ),
@@ -105,11 +111,14 @@ class _TitleBar_Medium extends StatelessWidget {
             ),
           ),
         ),
+        // ===== 右侧：操作区（搜索 / 导航切换 / 窗口控制） =====
+        const _TitleBarSearchBtn(),
+        const SizedBox(width: 2.0),
+        const _ToggleSideNavBtn(),
         if (!PlatformHelper.isMacOS) ...[
+          const SizedBox(width: 4.0),
           const WindowControlls(),
-          const SizedBox(width: 8.0),
         ],
-        if (PlatformHelper.isMacOS) const _TitleBarSearchBtn(),
       ],
     );
   }
@@ -124,44 +133,56 @@ class _TitleBar_Large extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: DragToMoveArea(
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 248,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 12),
-                      child: Row(
-                        children: [
-                          Image.asset("app_icon.ico", width: 24, height: 24),
+      child: ListenableBuilder(
+        listenable: SideNavController.instance,
+        builder: (context, _) {
+          final expanded = SideNavController.instance.expanded;
+          return Row(
+            children: [
+              // ===== 左侧：应用标识 + 间距（展开:248+40, 折叠:48+8） =====
+              DragToMoveArea(
+                child: SizedBox(
+                  width: expanded ? 288 : 56,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Row(
+                      children: [
+                        Image.asset("app_icon.ico", width: 24, height: 24),
+                        if (expanded) ...[
                           const SizedBox(width: 8.0),
                           Text(
                             "Coriander Player",
                             style: TextStyle(
                               color: scheme.onSurface,
-                              fontSize: 16,
+                              fontSize: 14,
                             ),
                           ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
-                  const Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(40.0, 8.0, 16.0, 8.0),
-                      child: HorizontalLyricView(),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
-          if (!PlatformHelper.isMacOS) const WindowControlls(),
-          if (PlatformHelper.isMacOS) const _TitleBarSearchBtn(),
-        ],
+              // ===== 中间：水平歌词 =====
+              Expanded(
+                child: DragToMoveArea(
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
+                    child: HorizontalLyricView(),
+                  ),
+                ),
+              ),
+              // ===== 右侧：操作区（搜索 / 导航切换 / 窗口控制） =====
+              const _TitleBarSearchBtn(),
+              const SizedBox(width: 2.0),
+              const _ToggleSideNavBtn(),
+              if (!PlatformHelper.isMacOS) ...[
+                const SizedBox(width: 4.0),
+                const WindowControlls(),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -189,6 +210,27 @@ class _OpenDrawerBtn extends StatelessWidget {
       tooltip: "打开导航栏",
       onPressed: Scaffold.of(context).openDrawer,
       icon: const Icon(Symbols.side_navigation),
+    );
+  }
+}
+
+class _ToggleSideNavBtn extends StatelessWidget {
+  const _ToggleSideNavBtn();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: SideNavController.instance,
+      builder: (context, _) {
+        final expanded = SideNavController.instance.expanded;
+        return IconButton(
+          tooltip: expanded ? "收起导航栏" : "展开导航栏",
+          onPressed: SideNavController.instance.toggle,
+          icon: Icon(
+            expanded ? Symbols.side_navigation : Symbols.menu,
+          ),
+        );
+      },
     );
   }
 }

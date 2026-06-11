@@ -158,9 +158,13 @@ class _EditTagDialogState extends State<EditTagDialog> {
       return Scaffold(
         backgroundColor: scheme.surface,
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Symbols.arrow_back),
+          leading: IconButton.filledTonal(
+            icon: const Icon(Symbols.arrow_back, size: 20.0),
             onPressed: () => Navigator.pop(context, false),
+            style: IconButton.styleFrom(
+              minimumSize: const Size(40, 40),
+              backgroundColor: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+            ),
           ),
           title: Text(widget.autoSearch ? "刮削元数据" : "编辑标签"),
           actions: [

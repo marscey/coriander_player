@@ -60,7 +60,7 @@ class _BuildIndexStateViewState extends State<BuildIndexStateView> {
             ),
             const SizedBox(height: 8.0),
             Text(
-              "${snapshot.data?.message}",
+              snapshot.data?.message ?? "正在构建音乐索引...",
               style: TextStyle(color: scheme.onSurface),
             ),
           ],

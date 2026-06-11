@@ -989,6 +989,37 @@ class CloudAudioPlayer {
     }
   }
 
+  /// 后台更新指定音频的元数据（封面等），不阻塞主线程
+  static Future<void> updateAudioMetadataInBackground({
+    required List<Audio> audios,
+    void Function(int completed, int total)? onProgress,
+    void Function()? onComplete,
+  }) async {
+    if (audios.isEmpty) return;
+
+    LOGGER.i('[CloudAudioPlayer] Starting background metadata update for ${audios.length} audios');
+
+    final total = audios.length;
+    for (int i = 0; i < total; i++) {
+      final audio = audios[i];
+      try {
+        // 触发封面加载（这会缓存封面）
+        await audio.cover;
+        onProgress?.call(i + 1, total);
+
+        // 每处理 5 首歌曲刷新一次 UI
+        if ((i + 1) % 5 == 0 || i == total - 1) {
+          AudioLibrary.instance.notifyUpdated();
+        }
+      } catch (e) {
+        LOGGER.e('[CloudAudioPlayer] Failed to update metadata for ${audio.title}: $e');
+      }
+    }
+
+    LOGGER.i('[CloudAudioPlayer] Background metadata update completed');
+    onComplete?.call();
+  }
+
   /// 将指定的云音频文件添加到音乐库（非递归扫描文件夹）。
   static Future<void> addCloudFilesToLibrary({
     required webdav.WebDavService service,
