@@ -982,7 +982,7 @@ pub fn read_metadata_from_bytes(
 
     log_to_dart(format!("[DEBUG] read_metadata_from_bytes: file_type={:?}, duration={}s, bitrate={:?}, sample_rate={:?}", file_type, duration, bitrate, sample_rate));
 
-    let (title, artist, album, track) = if let Some(tag) = tagged_file
+    let (title, artist, album, track, genre) = if let Some(tag) = tagged_file
         .primary_tag()
         .or_else(|| tagged_file.first_tag())
     {
@@ -998,10 +998,11 @@ pub fn read_metadata_from_bytes(
             artist,
             tag.album().map(|s| s.to_string()).unwrap_or_default(),
             tag.track(),
+            tag.genre().map(|s| s.to_string()).unwrap_or_default(),
         )
     } else {
         log_to_dart("[DEBUG] read_metadata_from_bytes: no tag found in file".to_string());
-        (file_name.clone(), String::new(), String::new(), None)
+        (file_name.clone(), String::new(), String::new(), None, String::new())
     };
 
     let result = serde_json::json!({
@@ -1009,6 +1010,7 @@ pub fn read_metadata_from_bytes(
         "artist": artist,
         "album": album,
         "track": track,
+        "genre": genre,
         "duration": duration,
         "bitrate": bitrate,
         "sample_rate": sample_rate,

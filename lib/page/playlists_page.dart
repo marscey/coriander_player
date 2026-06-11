@@ -18,19 +18,28 @@ class PlaylistsPage extends StatefulWidget {
 }
 
 class _PlaylistsPageState extends State<PlaylistsPage> {
+  final _manager = PlaylistManager.instance;
+
   @override
   void initState() {
     super.initState();
     PlayService.instance.playbackService.addListener(_onPlaybackChanged);
+    _manager.addListener(_onPlaylistsChanged);
   }
 
   @override
   void dispose() {
     PlayService.instance.playbackService.removeListener(_onPlaybackChanged);
+    _manager.removeListener(_onPlaylistsChanged);
     super.dispose();
   }
 
   void _onPlaybackChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// 歌单数据变更时自动刷新 UI
+  void _onPlaylistsChanged() {
     if (mounted) setState(() {});
   }
 
@@ -54,7 +63,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
     }
 
     Playlist? targetPlaylist;
-    for (final playlist in PLAYLISTS) {
+    for (final playlist in _manager.allPlaylists) {
       if (playlist.audios.containsKey(nowPlaying.path)) {
         targetPlaylist = playlist;
         break;
@@ -77,9 +86,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
       builder: (context) => const _NewPlaylistDialog(),
     );
     if (name == null) return;
-    setState(() {
-      PLAYLISTS.add(Playlist(name, {}));
-    });
+    _manager.createPlaylist(name);
   }
 
   void editPlaylist(
@@ -91,67 +98,121 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
       builder: (context) => const _EditPlaylistDialog(),
     );
     if (name == null) return;
-    setState(() {
-      playlist.name = name;
-    });
+    _manager.renamePlaylist(playlist, name);
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
+    // 内置歌单固定在前，自建歌单在后
+    final builtInPlaylists = _manager.allPlaylists
+        .where((p) => p.isBuiltIn)
+        .toList();
+
+    // 自建歌单作为可排序列表传入 UniPage
+    final userPlaylists = _manager.userPlaylists;
+
     return UniPage<Playlist>(
       pref: AppPreference.instance.playlistsPagePref,
       title: "歌单",
-      subtitle: "${PLAYLISTS.length} 个歌单",
-      contentList: PLAYLISTS,
-      contentBuilder: (context, item, i, multiSelectController) => ListTile(
-        leading: PlayingIndicatorOverlay(
-          size: PlayingIndicatorSize.medium,
-          isActivelyPlaying: _isPlaylistPlaying(PLAYLISTS[i]),
-          child: Icon(
-            Symbols.queue_music,
-            size: 36,
-            color: scheme.primary,
+      subtitle: "${_manager.allPlaylists.length} 个歌单",
+      contentList: userPlaylists,
+      // 内置歌单始终显示在列表顶部，不参与排序
+      pinnedItems: builtInPlaylists,
+      contentBuilder: (context, item, i, multiSelectController) {
+        // 内置歌单与自建歌单之间的分隔线
+        // 当当前项是第一个自建歌单时显示
+        final showDivider = !item.isBuiltIn &&
+            i == 0 &&
+            builtInPlaylists.isNotEmpty;
+
+        return Container(
+          decoration: showDivider
+              ? BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: scheme.outlineVariant,
+                      width: 0.5,
+                    ),
+                  ),
+                )
+              : null,
+          child: ListTile(
+            leading: PlayingIndicatorOverlay(
+              size: PlayingIndicatorSize.medium,
+              isActivelyPlaying: _isPlaylistPlaying(item),
+              child: Icon(
+                item.isBuiltIn
+                    ? (item.builtInId == 'favorites'
+                        ? Symbols.favorite
+                        : Symbols.history)
+                    : Symbols.queue_music,
+                size: 36,
+                color: item.isBuiltIn ? scheme.tertiary : scheme.primary,
+              ),
+            ),
+            title: Row(
+              children: [
+                Text(
+                  item.name,
+                  softWrap: false,
+                  maxLines: 1,
+                ),
+                if (item.isBuiltIn) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: scheme.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      "内置",
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: scheme.onTertiaryContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            subtitle: Text(
+              "${item.audios.length}首乐曲",
+              softWrap: false,
+              maxLines: 1,
+            ),
+            trailing: item.isBuiltIn
+                ? null
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: "编辑",
+                        onPressed: () => editPlaylist(context, item),
+                        icon: const Icon(Symbols.edit),
+                      ),
+                      const SizedBox(width: 8.0),
+                      IconButton(
+                        tooltip: "删除",
+                        onPressed: () => _manager.removePlaylist(item),
+                        color: scheme.error,
+                        icon: const Icon(Symbols.delete),
+                      ),
+                    ],
+                  ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8.0),
+            ),
+            onTap: () => context.push(
+              app_paths.PLAYLIST_DETAIL_PAGE,
+              extra: item,
+            ),
           ),
-        ),
-        title: Text(
-          PLAYLISTS[i].name,
-          softWrap: false,
-          maxLines: 1,
-        ),
-        subtitle: Text(
-          "${PLAYLISTS[i].audios.length}首乐曲",
-          softWrap: false,
-          maxLines: 1,
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              tooltip: "编辑",
-              onPressed: () => editPlaylist(context, PLAYLISTS[i]),
-              icon: const Icon(Symbols.edit),
-            ),
-            const SizedBox(width: 8.0),
-            IconButton(
-              tooltip: "删除",
-              onPressed: () => setState(() {
-                PLAYLISTS.remove(PLAYLISTS[i]);
-              }),
-              color: scheme.error,
-              icon: const Icon(Symbols.delete),
-            ),
-          ],
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8.0),
-        ),
-        onTap: () => context.push(
-          app_paths.PLAYLIST_DETAIL_PAGE,
-          extra: PLAYLISTS[i],
-        ),
-      ),
+        );
+      },
       primaryAction: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -199,10 +260,12 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
           method: (list, order) {
             switch (order) {
               case SortOrder.ascending:
-                list.sort((a, b) => a.audios.length.compareTo(b.audios.length));
+                list.sort(
+                    (a, b) => a.audios.length.compareTo(b.audios.length));
                 break;
               case SortOrder.decending:
-                list.sort((a, b) => b.audios.length.compareTo(a.audios.length));
+                list.sort(
+                    (a, b) => b.audios.length.compareTo(a.audios.length));
                 break;
             }
           },

@@ -41,22 +41,25 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       enableContentViewSwitch: true,
       multiSelectController: multiSelectController,
       multiSelectViewActions: [
-        IconButton.filled(
-          tooltip: "移除选中歌曲",
-          onPressed: () {
-            setState(() {
-              for (var item in multiSelectController.selected) {
-                widget.playlist.audios.remove(item.path);
-              }
-            });
-            multiSelectController.useMultiSelectView(false);
-          },
-          style: ButtonStyle(
-            backgroundColor: WidgetStatePropertyAll(scheme.error),
-            foregroundColor: WidgetStatePropertyAll(scheme.onError),
+        // "最近播放"内置歌单不允许移除歌曲（内容由 RecentPlayService 动态管理）
+        if (!(widget.playlist.isBuiltIn &&
+            widget.playlist.builtInId == 'recent'))
+          IconButton.filled(
+            tooltip: "移除选中歌曲",
+            onPressed: () {
+              PlaylistManager.instance.removeAudiosFromPlaylist(
+                widget.playlist,
+                multiSelectController.selected,
+              );
+              setState(() {});
+              multiSelectController.useMultiSelectView(false);
+            },
+            style: ButtonStyle(
+              backgroundColor: WidgetStatePropertyAll(scheme.error),
+              foregroundColor: WidgetStatePropertyAll(scheme.onError),
+            ),
+            icon: const Icon(Symbols.delete),
           ),
-          icon: const Icon(Symbols.delete),
-        ),
         MultiSelectSelectOrClearAll(
           multiSelectController: multiSelectController,
           contentList: contentList,

@@ -122,6 +122,7 @@ class CloudAudioPlayer {
       parsed.title,
       parsed.artist,
       '',
+      '',           // genre
       0,
       0,
       null,
@@ -561,6 +562,7 @@ class CloudAudioPlayer {
       parsed.title,
       parsed.artist,
       '',
+      '',           // genre
       0,
       0,
       null,
@@ -626,6 +628,7 @@ class CloudAudioPlayer {
       final metaArtist = meta['artist'] as String?;
       final metaAlbum = meta['album'] as String?;
       final metaTrack = meta['track'] as int?;
+      final metaGenre = meta['genre'] as String?;
       final metaDuration = meta['duration'] as int?;
       final metaBitrate = meta['bitrate'] as int?;
       final metaSampleRate = meta['sample_rate'] as int?;
@@ -660,6 +663,7 @@ class CloudAudioPlayer {
             ? metaArtist
             : parsed.artist,
         (metaAlbum != null && metaAlbum.isNotEmpty) ? metaAlbum : '',
+        (metaGenre != null && metaGenre.isNotEmpty) ? metaGenre : '',  // genre
         metaTrack ?? 0,
         duration,
         bitrate,
@@ -715,6 +719,7 @@ class CloudAudioPlayer {
       parsed.title,
       parsed.artist,
       '',
+      '',           // genre
       0,
       0,
       null,
@@ -958,6 +963,7 @@ class CloudAudioPlayer {
             parsed.title,
             parsed.artist,
             '',
+            '',           // genre
             0,
             0,
             null,
@@ -1061,6 +1067,7 @@ class CloudAudioPlayer {
             parsed.title,
             parsed.artist,
             '',
+            '',           // genre
             0,
             0,
             null,

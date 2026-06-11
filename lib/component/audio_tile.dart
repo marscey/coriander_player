@@ -130,27 +130,32 @@ class _AudioTileState extends State<AudioTile> {
           ),
 
         /// add to playlist
-        SubmenuButton(
-          menuChildren: List.generate(
-            PLAYLISTS.length,
-            (i) => MenuItemButton(
-              onPressed: () {
-                final added = PLAYLISTS[i].audios.containsKey(audio.path);
-                if (added) {
-                  showTextOnSnackBar("歌曲“${audio.title}”已存在");
-                  return;
-                }
+        ListenableBuilder(
+          listenable: PlaylistManager.instance,
+          builder: (context, _) => SubmenuButton(
+            menuChildren: List.generate(
+              PlaylistManager.instance.allPlaylists.length,
+              (i) => MenuItemButton(
+                onPressed: () {
+                  final playlists = PlaylistManager.instance.allPlaylists;
+                  final target = playlists[i];
+                  final added = target.audios.containsKey(audio.path);
+                  if (added) {
+                    showTextOnSnackBar("歌曲「${audio.title}」已存在");
+                    return;
+                  }
 
-                PLAYLISTS[i].audios[audio.path] = audio;
-                showTextOnSnackBar(
-                  "成功将“${audio.title}”添加到歌单“${PLAYLISTS[i].name}”",
-                );
-              },
-              leadingIcon: const Icon(Symbols.queue_music),
-              child: Text(PLAYLISTS[i].name),
+                  PlaylistManager.instance.addAudioToPlaylist(target, audio);
+                  showTextOnSnackBar(
+                    "成功将「${audio.title}」添加到歌单「${target.name}」",
+                  );
+                },
+                leadingIcon: const Icon(Symbols.queue_music),
+                child: Text(PlaylistManager.instance.allPlaylists[i].name),
+              ),
             ),
+            child: const Text("添加到歌单"),
           ),
-          child: const Text("添加到歌单"),
         ),
 
         /// to detail page
@@ -244,209 +249,210 @@ class _AudioTileState extends State<AudioTile> {
           identifier: 'audio_tile_${widget.audioIndex}',
           child: Ink(
             height: 64.0,
-          decoration: BoxDecoration(
-            color: widget.multiSelectController == null
-                ? Colors.transparent
-                : widget.multiSelectController!.selected.contains(audio)
-                    ? scheme.secondaryContainer
-                    : Colors.transparent,
-            borderRadius: BorderRadius.circular(8.0),
-          ),
-          child: InkWell(
-            focusColor: Colors.transparent,
-            borderRadius: BorderRadius.circular(8.0),
-            onTap: () {
-              if (controller.isOpen) {
-                controller.close();
-                return;
-              }
+            decoration: BoxDecoration(
+              color: widget.multiSelectController == null
+                  ? Colors.transparent
+                  : widget.multiSelectController!.selected.contains(audio)
+                      ? scheme.secondaryContainer
+                      : Colors.transparent,
+              borderRadius: BorderRadius.circular(8.0),
+            ),
+            child: InkWell(
+              focusColor: Colors.transparent,
+              borderRadius: BorderRadius.circular(8.0),
+              onTap: () {
+                if (controller.isOpen) {
+                  controller.close();
+                  return;
+                }
 
-              if (widget.multiSelectController == null ||
-                  !widget.multiSelectController!.enableMultiSelectView) {
-                PlayService.instance.playbackService
-                    .play(widget.audioIndex, widget.playlist);
-              } else {
-                final isShiftPressed = HardwareKeyboard
-                        .instance.logicalKeysPressed
-                        .contains(LogicalKeyboardKey.shiftLeft) ||
-                    HardwareKeyboard.instance.logicalKeysPressed
-                        .contains(LogicalKeyboardKey.shiftRight);
-                if (isShiftPressed &&
-                    widget.multiSelectController!.lastSelectedIndex >= 0) {
-                  widget.multiSelectController!.selectRange(
-                    widget.playlist,
-                    widget.multiSelectController!.lastSelectedIndex,
-                    widget.audioIndex,
-                  );
-                } else if (widget.multiSelectController!.selected
-                    .contains(audio)) {
-                  widget.multiSelectController!.unselect(audio);
+                if (widget.multiSelectController == null ||
+                    !widget.multiSelectController!.enableMultiSelectView) {
+                  PlayService.instance.playbackService
+                      .play(widget.audioIndex, widget.playlist);
                 } else {
+                  final isShiftPressed = HardwareKeyboard
+                          .instance.logicalKeysPressed
+                          .contains(LogicalKeyboardKey.shiftLeft) ||
+                      HardwareKeyboard.instance.logicalKeysPressed
+                          .contains(LogicalKeyboardKey.shiftRight);
+                  if (isShiftPressed &&
+                      widget.multiSelectController!.lastSelectedIndex >= 0) {
+                    widget.multiSelectController!.selectRange(
+                      widget.playlist,
+                      widget.multiSelectController!.lastSelectedIndex,
+                      widget.audioIndex,
+                    );
+                  } else if (widget.multiSelectController!.selected
+                      .contains(audio)) {
+                    widget.multiSelectController!.unselect(audio);
+                  } else {
+                    widget.multiSelectController!
+                        .selectAtIndex(audio, widget.audioIndex);
+                  }
+                }
+              },
+              // 移动端长按进入多选模式并选中当前项
+              onLongPress: () {
+                if (widget.multiSelectController == null) return;
+                if (PlatformHelper.isMobile) {
+                  _showMobileContextMenu(context, audio);
+                } else {
+                  if (!widget.multiSelectController!.enableMultiSelectView) {
+                    widget.multiSelectController!.useMultiSelectView(true);
+                  }
                   widget.multiSelectController!
                       .selectAtIndex(audio, widget.audioIndex);
+                  HapticFeedback.mediumImpact();
                 }
-              }
-            },
-            // 移动端长按进入多选模式并选中当前项
-            onLongPress: () {
-              if (widget.multiSelectController == null) return;
-              if (PlatformHelper.isMobile) {
-                _showMobileContextMenu(context, audio);
-              } else {
-                if (!widget.multiSelectController!.enableMultiSelectView) {
-                  widget.multiSelectController!.useMultiSelectView(true);
-                }
-                widget.multiSelectController!
-                    .selectAtIndex(audio, widget.audioIndex);
-                HapticFeedback.mediumImpact();
-              }
-            },
-            onSecondaryTapDown: (details) {
-              if (widget.multiSelectController?.enableMultiSelectView == true)
-                return;
+              },
+              onSecondaryTapDown: (details) {
+                if (widget.multiSelectController?.enableMultiSelectView == true)
+                  return;
 
-              controller.open(
-                  position: details.localPosition.translate(0, -240));
-            },
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: PlatformHelper.isMobile ? 4.0 : 8.0,
-              ),
-              child: Row(children: [
-                if (widget.multiSelectController != null &&
-                    widget.multiSelectController!.enableMultiSelectView)
-                  Padding(
-                    padding: EdgeInsets.only(
-                        right: PlatformHelper.isMobile ? 8.0 : 12.0),
-                    child: Checkbox(
-                      value: widget.multiSelectController!.selected
-                          .contains(audio),
-                      onChanged: (_) {
-                        if (widget.multiSelectController!.selected
-                            .contains(audio)) {
-                          widget.multiSelectController!.unselect(audio);
-                        } else {
-                          widget.multiSelectController!
-                              .selectAtIndex(audio, widget.audioIndex);
-                        }
-                      },
-                      visualDensity: VisualDensity.compact,
+                controller.open(
+                    position: details.localPosition.translate(0, -240));
+              },
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: PlatformHelper.isMobile ? 4.0 : 8.0,
+                ),
+                child: Row(children: [
+                  if (widget.multiSelectController != null &&
+                      widget.multiSelectController!.enableMultiSelectView)
+                    Padding(
+                      padding: EdgeInsets.only(
+                          right: PlatformHelper.isMobile ? 8.0 : 12.0),
+                      child: Checkbox(
+                        value: widget.multiSelectController!.selected
+                            .contains(audio),
+                        onChanged: (_) {
+                          if (widget.multiSelectController!.selected
+                              .contains(audio)) {
+                            widget.multiSelectController!.unselect(audio);
+                          } else {
+                            widget.multiSelectController!
+                                .selectAtIndex(audio, widget.audioIndex);
+                          }
+                        },
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    )
+                  else if (AppSettings.instance.showTrackIndex)
+                    Padding(
+                      padding: EdgeInsets.only(
+                          right: PlatformHelper.isMobile ? 8.0 : 12.0),
+                      child: SizedBox(
+                        width: PlatformHelper.isMobile ? 24.0 : 32.0,
+                        child: Text(
+                          '${widget.audioIndex + 1}',
+                          style: TextStyle(
+                            color: (widget.focus || _isNowPlaying)
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
+                          textAlign: TextAlign.end,
+                        ),
+                      ),
                     ),
-                  )
-                else if (AppSettings.instance.showTrackIndex)
-                  Padding(
-                    padding: EdgeInsets.only(
-                        right: PlatformHelper.isMobile ? 8.0 : 12.0),
-                    child: SizedBox(
-                      width: PlatformHelper.isMobile ? 24.0 : 32.0,
-                      child: Text(
-                        '${widget.audioIndex + 1}',
+
+                  if (widget.leading != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 16.0),
+                      child: widget.leading!,
+                    ),
+
+                  /// cover
+                  PlayingIndicatorOverlay(
+                    size: PlayingIndicatorSize.small,
+                    isActivelyPlaying: _isNowPlaying,
+                    child: ScrollAwareFutureBuilder(
+                      future: () => audio.cover,
+                      builder: (context, snapshot) {
+                        if (snapshot.data == null) {
+                          return placeholder;
+                        }
+
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(8.0),
+                          child: Image(
+                            image: snapshot.data!,
+                            width: 48.0,
+                            height: 48.0,
+                            errorBuilder: (_, __, ___) => placeholder,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  SizedBox(width: PlatformHelper.isMobile ? 10.0 : 16.0),
+
+                  /// title, artist and album
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                audio.title,
+                                style:
+                                    TextStyle(color: textColor, fontSize: 16),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (audio.isCloudAudio)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 4.0),
+                                child: Icon(
+                                  Symbols.cloud,
+                                  size: 14,
+                                  color: scheme.outline,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 2.0),
+                        Text(
+                          audio.subtitleText,
+                          style: TextStyle(color: textColor, fontSize: 13),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8.0),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        Duration(seconds: audio.duration).toStringHMMSS(),
                         style: TextStyle(
                           color: (widget.focus || _isNowPlaying)
                               ? scheme.primary
-                              : scheme.onSurfaceVariant,
-                          fontSize: 13,
+                              : scheme.onSurface,
                         ),
-                        textAlign: TextAlign.end,
                       ),
-                    ),
-                  ),
-
-                if (widget.leading != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 16.0),
-                    child: widget.leading!,
-                  ),
-
-                /// cover
-                PlayingIndicatorOverlay(
-                  size: PlayingIndicatorSize.small,
-                  isActivelyPlaying: _isNowPlaying,
-                  child: ScrollAwareFutureBuilder(
-                    future: () => audio.cover,
-                    builder: (context, snapshot) {
-                      if (snapshot.data == null) {
-                        return placeholder;
-                      }
-
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(8.0),
-                        child: Image(
-                          image: snapshot.data!,
-                          width: 48.0,
-                          height: 48.0,
-                          errorBuilder: (_, __, ___) => placeholder,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                SizedBox(width: PlatformHelper.isMobile ? 10.0 : 16.0),
-
-                /// title, artist and album
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              audio.title,
-                              style: TextStyle(color: textColor, fontSize: 16),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (audio.isCloudAudio)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4.0),
-                              child: Icon(
-                                Symbols.cloud,
-                                size: 14,
-                                color: scheme.outline,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 2.0),
-                      Text(
-                        audio.subtitleText,
-                        style: TextStyle(color: textColor, fontSize: 13),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      _buildAudioMetaRight(audio, scheme),
                     ],
                   ),
-                ),
-                const SizedBox(width: 8.0),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      Duration(seconds: audio.duration).toStringHMMSS(),
-                      style: TextStyle(
-                        color: (widget.focus || _isNowPlaying)
-                            ? scheme.primary
-                            : scheme.onSurface,
-                      ),
+                  if (widget.action != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8.0),
+                      child: widget.action!,
                     ),
-                    _buildAudioMetaRight(audio, scheme),
-                  ],
-                ),
-                if (widget.action != null)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8.0),
-                    child: widget.action!,
-                  ),
-              ]),
+                ]),
+              ),
             ),
           ),
-        ),
         );
-        },
+      },
     );
   }
 

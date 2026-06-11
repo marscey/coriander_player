@@ -11,12 +11,14 @@ import 'package:go_router/go_router.dart';
 /// 所有 Tab 一级页面路径（mini player 在这些页面显示）
 const List<String> _shellRootPages = [
   '/audios',
-  '/recent',
-  '/artists',
-  '/albums',
+  '/categories',
+  '/categories/artists',
+  '/categories/albums',
+  '/categories/genres',
   '/folders',
   '/cloud',
   '/playlists',
+  '/playlists/detail',
   '/search',
   '/settings',
 ];

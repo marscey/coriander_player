@@ -3,21 +3,22 @@ import 'dart:io';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/component/app_shell.dart';
 import 'package:coriander_player/platform_helper.dart';
-import 'package:coriander_player/page/album_detail_page_new.dart';
 import 'package:coriander_player/page/albums_page.dart';
+import 'package:coriander_player/page/album_detail_page_new.dart';
 import 'package:coriander_player/page/artist_detail_page.dart';
 import 'package:coriander_player/page/artists_page.dart';
 import 'package:coriander_player/page/audio_detail_page.dart';
 import 'package:coriander_player/page/audios_page.dart';
+import 'package:coriander_player/page/categories_page.dart';
 import 'package:coriander_player/page/cloud_service/cloud_connections_page.dart';
 import 'package:coriander_player/page/cloud_service/cloud_file_browser.dart';
 import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
 import 'package:coriander_player/page/folder_detail_page.dart';
 import 'package:coriander_player/page/folders_page.dart';
+import 'package:coriander_player/page/genres_page.dart';
 import 'package:coriander_player/page/now_playing_page/page.dart';
 import 'package:coriander_player/page/playlist_detail_page.dart';
 import 'package:coriander_player/page/playlists_page.dart';
-import 'package:coriander_player/page/recent_plays_page.dart';
 import 'package:coriander_player/page/search_page/search_page.dart';
 import 'package:coriander_player/page/search_page/search_result_page.dart';
 import 'package:coriander_player/page/settings_page/create_issue.dart';
@@ -161,38 +162,42 @@ class Entry extends StatelessWidget {
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
-              path: app_paths.RECENT_PLAYS_PAGE,
+              path: app_paths.CATEGORIES_PAGE,
               pageBuilder: (context, state) => const SlideTransitionPage(
-                child: RecentPlaysPage(),
-              ),
-            ),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: app_paths.ARTISTS_PAGE,
-              pageBuilder: (context, state) => const SlideTransitionPage(
-                child: ArtistsPage(),
+                child: CategoriesPage(),
               ),
               routes: [
                 GoRoute(
-                  path: "detail",
-                  builder: (context, state) =>
-                      ArtistDetailPage(artist: state.extra as Artist),
+                  path: "artists",
+                  pageBuilder: (context, state) => const SlideTransitionPage(
+                    child: ArtistsPage(),
+                  ),
+                  routes: [
+                    GoRoute(
+                      path: "detail",
+                      builder: (context, state) =>
+                          ArtistDetailPage(artist: state.extra as Artist),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: app_paths.ALBUMS_PAGE,
-              pageBuilder: (context, state) => const SlideTransitionPage(
-                child: AlbumsPage(),
-              ),
-              routes: [
                 GoRoute(
-                  path: "detail",
-                  builder: (context, state) =>
-                      AlbumDetailPageNew(album: state.extra as Album),
+                  path: "albums",
+                  pageBuilder: (context, state) => const SlideTransitionPage(
+                    child: AlbumsPage(),
+                  ),
+                  routes: [
+                    GoRoute(
+                      path: "detail",
+                      builder: (context, state) =>
+                          AlbumDetailPageNew(album: state.extra as Album),
+                    ),
+                  ],
+                ),
+                GoRoute(
+                  path: "genres",
+                  pageBuilder: (context, state) => const SlideTransitionPage(
+                    child: GenresPage(),
+                  ),
                 ),
               ],
             ),

@@ -129,6 +129,7 @@ class UniPage<T> extends StatefulWidget {
     required this.enableSortOrder,
     required this.enableContentViewSwitch,
     this.sortMethods,
+    this.pinnedItems,
     this.locateTo,
     this.multiSelectController,
     this.multiSelectViewActions,
@@ -152,6 +153,9 @@ class UniPage<T> extends StatefulWidget {
 
   final List<SortMethodDesc<T>>? sortMethods;
 
+  /// 固定在列表顶部的项（不参与排序）
+  final List<T>? pinnedItems;
+
   final T? locateTo;
 
   final MultiSelectController<T>? multiSelectController;
@@ -169,16 +173,25 @@ class _UniPageState<T> extends State<UniPage<T>> {
   late ContentView currContentView = widget.pref.contentView;
   late ScrollController scrollController = ScrollController();
 
+  /// 固定项数量（pinned items 不参与排序）
+  int get _pinnedCount => widget.pinnedItems?.length ?? 0;
+
+  /// 总项目数（固定项 + 可排序列表项）
+  int get _totalItemCount => _pinnedCount + widget.contentList.length;
+
   @override
   void initState() {
     super.initState();
-    currSortMethod?.method(widget.contentList, currSortOrder);
+    // 排序只作用于 contentList，不影响 pinnedItems
+    if (widget.contentList.isNotEmpty) {
+      currSortMethod?.method(widget.contentList, currSortOrder);
+    }
     if (widget.locateTo == null) return;
 
     int targetAt = widget.contentList.indexOf(widget.locateTo as T);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (currContentView == ContentView.list) {
-        scrollController.jumpTo(targetAt * 64);
+        scrollController.jumpTo((_pinnedCount + targetAt) * 64);
       } else {
         final renderObject = context.findRenderObject();
         if (renderObject is RenderBox) {
@@ -186,7 +199,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
               PlatformDispatcher.instance.views.first.devicePixelRatio;
           final width = renderObject.size.width - 32;
           final crossAxisCount = (width * ratio / 300).floor();
-          final offset = (targetAt ~/ crossAxisCount) * (64.0 + 8.0);
+          final offset = ((_pinnedCount + targetAt) ~/ crossAxisCount) * (64.0 + 8.0);
           scrollController.jumpTo(offset);
         }
       }
@@ -196,22 +209,29 @@ class _UniPageState<T> extends State<UniPage<T>> {
   @override
   void didUpdateWidget(covariant UniPage<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    currSortMethod?.method(widget.contentList, currSortOrder);
+    // 排序只作用于 contentList
+    if (widget.contentList.isNotEmpty) {
+      currSortMethod?.method(widget.contentList, currSortOrder);
+    }
   }
 
   void setSortMethod(SortMethodDesc<T> sortMethod) {
     setState(() {
       currSortMethod = sortMethod;
       widget.pref.sortMethod = widget.sortMethods?.indexOf(sortMethod) ?? 0;
-      currSortMethod?.method(widget.contentList, currSortOrder);
+      if (widget.contentList.isNotEmpty) {
+        currSortMethod?.method(widget.contentList, currSortOrder);
+      }
     });
   }
 
   void setSortOrder(SortOrder sortOrder) {
     setState(() {
       currSortOrder = sortOrder;
-      widget.pref.sortOrder = sortOrder;
-      currSortMethod?.method(widget.contentList, currSortOrder);
+      widget.pref.sortOrder = currSortOrder;
+      if (widget.contentList.isNotEmpty) {
+        currSortMethod?.method(widget.contentList, currSortOrder);
+      }
     });
   }
 
@@ -274,7 +294,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
           : multiSelectController.enableMultiSelectView
               ? widget.multiSelectViewActions!
               : actions,
-      body: widget.contentList.isEmpty && widget.emptyStateBuilder != null
+      body: _totalItemCount == 0 && widget.emptyStateBuilder != null
           ? widget.emptyStateBuilder!(context)
           : Material(
               type: MaterialType.transparency,
@@ -282,26 +302,50 @@ class _UniPageState<T> extends State<UniPage<T>> {
                 ContentView.list => ListView.builder(
                     controller: scrollController,
                     padding: const EdgeInsets.only(bottom: 96.0),
-                    itemCount: widget.contentList.length,
+                    itemCount: _totalItemCount,
                     itemExtent: 64,
-                    itemBuilder: (context, i) => widget.contentBuilder(
-                      context,
-                      widget.contentList[i],
-                      i,
-                      multiSelectController,
-                    ),
+                    itemBuilder: (context, i) {
+                      if (i < _pinnedCount) {
+                        // 固定项：使用原始索引
+                        return widget.contentBuilder(
+                          context,
+                          widget.pinnedItems![i],
+                          i,
+                          multiSelectController,
+                        );
+                      }
+                      // 可排序项：调整索引
+                      final contentIndex = i - _pinnedCount;
+                      return widget.contentBuilder(
+                        context,
+                        widget.contentList[contentIndex],
+                        contentIndex,
+                        multiSelectController,
+                      );
+                    },
                   ),
                 ContentView.table => GridView.builder(
                     controller: scrollController,
                     padding: const EdgeInsets.only(bottom: 96.0),
                     gridDelegate: gridDelegate,
-                    itemCount: widget.contentList.length,
-                    itemBuilder: (context, i) => widget.contentBuilder(
-                      context,
-                      widget.contentList[i],
-                      i,
-                      multiSelectController,
-                    ),
+                    itemCount: _totalItemCount,
+                    itemBuilder: (context, i) {
+                      if (i < _pinnedCount) {
+                        return widget.contentBuilder(
+                          context,
+                          widget.pinnedItems![i],
+                          i,
+                          multiSelectController,
+                        );
+                      }
+                      final contentIndex = i - _pinnedCount;
+                      return widget.contentBuilder(
+                        context,
+                        widget.contentList[contentIndex],
+                        contentIndex,
+                        multiSelectController,
+                      );
+                    },
                   ),
               },
             ),

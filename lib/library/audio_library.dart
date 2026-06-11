@@ -24,6 +24,8 @@ class AudioLibrary extends ChangeNotifier {
 
   Map<String, Album> albumCollection = {};
 
+  Map<String, Genre> genreCollection = {};
+
   static AudioLibrary get instance {
     _instance ??= AudioLibrary._([]);
     return _instance!;
@@ -71,6 +73,7 @@ class AudioLibrary extends ChangeNotifier {
 
       instance.artistCollection.clear();
       instance.albumCollection.clear();
+      instance.genreCollection.clear();
       instance._buildCollections();
 
       await instance._loadCloudAudios();
@@ -169,6 +172,14 @@ class AudioLibrary extends ChangeNotifier {
           .putIfAbsent(audio.album, () => Album(name: audio.album))
           .works
           .add(audio);
+
+      // 构建流派集合
+      if (audio.genre.isNotEmpty) {
+        genreCollection
+            .putIfAbsent(audio.genre, () => Genre(name: audio.genre))
+            .works
+            .add(audio);
+      }
     }
 
     for (Artist artist in artistCollection.values) {
@@ -212,6 +223,14 @@ class AudioLibrary extends ChangeNotifier {
           .putIfAbsent(audio.album, () => Album(name: audio.album))
           .works
           .add(audio);
+
+      // 构建流派集合
+      if (audio.genre.isNotEmpty) {
+        genreCollection
+            .putIfAbsent(audio.genre, () => Genre(name: audio.genre))
+            .works
+            .add(audio);
+      }
     }
 
     for (Artist artist in artistCollection.values) {
@@ -290,6 +309,7 @@ class AudioLibrary extends ChangeNotifier {
   void rebuildCollections() {
     artistCollection.clear();
     albumCollection.clear();
+    genreCollection.clear();
     for (Audio audio in audioCollection) {
       for (String artistName in audio.splitedArtists) {
         artistCollection
@@ -302,6 +322,14 @@ class AudioLibrary extends ChangeNotifier {
           .putIfAbsent(audio.album, () => Album(name: audio.album))
           .works
           .add(audio);
+
+      // 重建流派集合
+      if (audio.genre.isNotEmpty) {
+        genreCollection
+            .putIfAbsent(audio.genre, () => Genre(name: audio.genre))
+            .works
+            .add(audio);
+      }
     }
 
     for (Artist artist in artistCollection.values) {
@@ -362,13 +390,16 @@ class AudioFolder {
 class Audio {
   String title;
 
-  /// 从音乐标签中读取的艺术家字符串，可能包含多个艺术家，以“、”，“/”等分隔。
+  /// 从音乐标签中读取的艺术家字符串，可能包含多个艺术家，以"、"，"/"等分隔。
   String artist;
 
   /// 分割[artist]得到的结果
   List<String> splitedArtists;
 
   String album;
+
+  /// 音乐流派/类型（从音频标签的 genre 字段提取）
+  String genre;
 
   /// 0: 没有track
   int track;
@@ -408,6 +439,7 @@ class Audio {
     this.title,
     this.artist,
     this.album,
+    this.genre,
     this.track,
     this.duration,
     this.bitrate,
@@ -426,6 +458,7 @@ class Audio {
         map["title"]?.toString() ?? '',
         map["artist"]?.toString() ?? '',
         map["album"]?.toString() ?? '',
+        map["genre"]?.toString() ?? '',
         map["track"] ?? 0,
         map["duration"] ?? 0,
         map["bitrate"],
@@ -442,6 +475,7 @@ class Audio {
         "title": title,
         "artist": artist,
         "album": album,
+        "genre": genre,
         "track": track,
         "duration": duration,
         "bitrate": bitrate,
@@ -626,4 +660,13 @@ class Album {
       works.first._getResizedPic(width: 200, height: 200);
 
   Album({required this.name});
+}
+
+class Genre {
+  String name;
+
+  /// 作品
+  List<Audio> works = [];
+
+  Genre({required this.name});
 }

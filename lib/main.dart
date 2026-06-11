@@ -7,6 +7,7 @@ import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
 import 'package:coriander_player/entry.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
 import 'package:coriander_player/library/playlist.dart';
+import 'package:coriander_player/library/genre_service.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
 import 'package:coriander_player/platform_dependency_manager.dart';
 import 'package:coriander_player/platform_helper.dart';
@@ -259,6 +260,8 @@ Future<void> main() async {
   await initWindow();
 
   await RecentPlayService.instance.load();
+
+  await GenreService.instance.load();
 
   await ScraperOrchestrator.instance.initDefaults();
 

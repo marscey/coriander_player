@@ -231,14 +231,16 @@ class AddAllToPlaylist extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MenuAnchor(
-      style: MenuStyle(
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    return ListenableBuilder(
+      listenable: PlaylistManager.instance,
+      builder: (context, _) => MenuAnchor(
+        style: MenuStyle(
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          ),
         ),
-      ),
       menuChildren: List.generate(
-        PLAYLISTS.length,
+        PlaylistManager.instance.allPlaylists.length,
         (i) => MenuItemButton(
           style: const ButtonStyle(
             padding: WidgetStatePropertyAll(
@@ -246,16 +248,16 @@ class AddAllToPlaylist extends StatelessWidget {
             ),
           ),
           onPressed: () {
-            for (var item in multiSelectController.selected) {
-              if (!PLAYLISTS[i].audios.containsKey(item.path)) {
-                PLAYLISTS[i].audios[item.path] = item;
-              }
-            }
+            final target = PlaylistManager.instance.allPlaylists[i];
+            PlaylistManager.instance.addAudiosToPlaylist(
+              target,
+              multiSelectController.selected,
+            );
             showTextOnSnackBar(
-              "成功将${multiSelectController.selected.length}首添加到歌单“${PLAYLISTS[i].name}”",
+              "成功将${multiSelectController.selected.length}首添加到歌单「${target.name}」",
             );
           },
-          child: Text(PLAYLISTS[i].name),
+          child: Text(PlaylistManager.instance.allPlaylists[i].name),
         ),
       ),
       builder: (context, controller, _) => FilledButton.icon(
@@ -272,7 +274,8 @@ class AddAllToPlaylist extends StatelessWidget {
           fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -367,7 +370,8 @@ class BatchScrapeMetadata extends StatelessWidget {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                LinearProgressIndicator(value: total > 0 ? completed / total : 0),
+                LinearProgressIndicator(
+                    value: total > 0 ? completed / total : 0),
                 const SizedBox(height: 12),
                 Text("已完成 $completed / $total"),
               ],

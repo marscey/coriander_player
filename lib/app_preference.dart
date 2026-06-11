@@ -53,7 +53,8 @@ class NowPlayingPagePreference {
     return NowPlayingPagePreference(
       NowPlayingViewMode.fromString(map?["nowPlayingViewMode"]) ??
           NowPlayingViewMode.withLyric,
-      LyricTextAlign.fromString(map?["lyricTextAlign"]) ?? LyricTextAlign.center,
+      LyricTextAlign.fromString(map?["lyricTextAlign"]) ??
+          LyricTextAlign.center,
       map?["lyricFontSize"] ?? 20.0,
       map?["translationFontSize"] ?? 16.0,
     );
@@ -84,13 +85,22 @@ class AppPreference {
       PagePreference(0, SortOrder.ascending, ContentView.table);
 
   var artistDetailPagePref =
-      PagePreference(0, SortOrder.ascending, ContentView.list);
+      PagePreference(2, SortOrder.ascending, ContentView.list);
 
   var albumsPagePref =
       PagePreference(0, SortOrder.ascending, ContentView.table);
 
   var albumDetailPagePref =
       PagePreference(2, SortOrder.ascending, ContentView.list);
+
+  var genresPagePref =
+      PagePreference(0, SortOrder.ascending, ContentView.table);
+
+  var genreDetailPagePref =
+      PagePreference(0, SortOrder.ascending, ContentView.list);
+
+  var categoriesPagePref =
+      PagePreference(0, SortOrder.ascending, ContentView.list);
 
   var foldersPagePref =
       PagePreference(0, SortOrder.ascending, ContentView.list);
@@ -117,7 +127,8 @@ class AppPreference {
   Future<void> save() async {
     try {
       final supportPath = (await getAppDataDir()).path;
-      final appPreferencePath = PlatformHelper.joinPaths([supportPath, "app_preference.json"]);
+      final appPreferencePath =
+          PlatformHelper.joinPaths([supportPath, "app_preference.json"]);
 
       Map prefMap = {
         "audiosPagePref": audiosPagePref.toMap(),
@@ -125,6 +136,9 @@ class AppPreference {
         "artistDetailPagePref": artistDetailPagePref.toMap(),
         "albumsPagePref": albumsPagePref.toMap(),
         "albumDetailPagePref": albumDetailPagePref.toMap(),
+        "genresPagePref": genresPagePref.toMap(),
+        "genreDetailPagePref": genreDetailPagePref.toMap(),
+        "categoriesPagePref": categoriesPagePref.toMap(),
         "foldersPagePref": foldersPagePref.toMap(),
         "folderDetailPagePref": folderDetailPagePref.toMap(),
         "playlistsPagePref": playlistsPagePref.toMap(),
@@ -146,7 +160,8 @@ class AppPreference {
   static Future<void> read() async {
     try {
       final supportPath = (await getAppDataDir()).path;
-      final appPreferencePath = PlatformHelper.joinPaths([supportPath, "app_preference.json"]);
+      final appPreferencePath =
+          PlatformHelper.joinPaths([supportPath, "app_preference.json"]);
 
       final prefJson = await File(appPreferencePath).readAsString();
       final Map prefMap = json.decode(prefJson);
@@ -162,6 +177,14 @@ class AppPreference {
           PagePreference.fromMap(prefMap["albumsPagePref"]);
       instance.albumDetailPagePref = PagePreference.fromMap(
         prefMap["albumDetailPagePref"],
+      );
+      instance.genresPagePref =
+          PagePreference.fromMap(prefMap["genresPagePref"]);
+      instance.genreDetailPagePref = PagePreference.fromMap(
+        prefMap["genreDetailPagePref"],
+      );
+      instance.categoriesPagePref = PagePreference.fromMap(
+        prefMap["categoriesPagePref"],
       );
       instance.foldersPagePref =
           PagePreference.fromMap(prefMap["foldersPagePref"]);
