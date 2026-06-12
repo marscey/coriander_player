@@ -42,7 +42,7 @@ Future<Directory> getAppDataDir() async {
 
 class AppSettings extends ChangeNotifier {
   static final github = GitHub();
-  static const String version = "1.8.0";
+  static const String version = "1.9.0";
 
   /// 主题模式：亮 / 暗
   ThemeMode themeMode = getWindowsThemeMode();
