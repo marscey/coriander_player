@@ -141,6 +141,7 @@ class Entry extends StatelessWidget {
         builder: (context, state, navigationShell) =>
             AppShell(navigationShell: navigationShell),
         branches: [
+          // 0: 音乐库
           StatefulShellBranch(routes: [
             GoRoute(
               path: app_paths.AUDIOS_PAGE,
@@ -160,6 +161,25 @@ class Entry extends StatelessWidget {
               ],
             ),
           ]),
+          // 1: 歌单
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: app_paths.PLAYLISTS_PAGE,
+              pageBuilder: (context, state) => const SlideTransitionPage(
+                child: PlaylistsPage(),
+              ),
+              routes: [
+                GoRoute(
+                  path: "detail",
+                  builder: (context, state) {
+                    final playlist = state.extra as Playlist;
+                    return PlaylistDetailPage(playlist: playlist);
+                  },
+                ),
+              ],
+            ),
+          ]),
+          // 2: 类别
           StatefulShellBranch(routes: [
             GoRoute(
               path: app_paths.CATEGORIES_PAGE,
@@ -198,10 +218,18 @@ class Entry extends StatelessWidget {
                   pageBuilder: (context, state) => const SlideTransitionPage(
                     child: GenresPage(),
                   ),
+                  routes: [
+                    GoRoute(
+                      path: "detail",
+                      builder: (context, state) =>
+                          GenreDetailPage(genre: state.extra as Genre),
+                    ),
+                  ],
                 ),
               ],
             ),
           ]),
+          // 3: 本地
           StatefulShellBranch(routes: [
             GoRoute(
               path: app_paths.FOLDERS_PAGE,
@@ -220,6 +248,7 @@ class Entry extends StatelessWidget {
               ],
             ),
           ]),
+          // 4: 连接
           StatefulShellBranch(routes: [
             GoRoute(
               path: app_paths.CLOUD_CONNECTIONS_PAGE,
@@ -242,23 +271,7 @@ class Entry extends StatelessWidget {
               ],
             ),
           ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: app_paths.PLAYLISTS_PAGE,
-              pageBuilder: (context, state) => const SlideTransitionPage(
-                child: PlaylistsPage(),
-              ),
-              routes: [
-                GoRoute(
-                  path: "detail",
-                  builder: (context, state) {
-                    final playlist = state.extra as Playlist;
-                    return PlaylistDetailPage(playlist: playlist);
-                  },
-                ),
-              ],
-            ),
-          ]),
+          // 5: 搜索
           StatefulShellBranch(routes: [
             GoRoute(
               path: app_paths.SEARCH_PAGE,
@@ -276,6 +289,7 @@ class Entry extends StatelessWidget {
               ],
             ),
           ]),
+          // 6: 设置
           StatefulShellBranch(routes: [
             GoRoute(
               path: app_paths.SETTINGS_PAGE,

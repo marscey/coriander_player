@@ -168,6 +168,24 @@ class AudioDetailPage extends StatelessWidget {
                     isMobile: isMobile,
                     detail: Text(audio.track > 0 ? audio.track.toString() : "—"),
                   ),
+                  if (audio.genre.isNotEmpty)
+                    _AudioDetailTile(
+                      title: "流派",
+                      isMobile: isMobile,
+                      detail: Text(audio.genre),
+                    ),
+                  if (audio.date.isNotEmpty)
+                    _AudioDetailTile(
+                      title: "发行日期",
+                      isMobile: isMobile,
+                      detail: Text(audio.date),
+                    ),
+                  if (audio.year != null)
+                    _AudioDetailTile(
+                      title: "年份",
+                      isMobile: isMobile,
+                      detail: Text(audio.year.toString()),
+                    ),
                   _AudioDetailTile(
                     title: "时长",
                     isMobile: isMobile,

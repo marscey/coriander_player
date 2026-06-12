@@ -2,6 +2,7 @@ import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/settings_tile.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/library/genre_service.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -158,6 +159,7 @@ class __ArtistSeparatorEditDialogState
                                 appSettings.artistSeparator.join("|");
                             await appSettings.saveSettings();
                             await AudioLibrary.initFromIndex();
+                            await GenreService.instance.refresh();
                             if (context.mounted) {
                               Navigator.pop(context);
                             }

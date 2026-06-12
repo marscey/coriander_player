@@ -114,6 +114,12 @@ class AudioLibrary extends ChangeNotifier {
                 .putIfAbsent(audio.album, () => Album(name: audio.album))
                 .works
                 .add(audio);
+            if (audio.genre.isNotEmpty) {
+              genreCollection
+                  .putIfAbsent(audio.genre, () => Genre(name: audio.genre))
+                  .works
+                  .add(audio);
+            }
           }
           for (Artist artist in artistCollection.values) {
             for (Audio audio in artist.works) {
@@ -401,6 +407,12 @@ class Audio {
   /// 音乐流派/类型（从音频标签的 genre 字段提取）
   String genre;
 
+  /// 发行年份（从音频标签的 year 字段提取）
+  int? year;
+
+  /// 发行日期（完整格式，如 "2022-07-15"，从 DATE/RecordingDate 标签提取）
+  String date;
+
   /// 0: 没有track
   int track;
 
@@ -440,6 +452,8 @@ class Audio {
     this.artist,
     this.album,
     this.genre,
+    this.year,
+    this.date,
     this.track,
     this.duration,
     this.bitrate,
@@ -459,16 +473,50 @@ class Audio {
         map["artist"]?.toString() ?? '',
         map["album"]?.toString() ?? '',
         map["genre"]?.toString() ?? '',
-        map["track"] ?? 0,
-        map["duration"] ?? 0,
-        map["bitrate"],
-        map["sample_rate"],
+        map["year"] is int
+            ? map["year"]
+            : map["year"] is double
+                ? (map["year"] as double).toInt()
+                : null,
+        map["date"]?.toString() ?? '',
+        map["track"] is int
+            ? map["track"]
+            : map["track"] is double
+                ? (map["track"] as double).toInt()
+                : 0,
+        map["duration"] is int
+            ? map["duration"]
+            : map["duration"] is double
+                ? (map["duration"] as double).toInt()
+                : 0,
+        map["bitrate"] is int
+            ? map["bitrate"]
+            : map["bitrate"] is double
+                ? (map["bitrate"] as double).toInt()
+                : null,
+        map["sample_rate"] is int
+            ? map["sample_rate"]
+            : map["sample_rate"] is double
+                ? (map["sample_rate"] as double).toInt()
+                : null,
         map["path"]?.toString() ?? '',
-        map["modified"] ?? 0,
-        map["created"] ?? 0,
+        map["modified"] is int
+            ? map["modified"]
+            : map["modified"] is double
+                ? (map["modified"] as double).toInt()
+                : 0,
+        map["created"] is int
+            ? map["created"]
+            : map["created"] is double
+                ? (map["created"] as double).toInt()
+                : 0,
         map["by"]?.toString(),
         connectionId: map["connection_id"]?.toString(),
-        fileSize: map["file_size"],
+        fileSize: map["file_size"] is int
+            ? map["file_size"]
+            : map["file_size"] is double
+                ? (map["file_size"] as double).toInt()
+                : null,
       );
 
   Map toMap() => {
@@ -476,6 +524,8 @@ class Audio {
         "artist": artist,
         "album": album,
         "genre": genre,
+        "year": year,
+        "date": date,
         "track": track,
         "duration": duration,
         "bitrate": bitrate,

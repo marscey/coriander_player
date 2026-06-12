@@ -4,6 +4,7 @@ import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/build_index_state_view.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/library/genre_service.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
 import 'package:coriander_player/play_service/play_service.dart';
@@ -98,6 +99,7 @@ class _FolderSelectorViewState extends State<FolderSelectorView> {
                         AppSettings.instance.saveSettings(),
                         AudioLibrary.initFromIndex(),
                       ]);
+                      await GenreService.instance.refresh();
                       if (context.mounted) {
                         context.go(app_paths.AUDIOS_PAGE);
                       }

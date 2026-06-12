@@ -2,6 +2,7 @@ import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/build_index_state_view.dart';
 import 'package:coriander_player/component/settings_tile.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/library/genre_service.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
 import 'package:coriander_player/platform_helper.dart';
@@ -205,6 +206,7 @@ class _AudioLibraryEditorDialogState extends State<AudioLibraryEditorDialog> {
                                     readPlaylists(),
                                     readLyricSources(),
                                   ]);
+                                  await GenreService.instance.refresh();
                                   if (context.mounted) {
                                     Navigator.pop(context);
                                   }

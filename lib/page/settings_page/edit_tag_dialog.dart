@@ -67,8 +67,10 @@ class _EditTagDialogState extends State<EditTagDialog> {
     _trackController = TextEditingController(
       text: widget.audio.track > 0 ? widget.audio.track.toString() : '',
     );
-    _yearController = TextEditingController();
-    _genreController = TextEditingController();
+    _yearController = TextEditingController(
+      text: widget.audio.year != null ? widget.audio.year.toString() : '',
+    );
+    _genreController = TextEditingController(text: widget.audio.genre);
 
     _loadCurrentCover();
 

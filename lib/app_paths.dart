@@ -9,6 +9,7 @@ const String ARTIST_DETAIL_PAGE = "/categories/artists/detail";
 const String ALBUMS_PAGE = "/categories/albums";
 const String ALBUM_DETAIL_PAGE = "/categories/albums/detail";
 const String GENRES_PAGE = "/categories/genres";
+const String GENRE_DETAIL_PAGE = "/categories/genres/detail";
 
 const String FOLDERS_PAGE = "/folders";
 const String FOLDER_DETAIL_PAGE = "/folders/detail";
@@ -35,8 +36,8 @@ const String CLOUD_BROWSER_PAGE =
 /// 可以作为 start page 的 pages
 const List<String> START_PAGES = [
   AUDIOS_PAGE,
+  PLAYLISTS_PAGE,
   CATEGORIES_PAGE,
   FOLDERS_PAGE,
   CLOUD_CONNECTIONS_PAGE,
-  PLAYLISTS_PAGE,
 ];

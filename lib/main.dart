@@ -261,6 +261,9 @@ Future<void> main() async {
 
   await RecentPlayService.instance.load();
 
+  // GenreService 需要在 AudioLibrary 初始化之后加载
+  // 但 AudioLibrary.initFromIndex() 在用户选择文件夹后才调用
+  // 所以先初始化 GenreService（此时为空），后续在 AudioLibrary 初始化后刷新
   await GenreService.instance.load();
 
   await ScraperOrchestrator.instance.initDefaults();

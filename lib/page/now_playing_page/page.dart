@@ -917,7 +917,7 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
     );
   }
 
-  /// 构建音频元信息（格式、码率、采样率）
+  /// 构建音频元信息（格式、码率、采样率、流派、年份）
   Widget _buildAudioMeta(Audio audio, ColorScheme scheme) {
     final parts = <String>[];
     final ext = _getAudioFormat(audio);
@@ -927,6 +927,12 @@ class __NowPlayingInfoState extends State<_NowPlayingInfo> {
       final sr = audio.sampleRate!;
       parts
           .add(sr >= 1000 ? '${(sr / 1000).toStringAsFixed(1)}kHz' : '${sr}Hz');
+    }
+    if (audio.genre.isNotEmpty) parts.add(audio.genre);
+    if (audio.date.isNotEmpty) {
+      parts.add(audio.date);
+    } else if (audio.year != null) {
+      parts.add('${audio.year}');
     }
     if (parts.isEmpty) return const SizedBox.shrink();
     return Text(

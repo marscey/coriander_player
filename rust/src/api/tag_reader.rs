@@ -61,6 +61,10 @@ struct Audio {
     title: String,
     artist: String,
     album: String,
+    genre: String,
+    year: Option<u32>,
+    /// 发行日期（完整格式，如 "2022-07-15"）
+    date: String,
     track: Option<u32>,
     /// in secs
     duration: u64,
@@ -84,6 +88,9 @@ impl Audio {
             title: path.file_name()?.to_string_lossy().to_string(),
             artist: "UNKNOWN".to_string(),
             album: "UNKNOWN".to_string(),
+            genre: String::new(),
+            year: None,
+            date: String::new(),
             track: None,
             duration: 0,
             bitrate: None,
@@ -100,6 +107,9 @@ impl Audio {
             "title": self.title,
             "artist": self.artist,
             "album": self.album,
+            "genre": self.genre,
+            "year": self.year,
+            "date": self.date,
             "track": self.track,
             "duration": self.duration,
             "bitrate": self.bitrate,
@@ -187,6 +197,11 @@ impl Audio {
                 artist_strs.join("/")
             };
 
+            let genre = tag.genre().map(|s| s.to_string()).unwrap_or_default();
+            let year = tag.year();
+            // 从 RecordingDate 字段获取完整发行日期（如 "2022-07-15"）
+            let date = tag.get_string(&ItemKey::RecordingDate).map(|s| s.to_string()).unwrap_or_default();
+
             return Some(Audio {
                 title: tag
                     .title()
@@ -197,6 +212,9 @@ impl Audio {
                     .album()
                     .unwrap_or(std::borrow::Cow::Borrowed("UNKNOWN"))
                     .to_string(),
+                genre,
+                year,
+                date,
                 track: tag.track(),
                 duration: properties.duration().as_secs(),
                 bitrate: properties.audio_bitrate(),
@@ -212,6 +230,9 @@ impl Audio {
             title: path.file_name()?.to_string_lossy().to_string(),
             artist: std::borrow::Cow::Borrowed("UNKNOWN").to_string(),
             album: std::borrow::Cow::Borrowed("UNKNOWN").to_string(),
+            genre: String::new(),
+            year: None,
+            date: String::new(),
             track: None,
             duration: properties.duration().as_secs(),
             bitrate: properties.audio_bitrate(),
@@ -269,6 +290,9 @@ impl Audio {
             title,
             artist,
             album,
+            genre: String::new(), // Windows API 不直接提供 genre
+            year: None,           // Windows API 不直接提供 year
+            date: String::new(),  // Windows API 不直接提供 date
             track: if track == 0 { None } else { Some(track) },
             duration: duration.as_secs(),
             bitrate: None, // Windows API 不直接提供比特率
@@ -982,7 +1006,7 @@ pub fn read_metadata_from_bytes(
 
     log_to_dart(format!("[DEBUG] read_metadata_from_bytes: file_type={:?}, duration={}s, bitrate={:?}, sample_rate={:?}", file_type, duration, bitrate, sample_rate));
 
-    let (title, artist, album, track, genre) = if let Some(tag) = tagged_file
+    let (title, artist, album, track, genre, year, date) = if let Some(tag) = tagged_file
         .primary_tag()
         .or_else(|| tagged_file.first_tag())
     {
@@ -999,10 +1023,12 @@ pub fn read_metadata_from_bytes(
             tag.album().map(|s| s.to_string()).unwrap_or_default(),
             tag.track(),
             tag.genre().map(|s| s.to_string()).unwrap_or_default(),
+            tag.year(),
+            tag.get_string(&ItemKey::RecordingDate).map(|s| s.to_string()).unwrap_or_default(),
         )
     } else {
         log_to_dart("[DEBUG] read_metadata_from_bytes: no tag found in file".to_string());
-        (file_name.clone(), String::new(), String::new(), None, String::new())
+        (file_name.clone(), String::new(), String::new(), None, String::new(), None, String::new())
     };
 
     let result = serde_json::json!({
@@ -1011,6 +1037,8 @@ pub fn read_metadata_from_bytes(
         "album": album,
         "track": track,
         "genre": genre,
+        "year": year,
+        "date": date,
         "duration": duration,
         "bitrate": bitrate,
         "sample_rate": sample_rate,
@@ -1178,6 +1206,7 @@ pub fn compute_content_hash(path: String) -> Option<String> {
 mod tests {
     use super::*;
     use lofty::prelude::{Accessor, TaggedFileExt};
+    use std::io::{Read, Seek};
 
     /// 创建一个最小的 WAV 测试文件（无需预添加标签，写入函数会自动创建）
     fn create_test_wav(path: &Path) {
@@ -1624,6 +1653,344 @@ mod tests {
         assert_eq!(lyric_text, Some(new_lyric));
 
         let _ = fs::remove_file(&path);
+    }
+
+    // ==================== 云服务 Range 请求元数据提取测试 ====================
+
+    /// 测试从完整 FLAC 文件中读取元数据（模拟本地文件读取）
+    #[test]
+    fn test_read_metadata_from_full_flac_file() {
+        let flac_path = "/tmp/coriander_test/02. 最伟大的作品.flac";
+        let path = Path::new(flac_path);
+        if !path.exists() {
+            eprintln!("SKIP: test FLAC file not found at {}", flac_path);
+            return;
+        }
+
+        // 直接从完整文件读取
+        let audio = Audio::read_from_path(path);
+        assert!(audio.is_some(), "Should be able to read FLAC file");
+        let audio = audio.unwrap();
+
+        println!("[TEST] Full file metadata:");
+        println!("[TEST]   title:    {}", audio.title);
+        println!("[TEST]   artist:   {}", audio.artist);
+        println!("[TEST]   album:    {}", audio.album);
+        println!("[TEST]   genre:    '{}'", audio.genre);
+        println!("[TEST]   year:     {:?}", audio.year);
+        println!("[TEST]   track:    {:?}", audio.track);
+        println!("[TEST]   duration: {}s", audio.duration);
+        println!("[TEST]   bitrate:  {:?}", audio.bitrate);
+        println!("[TEST]   sample_rate: {:?}", audio.sample_rate);
+        println!("[TEST]   by:       {:?}", audio.by);
+
+        // 验证关键字段
+        assert!(!audio.title.is_empty(), "Title should not be empty");
+        assert_ne!(audio.artist, "UNKNOWN", "Artist should not be UNKNOWN");
+        assert!(!audio.album.is_empty() && audio.album != "UNKNOWN", "Album should be populated");
+
+        // genre 和 year 是关键测试目标
+        if audio.genre.is_empty() {
+            eprintln!("[TEST] WARNING: genre is empty! This FLAC file may not have genre tag.");
+        } else {
+            println!("[TEST] SUCCESS: genre = '{}'", audio.genre);
+        }
+
+        if audio.year.is_none() {
+            eprintln!("[TEST] WARNING: year is None! This FLAC file may not have year tag.");
+        } else {
+            println!("[TEST] SUCCESS: year = {:?}", audio.year);
+        }
+    }
+
+    /// 测试从部分字节（模拟 Range 请求）中读取 FLAC 元数据
+    #[test]
+    fn test_read_metadata_from_range_bytes() {
+        let flac_path = "/tmp/coriander_test/02. 最伟大的作品.flac";
+        let path = Path::new(flac_path);
+        if !path.exists() {
+            eprintln!("SKIP: test FLAC file not found at {}", flac_path);
+            return;
+        }
+
+        let file_size = fs::metadata(path).unwrap().len();
+        println!("[TEST] File size: {} bytes", file_size);
+
+        // 读取头部 64KB
+        let head_size = (64 * 1024).min(file_size as usize);
+        let mut head_bytes = vec![0u8; head_size];
+        let mut file = fs::File::open(path).unwrap();
+        file.read_exact(&mut head_bytes).unwrap();
+
+        // 读取尾部 128KB
+        let tail_size = (128 * 1024).min(file_size as usize);
+        let tail_start = file_size.saturating_sub(tail_size as u64);
+        let mut tail_bytes = vec![0u8; tail_size];
+        file.seek(std::io::SeekFrom::Start(tail_start)).unwrap();
+        file.read_exact(&mut tail_bytes).unwrap();
+
+        println!("[TEST] head_bytes: {} bytes", head_bytes.len());
+        println!("[TEST] tail_bytes: {} bytes (from offset {})", tail_bytes.len(), tail_start);
+
+        // 验证 FLAC magic
+        if &head_bytes[0..4] == b"fLaC" {
+            println!("[TEST] FLAC magic verified: fLaC");
+        } else {
+            eprintln!("[TEST] ERROR: Not a FLAC file! First 4 bytes: {:?}", &head_bytes[0..4]);
+        }
+
+        // 解析 FLAC 元数据块头部信息
+        let mut offset = 4usize;
+        let mut block_count = 0;
+        while offset + 4 <= head_bytes.len() {
+            let is_last = (head_bytes[offset] & 0x80) != 0;
+            let block_type = head_bytes[offset] & 0x7F;
+            let block_size = ((head_bytes[offset + 1] as usize) << 16)
+                | ((head_bytes[offset + 2] as usize) << 8)
+                | (head_bytes[offset + 3] as usize);
+            let block_end = offset + 4 + block_size;
+
+            let type_name = match block_type {
+                0 => "STREAMINFO",
+                1 => "PADDING",
+                2 => "APPLICATION",
+                3 => "SEEKTABLE",
+                4 => "VORBIS_COMMENT",
+                5 => "CUESHEET",
+                6 => "PICTURE",
+                _ => "UNKNOWN",
+            };
+
+            println!("[TEST] Block #{}: type={} ({}), size={}, offset={}, is_last={}, complete={}",
+                block_count, block_type, type_name, block_size, offset, is_last, block_end <= head_bytes.len());
+
+            if is_last || block_end > head_bytes.len() {
+                break;
+            }
+            offset = block_end;
+            block_count += 1;
+        }
+
+        // 调用 readMetadataFromBytes
+        let result = read_metadata_from_bytes(
+            head_bytes,
+            tail_bytes,
+            file_size as u32,
+            "02. 最伟大的作品.flac".to_string(),
+        );
+
+        match result {
+            Some(json_str) => {
+                println!("[TEST] readMetadataFromBytes result: {}", json_str);
+                let meta: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+                println!("[TEST]   title:    {}", meta["title"]);
+                println!("[TEST]   artist:   {}", meta["artist"]);
+                println!("[TEST]   album:    {}", meta["album"]);
+                println!("[TEST]   genre:    {}", meta["genre"]);
+                println!("[TEST]   year:     {}", meta["year"]);
+                println!("[TEST]   track:    {}", meta["track"]);
+                println!("[TEST]   duration: {}", meta["duration"]);
+                println!("[TEST]   bitrate:  {}", meta["bitrate"]);
+                println!("[TEST]   sample_rate: {}", meta["sample_rate"]);
+
+                // 检查 genre 和 year
+                let genre = meta["genre"].as_str().unwrap_or("");
+                let year = meta["year"].as_u64();
+
+                if genre.is_empty() {
+                    eprintln!("[TEST] FAIL: genre is empty in Range request result!");
+                } else {
+                    println!("[TEST] SUCCESS: genre = '{}'", genre);
+                }
+                if year.is_none() {
+                    eprintln!("[TEST] FAIL: year is null in Range request result!");
+                } else {
+                    println!("[TEST] SUCCESS: year = {}", year.unwrap());
+                }
+            }
+            None => {
+                eprintln!("[TEST] FAIL: readMetadataFromBytes returned None!");
+            }
+        }
+    }
+
+    /// 测试更大的 head bytes 是否能捕获完整元数据
+    #[test]
+    fn test_read_metadata_with_larger_head_bytes() {
+        let flac_path = "/tmp/coriander_test/02. 最伟大的作品.flac";
+        let path = Path::new(flac_path);
+        if !path.exists() {
+            eprintln!("SKIP: test FLAC file not found at {}", flac_path);
+            return;
+        }
+
+        let file_size = fs::metadata(path).unwrap().len();
+
+        // 尝试不同大小的 head bytes
+        for head_kb in [64, 128, 256, 512, 1024, 2048] {
+            let head_size = (head_kb * 1024).min(file_size as usize);
+            let mut head_bytes = vec![0u8; head_size];
+            let mut file = fs::File::open(path).unwrap();
+            file.read_exact(&mut head_bytes).unwrap();
+
+            let tail_size = (128 * 1024).min(file_size as usize);
+            let tail_start = file_size.saturating_sub(tail_size as u64);
+            let mut tail_bytes = vec![0u8; tail_size];
+            file.seek(io::SeekFrom::Start(tail_start)).unwrap();
+            file.read_exact(&mut tail_bytes).unwrap();
+
+            let result = read_metadata_from_bytes(
+                head_bytes,
+                tail_bytes,
+                file_size as u32,
+                "02. 最伟大的作品.flac".to_string(),
+            );
+
+            match result {
+                Some(json_str) => {
+                    let meta: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+                    let genre = meta["genre"].as_str().unwrap_or("");
+                    let year = meta["year"].as_u64();
+                    println!("[TEST] head={}KB: genre='{}', year={:?}, title={}",
+                        head_kb, genre, year, meta["title"]);
+                }
+                None => {
+                    println!("[TEST] head={}KB: readMetadataFromBytes returned None", head_kb);
+                }
+            }
+        }
+    }
+
+    /// 测试从 WebDAV 下载保存的字节中读取元数据（端到端验证）
+    /// 先运行 Dart 脚本 test/test_webdav_scan_e2e.dart 下载字节
+    /// 然后运行: cd rust && cargo test test_read_metadata_from_webdav_saved_bytes -- --nocapture
+    #[test]
+    fn test_read_metadata_from_webdav_saved_bytes() {
+        let test_dir = Path::new("/tmp/coriander_webdav_test");
+        let head_path = test_dir.join("webdav_head.bin");
+        let tail_path = test_dir.join("webdav_tail.bin");
+        let info_path = test_dir.join("test_info.json");
+
+        if !head_path.exists() || !tail_path.exists() {
+            eprintln!("SKIP: WebDAV test bytes not found. Run `dart test/test_webdav_scan_e2e.dart` first.");
+            return;
+        }
+
+        // 读取测试信息
+        let file_size: u64 = if info_path.exists() {
+            let info_str = fs::read_to_string(&info_path).unwrap();
+            let info: serde_json::Value = serde_json::from_str(&info_str).unwrap();
+            info["file_size"].as_u64().unwrap()
+        } else {
+            eprintln!("[TEST] WARNING: test_info.json not found, using default file size");
+            50502164
+        };
+
+        // 读取头部字节
+        let head_bytes = fs::read(&head_path).unwrap();
+        let tail_bytes = fs::read(&tail_path).unwrap();
+
+        println!("[WEBDAV-TEST] ========================================");
+        println!("[WEBDAV-TEST] WebDAV Range 请求元数据提取测试");
+        println!("[WEBDAV-TEST] ========================================");
+        println!("[WEBDAV-TEST] file_size: {} bytes", file_size);
+        println!("[WEBDAV-TEST] head_bytes: {} bytes", head_bytes.len());
+        println!("[WEBDAV-TEST] tail_bytes: {} bytes", tail_bytes.len());
+
+        // 验证 FLAC magic
+        if head_bytes.len() >= 4 {
+            if &head_bytes[0..4] == b"fLaC" {
+                println!("[WEBDAV-TEST] FLAC magic: ✓ (fLaC)");
+            } else {
+                eprintln!("[WEBDAV-TEST] FLAC magic: ✗ (expected fLaC, got {:?})", &head_bytes[0..4]);
+            }
+        }
+
+        // 分析 FLAC 元数据块结构
+        if head_bytes.len() >= 4 && &head_bytes[0..4] == b"fLaC" {
+            let mut offset = 4usize;
+            let mut block_count = 0;
+            while offset + 4 <= head_bytes.len() {
+                let is_last = (head_bytes[offset] & 0x80) != 0;
+                let block_type = head_bytes[offset] & 0x7F;
+                let block_size = ((head_bytes[offset + 1] as usize) << 16)
+                    | ((head_bytes[offset + 2] as usize) << 8)
+                    | (head_bytes[offset + 3] as usize);
+                let block_end = offset + 4 + block_size;
+
+                let type_names = [
+                    "STREAMINFO", "PADDING", "APPLICATION", "SEEKTABLE",
+                    "VORBIS_COMMENT", "CUESHEET", "PICTURE",
+                ];
+                let type_name = if (block_type as usize) < type_names.len() {
+                    type_names[block_type as usize]
+                } else {
+                    "UNKNOWN"
+                };
+                let is_complete = block_end <= head_bytes.len();
+
+                println!("[WEBDAV-TEST] Block #{}: type={} ({}), size={}, offset={}, is_last={}, complete={}",
+                    block_count, block_type, type_name, block_size, offset, is_last, is_complete);
+
+                if is_last || !is_complete {
+                    break;
+                }
+                offset = block_end;
+                block_count += 1;
+            }
+        }
+
+        // 调用 read_metadata_from_bytes
+        println!("[WEBDAV-TEST] 调用 read_metadata_from_bytes...");
+        let result = read_metadata_from_bytes(
+            head_bytes,
+            tail_bytes,
+            file_size as u32,
+            "02. 最伟大的作品.flac".to_string(),
+        );
+
+        match result {
+            Some(json_str) => {
+                println!("[WEBDAV-TEST] read_metadata_from_bytes 结果:");
+                let meta: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+                println!("[WEBDAV-TEST]   title:       {}", meta["title"]);
+                println!("[WEBDAV-TEST]   artist:      {}", meta["artist"]);
+                println!("[WEBDAV-TEST]   album:       {}", meta["album"]);
+                println!("[WEBDAV-TEST]   genre:       {}", meta["genre"]);
+                println!("[WEBDAV-TEST]   year:        {}", meta["year"]);
+                println!("[WEBDAV-TEST]   track:       {}", meta["track"]);
+                println!("[WEBDAV-TEST]   duration:    {}s", meta["duration"]);
+                println!("[WEBDAV-TEST]   bitrate:     {:?}", meta["bitrate"]);
+                println!("[WEBDAV-TEST]   sample_rate: {:?}", meta["sample_rate"]);
+
+                // 关键验证
+                let genre = meta["genre"].as_str().unwrap_or("");
+                let year = meta["year"].as_u64();
+
+                println!("[WEBDAV-TEST] ========================================");
+                if genre.is_empty() {
+                    eprintln!("[WEBDAV-TEST] FAIL: genre 为空！WebDAV Range 请求未能提取流派信息");
+                } else {
+                    println!("[WEBDAV-TEST] SUCCESS: genre = '{}'", genre);
+                }
+                if year.is_none() {
+                    eprintln!("[WEBDAV-TEST] FAIL: year 为空！WebDAV Range 请求未能提取年份信息");
+                } else {
+                    println!("[WEBDAV-TEST] SUCCESS: year = {}", year.unwrap());
+                }
+                println!("[WEBDAV-TEST] ========================================");
+
+                // 断言
+                assert!(!genre.is_empty(), "genre should not be empty from WebDAV Range bytes");
+                assert!(year.is_some(), "year should not be None from WebDAV Range bytes");
+                assert_eq!(genre, "国语流行", "genre should be '国语流行'");
+                assert_eq!(year.unwrap(), 2022, "year should be 2022");
+            }
+            None => {
+                eprintln!("[WEBDAV-TEST] FAIL: read_metadata_from_bytes 返回 None！");
+                panic!("read_metadata_from_bytes should not return None for valid WebDAV Range bytes");
+            }
+        }
     }
 
     // ==================== 综合测试：写入后 contentHash 不变 ====================

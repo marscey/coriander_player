@@ -1,11 +1,13 @@
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/component/audio_tile.dart';
+import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/genre_service.dart';
 import 'package:coriander_player/page/uni_page_components.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class GenresPage extends StatelessWidget {
@@ -81,10 +83,9 @@ class _GenreTile extends StatelessWidget {
         button: true,
         child: InkWell(
           onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => GenreDetailPage(genre: genre),
-              ),
+            context.push(
+              app_paths.GENRE_DETAIL_PAGE,
+              extra: genre,
             );
           },
           borderRadius: BorderRadius.circular(8.0),

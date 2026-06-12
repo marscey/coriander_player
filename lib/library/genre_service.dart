@@ -1,9 +1,8 @@
 import 'package:coriander_player/library/audio_library.dart';
-import 'package:coriander_player/metadata/metadata_store.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/foundation.dart';
 
-/// 流派服务 - 从 MetadataStore 查询流派信息并关联 AudioLibrary
+/// 流派服务 - 从 AudioLibrary 获取流派信息
 class GenreService extends ChangeNotifier {
   static GenreService get instance {
     _instance ??= GenreService._();
@@ -19,35 +18,23 @@ class GenreService extends ChangeNotifier {
 
   List<Genre> get genres => _genreCollection.values.toList();
 
-  /// 从 MetadataStore 加载流派数据并关联 AudioLibrary
+  /// 从 AudioLibrary.genreCollection 加载流派数据
   Future<void> load() async {
     try {
-      final db = await MetadataStore.instance.database;
-      final results = await db.rawQuery(
-        'SELECT DISTINCT genre FROM ${MetadataStore.metadataTable} WHERE genre IS NOT NULL AND genre != ""',
-      );
-
       final Map<String, Genre> newCollection = {};
 
-      for (final row in results) {
-        final genreName = row['genre'] as String;
+      // 从 AudioLibrary.genreCollection 获取（本地扫描 + 云音频的 genre 标签）
+      for (final entry in AudioLibrary.instance.genreCollection.entries) {
+        final genreName = entry.key;
         if (genreName.isEmpty) continue;
-        newCollection.putIfAbsent(genreName, () => Genre(name: genreName));
-      }
-
-      // 关联 AudioLibrary 中的音频到流派
-      for (Audio audio in AudioLibrary.instance.audioCollection) {
-        try {
-          final record = await MetadataStore.instance
-              .getMetadataByPath(audio.path);
-          if (record?.genre != null && record!.genre!.isNotEmpty) {
-            newCollection
-                .putIfAbsent(record.genre!, () => Genre(name: record.genre!))
-                .works
-                .add(audio);
+        final genre = newCollection.putIfAbsent(
+          genreName,
+          () => Genre(name: genreName),
+        );
+        for (final audio in entry.value.works) {
+          if (!genre.works.any((a) => a.path == audio.path)) {
+            genre.works.add(audio);
           }
-        } catch (_) {
-          // 忽略单个音频的查询错误
         }
       }
 

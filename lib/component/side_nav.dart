@@ -18,10 +18,10 @@ class DestinationDesc {
 /// 分支顺序必须与 entry.dart 中 StatefulShellRoute.indexedStack 的 branches 顺序一致
 final destinations = <DestinationDesc>[
   DestinationDesc(Symbols.library_music, "音乐库", app_paths.AUDIOS_PAGE),
+  DestinationDesc(Symbols.list, "歌单", app_paths.PLAYLISTS_PAGE),
   DestinationDesc(Symbols.category, "类别", app_paths.CATEGORIES_PAGE),
   DestinationDesc(Symbols.folder, "本地", app_paths.FOLDERS_PAGE),
   DestinationDesc(Symbols.cloud, "连接", app_paths.CLOUD_CONNECTIONS_PAGE),
-  DestinationDesc(Symbols.list, "歌单", app_paths.PLAYLISTS_PAGE),
   DestinationDesc(Symbols.search, "搜索", app_paths.SEARCH_PAGE),
   DestinationDesc(Symbols.settings, "设置", app_paths.SETTINGS_PAGE),
 ];

@@ -179,6 +179,8 @@ class ScraperOrchestrator {
       title: bestMatch.title,
       artist: bestMatch.artist,
       album: bestMatch.album,
+      year: bestMatch.year,
+      genre: bestMatch.genre,
       mbRecordingId: bestMatch.mbRecordingId,
       mbReleaseId: bestMatch.mbReleaseId,
       mbArtistId: bestMatch.mbArtistId,

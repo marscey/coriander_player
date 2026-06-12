@@ -6,6 +6,7 @@ import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/cloud_service/cloud_audio_player.dart';
 import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/library/genre_service.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
 import 'package:coriander_player/play_service/play_service.dart';
@@ -61,6 +62,7 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
       readPlaylists(),
       readLyricSources(),
     ]);
+    await GenreService.instance.refresh();
 
     // TODO: 测试用自动扫描，稳定后移除
     if (AppSettings.instance.autoTestConfig) {
@@ -111,11 +113,11 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
       LOGGER.i('[Test] Auto-scan completed');
 
       // 后台更新元数据（封面等），不阻塞主线程
-      final cloudAudios = library.audioCollection
-          .where((a) => a.isCloudAudio)
-          .toList();
+      final cloudAudios =
+          library.audioCollection.where((a) => a.isCloudAudio).toList();
       if (cloudAudios.isNotEmpty) {
-        LOGGER.i('[Test] Starting background metadata update for ${cloudAudios.length} audios...');
+        LOGGER.i(
+            '[Test] Starting background metadata update for ${cloudAudios.length} audios...');
         CloudAudioPlayer.updateAudioMetadataInBackground(
           audios: cloudAudios,
           onProgress: (completed, total) {

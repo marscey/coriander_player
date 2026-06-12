@@ -409,6 +409,8 @@ class MetadataService {
           title: output.bestMatch.title,
           artist: output.bestMatch.artist,
           album: output.bestMatch.album,
+          year: output.bestMatch.year,
+          genre: output.bestMatch.genre,
           mbRecordingId: output.bestMatch.mbRecordingId,
           mbReleaseId: output.bestMatch.mbReleaseId,
           mbArtistId: output.bestMatch.mbArtistId,

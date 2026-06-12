@@ -122,7 +122,9 @@ class CloudAudioPlayer {
       parsed.title,
       parsed.artist,
       '',
-      '',           // genre
+      '', // genre
+      null, // year
+      '', // date
       0,
       0,
       null,
@@ -259,6 +261,15 @@ class CloudAudioPlayer {
         if (meta['sample_rate'] != null) {
           np.sampleRate = meta['sample_rate'] as int?;
         }
+        if (meta['genre'] != null && (meta['genre'] as String).isNotEmpty) {
+          np.genre = meta['genre'] as String;
+        }
+        if (meta['year'] != null) {
+          np.year = meta['year'] as int?;
+          if (meta['date'] != null && (meta['date'] as String).isNotEmpty) {
+            np.date = meta['date'] as String;
+          }
+        }
         np.fileSize = fileSize;
 
         // 尝试从缓存文件获取封面
@@ -375,6 +386,9 @@ class CloudAudioPlayer {
             np.duration = updatedAudio.duration;
             np.bitrate = updatedAudio.bitrate;
             np.sampleRate = updatedAudio.sampleRate;
+            np.genre = updatedAudio.genre;
+            np.year = updatedAudio.year;
+            np.date = updatedAudio.date;
             LOGGER.i(
                 '[CloudAudioPlayer] metadata updated: title=${updatedAudio.title}, artist=${updatedAudio.artist}, album=${updatedAudio.album}, duration=${updatedAudio.duration}');
 
@@ -425,6 +439,9 @@ class CloudAudioPlayer {
         audio.duration = existingInLib.duration;
         audio.bitrate = existingInLib.bitrate;
         audio.sampleRate = existingInLib.sampleRate;
+        audio.genre = existingInLib.genre;
+        audio.year = existingInLib.year;
+        audio.date = existingInLib.date;
         if (existingInLib.coverImage != null) {
           audio.setCover(existingInLib.coverImage!);
         }
@@ -481,6 +498,9 @@ class CloudAudioPlayer {
               np.duration = updatedAudio.duration;
               np.bitrate = updatedAudio.bitrate;
               np.sampleRate = updatedAudio.sampleRate;
+              np.genre = updatedAudio.genre;
+              np.year = updatedAudio.year;
+              np.date = updatedAudio.date;
 
               try {
                 final pic = await getPictureFromPath(
@@ -528,6 +548,9 @@ class CloudAudioPlayer {
         audio.duration = updatedAudio.duration;
         audio.bitrate = updatedAudio.bitrate;
         audio.sampleRate = updatedAudio.sampleRate;
+        audio.genre = updatedAudio.genre;
+        audio.year = updatedAudio.year;
+        audio.date = updatedAudio.date;
         if (updatedAudio.coverImage != null) {
           audio.setCover(updatedAudio.coverImage!);
         }
@@ -562,7 +585,9 @@ class CloudAudioPlayer {
       parsed.title,
       parsed.artist,
       '',
-      '',           // genre
+      '', // genre
+      null, // year
+      '', // date
       0,
       0,
       null,
@@ -629,7 +654,11 @@ class CloudAudioPlayer {
       final metaAlbum = meta['album'] as String?;
       final metaTrack = meta['track'] as int?;
       final metaGenre = meta['genre'] as String?;
+      final metaYear = meta['year'] as int?;
+      final metaDate = meta['date'] as String?;
       final metaDuration = meta['duration'] as int?;
+      LOGGER.i(
+          '[DEBUG] _createAudioViaRange: genre=$metaGenre, year=$metaYear, title=$metaTitle, artist=$metaArtist, album=$metaAlbum');
       final metaBitrate = meta['bitrate'] as int?;
       final metaSampleRate = meta['sample_rate'] as int?;
 
@@ -663,7 +692,9 @@ class CloudAudioPlayer {
             ? metaArtist
             : parsed.artist,
         (metaAlbum != null && metaAlbum.isNotEmpty) ? metaAlbum : '',
-        (metaGenre != null && metaGenre.isNotEmpty) ? metaGenre : '',  // genre
+        (metaGenre != null && metaGenre.isNotEmpty) ? metaGenre : '', // genre
+        metaYear, // year
+        metaDate ?? '', // date
         metaTrack ?? 0,
         duration,
         bitrate,
@@ -719,7 +750,9 @@ class CloudAudioPlayer {
       parsed.title,
       parsed.artist,
       '',
-      '',           // genre
+      '', // genre
+      null, // year
+      '', // date
       0,
       0,
       null,
@@ -941,11 +974,48 @@ class CloudAudioPlayer {
 
       final library = AudioLibrary.instance;
       final cloudAudios = <Audio>[];
+      final needUpdateAudios = <Audio>[]; // 已存在但缺少 genre/year 的音频
 
       for (int i = 0; i < audioFiles.length; i++) {
         final file = audioFiles[i];
         try {
-          if (library.audioCollection.any((a) => a.path == file.path)) continue;
+          final existing = library.audioCollection
+              .where((a) => a.path == file.path)
+              .firstOrNull;
+
+          if (existing != null) {
+            // 已存在：检查是否缺少 genre/year，如果是则重新读取元数据
+            if (existing.genre.isEmpty && existing.year == null) {
+              needUpdateAudios.add(existing);
+              registerPath(file.path, service);
+              onStatus?.call(
+                  '正在更新元数据 (${i + 1}/${audioFiles.length}): ${file.name}');
+              try {
+                final updatedAudio = await _createAudioViaRange(service, file,
+                    connectionId: connectionId);
+                // 更新已有音频的元数据
+                existing.title = updatedAudio.title;
+                existing.artist = updatedAudio.artist;
+                existing.splitedArtists = updatedAudio.splitedArtists;
+                existing.album = updatedAudio.album;
+                existing.genre = updatedAudio.genre;
+                existing.year = updatedAudio.year;
+                existing.date = updatedAudio.date;
+                existing.track = updatedAudio.track;
+                existing.duration = updatedAudio.duration;
+                existing.bitrate = updatedAudio.bitrate;
+                existing.sampleRate = updatedAudio.sampleRate;
+                if (updatedAudio.coverImage != null) {
+                  existing.setCover(updatedAudio.coverImage!);
+                }
+                LOGGER.i(
+                    '[DEBUG] addCloudFolderToLibrary: 更新已有音频元数据 genre=${existing.genre}, year=${existing.year}, path=${existing.path}');
+              } catch (e) {
+                LOGGER.w('[CloudAudioPlayer] 更新已有音频元数据失败: ${file.path} - $e');
+              }
+            }
+            continue;
+          }
 
           registerPath(file.path, service);
           onStatus?.call('正在处理 (${i + 1}/${audioFiles.length}): ${file.name}');
@@ -963,7 +1033,9 @@ class CloudAudioPlayer {
             parsed.title,
             parsed.artist,
             '',
-            '',           // genre
+            '', // genre
+            null, // year
+            '', // date
             0,
             0,
             null,
@@ -979,12 +1051,20 @@ class CloudAudioPlayer {
         }
       }
 
-      if (cloudAudios.isNotEmpty) {
-        await library.addCloudAudios(cloudAudios);
+      if (cloudAudios.isNotEmpty || needUpdateAudios.isNotEmpty) {
+        if (cloudAudios.isNotEmpty) {
+          await library.addCloudAudios(cloudAudios);
+        }
         library.rebuildCollections();
         await library.saveCloudAudios();
         library.notifyUpdated();
-        onStatus?.call('完成！已添加 ${cloudAudios.length} 首音频到音乐库');
+        final addedMsg =
+            cloudAudios.isNotEmpty ? '已添加 ${cloudAudios.length} 首音频' : '';
+        final updatedMsg = needUpdateAudios.isNotEmpty
+            ? '已更新 ${needUpdateAudios.length} 首音频的元数据'
+            : '';
+        onStatus?.call(
+            '完成！$addedMsg${addedMsg.isNotEmpty && updatedMsg.isNotEmpty ? '，' : ''}$updatedMsg');
       } else {
         onStatus?.call('未找到新的音频文件');
       }
@@ -1003,7 +1083,8 @@ class CloudAudioPlayer {
   }) async {
     if (audios.isEmpty) return;
 
-    LOGGER.i('[CloudAudioPlayer] Starting background metadata update for ${audios.length} audios');
+    LOGGER.i(
+        '[CloudAudioPlayer] Starting background metadata update for ${audios.length} audios');
 
     final total = audios.length;
     for (int i = 0; i < total; i++) {
@@ -1018,7 +1099,8 @@ class CloudAudioPlayer {
           AudioLibrary.instance.notifyUpdated();
         }
       } catch (e) {
-        LOGGER.e('[CloudAudioPlayer] Failed to update metadata for ${audio.title}: $e');
+        LOGGER.e(
+            '[CloudAudioPlayer] Failed to update metadata for ${audio.title}: $e');
       }
     }
 
@@ -1045,11 +1127,47 @@ class CloudAudioPlayer {
 
       final library = AudioLibrary.instance;
       final cloudAudios = <Audio>[];
+      final needUpdateAudios = <Audio>[];
 
       for (int i = 0; i < audioFiles.length; i++) {
         final file = audioFiles[i];
         try {
-          if (library.audioCollection.any((a) => a.path == file.path)) continue;
+          final existing = library.audioCollection
+              .where((a) => a.path == file.path)
+              .firstOrNull;
+
+          if (existing != null) {
+            // 已存在：检查是否缺少 genre/year，如果是则重新读取元数据
+            if (existing.genre.isEmpty && existing.year == null) {
+              needUpdateAudios.add(existing);
+              registerPath(file.path, service);
+              onStatus?.call(
+                  '正在更新元数据 (${i + 1}/${audioFiles.length}): ${file.name}');
+              try {
+                final updatedAudio = await _createAudioViaRange(service, file,
+                    connectionId: connectionId);
+                existing.title = updatedAudio.title;
+                existing.artist = updatedAudio.artist;
+                existing.splitedArtists = updatedAudio.splitedArtists;
+                existing.album = updatedAudio.album;
+                existing.genre = updatedAudio.genre;
+                existing.year = updatedAudio.year;
+                existing.date = updatedAudio.date;
+                existing.track = updatedAudio.track;
+                existing.duration = updatedAudio.duration;
+                existing.bitrate = updatedAudio.bitrate;
+                existing.sampleRate = updatedAudio.sampleRate;
+                if (updatedAudio.coverImage != null) {
+                  existing.setCover(updatedAudio.coverImage!);
+                }
+                LOGGER.i(
+                    '[DEBUG] addCloudFilesToLibrary: 更新已有音频元数据 genre=${existing.genre}, year=${existing.year}');
+              } catch (e) {
+                LOGGER.w('[CloudAudioPlayer] 更新已有音频元数据失败: ${file.path} - $e');
+              }
+            }
+            continue;
+          }
 
           registerPath(file.path, service);
           onStatus?.call('正在处理 (${i + 1}/${audioFiles.length}): ${file.name}');
@@ -1067,7 +1185,9 @@ class CloudAudioPlayer {
             parsed.title,
             parsed.artist,
             '',
-            '',           // genre
+            '', // genre
+            null, // year
+            '', // date
             0,
             0,
             null,
@@ -1083,12 +1203,20 @@ class CloudAudioPlayer {
         }
       }
 
-      if (cloudAudios.isNotEmpty) {
-        await library.addCloudAudios(cloudAudios);
+      if (cloudAudios.isNotEmpty || needUpdateAudios.isNotEmpty) {
+        if (cloudAudios.isNotEmpty) {
+          await library.addCloudAudios(cloudAudios);
+        }
         library.rebuildCollections();
         await library.saveCloudAudios();
         library.notifyUpdated();
-        onStatus?.call('完成！已添加 ${cloudAudios.length} 首音频到音乐库');
+        final addedMsg =
+            cloudAudios.isNotEmpty ? '已添加 ${cloudAudios.length} 首音频' : '';
+        final updatedMsg = needUpdateAudios.isNotEmpty
+            ? '已更新 ${needUpdateAudios.length} 首音频的元数据'
+            : '';
+        onStatus?.call(
+            '完成！$addedMsg${addedMsg.isNotEmpty && updatedMsg.isNotEmpty ? '，' : ''}$updatedMsg');
       } else {
         onStatus?.call('所有文件已在音乐库中');
       }

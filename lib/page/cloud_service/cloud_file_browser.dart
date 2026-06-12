@@ -10,6 +10,7 @@ import '../../play_service/play_service.dart';
 import '../../platform_helper.dart';
 import 'dart:io';
 import '../../cloud_service/cloud_audio_player.dart';
+import '../../library/genre_service.dart';
 import 'package:coriander_player/component/playing_indicator.dart';
 
 enum FileSortBy {
@@ -1491,6 +1492,7 @@ class _ScanToLibraryDialogState extends State<_ScanToLibraryDialog> {
           if (mounted) setState(() => _status = status);
         },
       );
+      await GenreService.instance.refresh();
       if (mounted) setState(() => _done = true);
     } catch (e) {
       if (mounted) {
@@ -1564,6 +1566,7 @@ class _AddToLibraryDialogState extends State<_AddToLibraryDialog> {
           if (mounted) setState(() => _status = status);
         },
       );
+      await GenreService.instance.refresh();
       if (mounted) setState(() => _done = true);
     } catch (e) {
       if (mounted) {
