@@ -1,13 +1,15 @@
-import 'dart:ui';
-
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/page/uni_page.dart';
 import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/utils.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-/// 专辑详情页面
+/// 专辑详情页面 — iOS 26 Liquid Glass 风格
 class AlbumDetailPageNew extends StatefulWidget {
   const AlbumDetailPageNew({super.key, required this.album});
 
@@ -18,6 +20,7 @@ class AlbumDetailPageNew extends StatefulWidget {
 }
 
 class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
+  late List<SortMethodDesc<Audio>> sortMethods;
   late SortMethodDesc<Audio>? currSortMethod;
   late SortOrder currSortOrder;
   late ContentView currContentView;
@@ -26,33 +29,31 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
   late ScrollController _scrollController;
   late ValueNotifier<double> _scrollNotifier;
 
+  // ─── 玻璃效果参数（与艺术家V3页面一致）───
+
+  static const _navButtonQuality = GlassQuality.premium;
+
+  static LiquidGlassSettings get _navButtonSettings => const LiquidGlassSettings(
+        blur: 3,
+        thickness: 30,
+        ambientStrength: 1,
+        lightIntensity: 0.6,
+        lightAngle: 0.75 * 3.14159,
+        chromaticAberration: 0.3,
+        refractiveIndex: 1.59,
+        saturation: 0.7,
+        glassColor: Color(0x3DFFFFFF),
+        specularSharpness: GlassSpecularSharpness.medium,
+      );
+
   @override
   void initState() {
     super.initState();
-    currSortMethod = SortMethodDesc(
-      icon: Symbols.numbers,
-      name: "音轨",
-      method: (list, order) {
-        switch (order) {
-          case SortOrder.ascending:
-            list.sort((a, b) => a.track.compareTo(b.track));
-            break;
-          case SortOrder.decending:
-            list.sort((a, b) => b.track.compareTo(a.track));
-            break;
-        }
-      },
-    );
-    currSortOrder = SortOrder.ascending;
-    currContentView = ContentView.list;
-    multiSelectController = MultiSelectController<Audio>();
-    sortedAudios = List.from(widget.album.works);
-    currSortMethod?.method(sortedAudios, currSortOrder);
+    _initSortAndView();
     _scrollController = ScrollController();
     _scrollNotifier = ValueNotifier(0.0);
     _scrollController.addListener(_onScroll);
 
-    // 设置沉浸式状态栏
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
@@ -60,31 +61,85 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
     ));
   }
 
+  void _initSortAndView() {
+    sortMethods = [
+      SortMethodDesc(
+        icon: Symbols.numbers,
+        name: "音轨",
+        method: (list, order) {
+          switch (order) {
+            case SortOrder.ascending:
+              list.sort((a, b) => a.track.compareTo(b.track));
+            case SortOrder.decending:
+              list.sort((a, b) => b.track.compareTo(a.track));
+          }
+        },
+      ),
+      SortMethodDesc(
+        icon: Symbols.title,
+        name: "标题",
+        method: (list, order) {
+          switch (order) {
+            case SortOrder.ascending:
+              list.sort((a, b) => a.title.localeCompareTo(b.title));
+            case SortOrder.decending:
+              list.sort((a, b) => b.title.localeCompareTo(a.title));
+          }
+        },
+      ),
+      SortMethodDesc(
+        icon: Symbols.artist,
+        name: "艺术家",
+        method: (list, order) {
+          switch (order) {
+            case SortOrder.ascending:
+              list.sort((a, b) => a.artist.localeCompareTo(b.artist));
+            case SortOrder.decending:
+              list.sort((a, b) => b.artist.localeCompareTo(a.artist));
+          }
+        },
+      ),
+    ];
+
+    currSortMethod = sortMethods[0]; // 默认按音轨排序
+    currSortOrder = SortOrder.ascending;
+    currContentView = ContentView.list;
+    multiSelectController = MultiSelectController<Audio>();
+    sortedAudios = List.from(widget.album.works);
+    currSortMethod?.method(sortedAudios, currSortOrder);
+  }
+
+  void setSortMethod(SortMethodDesc<Audio> sortMethod) {
+    setState(() {
+      currSortMethod = sortMethod;
+      currSortMethod?.method(sortedAudios, currSortOrder);
+    });
+  }
+
+  void setSortOrder(SortOrder sortOrder) {
+    setState(() {
+      currSortOrder = sortOrder;
+      currSortMethod?.method(sortedAudios, currSortOrder);
+    });
+  }
+
+  void setContentView(ContentView contentView) {
+    setState(() {
+      currContentView = contentView;
+    });
+  }
+
   @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _scrollNotifier.dispose();
-    // 恢复状态栏样式
-    final brightness = Theme.of(context).brightness;
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness:
-          brightness == Brightness.dark ? Brightness.light : Brightness.dark,
-      statusBarBrightness: brightness,
-    ));
     super.dispose();
   }
 
   void _onScroll() {
+    if (!_scrollController.hasClients) return;
     _scrollNotifier.value = _scrollController.offset;
-  }
-
-  String _formatTotalDuration() {
-    final totalSeconds = sortedAudios.fold<int>(0, (sum, audio) => sum + audio.duration);
-    final minutes = totalSeconds ~/ 60;
-    final seconds = totalSeconds % 60;
-    return '$minutes 分钟 ${seconds.toString().padLeft(2, '0')} 秒';
   }
 
   @override
@@ -92,7 +147,7 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
     final scheme = Theme.of(context).colorScheme;
     final album = widget.album;
     final statusBarHeight = MediaQuery.of(context).padding.top;
-    final navBarHeight = 56.0;
+    const navBarHeight = 56.0;
 
     return Scaffold(
       backgroundColor: scheme.surface,
@@ -103,19 +158,21 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
             child: CustomScrollView(
               controller: _scrollController,
               slivers: [
-                // 顶部间距
+                // 顶部间距（紧凑布局，减少空白）
                 SliverToBoxAdapter(
-                  child: SizedBox(height: statusBarHeight + navBarHeight + 8.0),
+                  child: SizedBox(height: statusBarHeight + navBarHeight),
                 ),
 
-                // 大标题（使用 ValueListenableBuilder 避免全量 rebuild）
+                // 大标题
                 SliverToBoxAdapter(
                   child: ValueListenableBuilder<double>(
                     valueListenable: _scrollNotifier,
                     builder: (context, scrollOffset, _) {
-                      final opacity = (1.0 - scrollOffset / 100.0).clamp(0.0, 1.0);
+                      final opacity =
+                          (1.0 - scrollOffset / 100.0).clamp(0.0, 1.0);
                       return Padding(
-                        padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 12.0),
+                        padding:
+                            const EdgeInsets.fromLTRB(16.0, 4.0, 16.0, 12.0),
                         child: Opacity(
                           opacity: opacity,
                           child: Text(
@@ -140,7 +197,8 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
                 // 操作按钮区
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 12.0),
                     child: Row(
                       children: [
                         Expanded(
@@ -149,7 +207,8 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
                             label: "顺序播放",
                             onTap: () {
                               HapticFeedback.lightImpact();
-                              PlayService.instance.playbackService.play(0, sortedAudios);
+                              PlayService.instance.playbackService
+                                  .play(0, sortedAudios);
                             },
                           ),
                         ),
@@ -160,7 +219,8 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
                             label: "随机播放",
                             onTap: () {
                               HapticFeedback.lightImpact();
-                              PlayService.instance.playbackService.shuffleAndPlay(sortedAudios);
+                              PlayService.instance.playbackService
+                                  .shuffleAndPlay(sortedAudios);
                             },
                           ),
                         ),
@@ -169,24 +229,37 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
                   ),
                 ),
 
-                // 歌曲列表
-                SliverList.builder(
-                  itemCount: sortedAudios.length,
-                  itemBuilder: (context, index) {
-                    return _AlbumAudioTile(
-                      audio: sortedAudios[index],
-                      audioIndex: index,
-                      playlist: sortedAudios,
-                    );
-                  },
-                ),
+                // 歌曲列表 / 网格视图
+                switch (currContentView) {
+                  ContentView.list => SliverList.builder(
+                      itemCount: sortedAudios.length,
+                      itemBuilder: (context, index) {
+                        return _AlbumAudioTile(
+                          audio: sortedAudios[index],
+                          audioIndex: index,
+                          playlist: sortedAudios,
+                        );
+                      },
+                    ),
+                  ContentView.table => SliverGrid.builder(
+                      gridDelegate: gridDelegate,
+                      itemCount: sortedAudios.length,
+                      itemBuilder: (context, index) {
+                        return _AlbumAudioTile(
+                          audio: sortedAudios[index],
+                          audioIndex: index,
+                          playlist: sortedAudios,
+                        );
+                      },
+                    ),
+                },
 
                 const SliverPadding(padding: EdgeInsets.only(bottom: 96.0)),
               ],
             ),
           ),
 
-          // 毛玻璃导航栏（透明背景 + 玻璃效果图标）
+          // 导航栏（Liquid Glass 风格，与艺术家V3页面一致）
           Positioned(
             top: 0,
             left: 0,
@@ -194,9 +267,10 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
             child: ValueListenableBuilder<double>(
               valueListenable: _scrollNotifier,
               builder: (context, scrollOffset, _) {
-                // 导航栏背景透明度随滚动变化
-                final bgOpacity = (scrollOffset / 100.0).clamp(0.0, 0.85);
-                final navTitleOpacity = (scrollOffset / 100.0).clamp(0.0, 1.0);
+                final bgOpacity =
+                    (scrollOffset / 100.0).clamp(0.0, 0.85);
+                final navTitleOpacity =
+                    ((scrollOffset - 50.0) / 70.0).clamp(0.0, 1.0);
 
                 return Container(
                   height: statusBarHeight + navBarHeight,
@@ -205,25 +279,30 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
                   ),
                   child: SafeArea(
                     bottom: false,
-                    child: Container(
+                    child: SizedBox(
                       height: navBarHeight,
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       child: Row(
                         children: [
-                          // 返回按钮（玻璃效果）
-                          _GlassButton(
-                            onTap: () => Navigator.pop(context),
-                            child: Icon(Symbols.arrow_back, color: scheme.onSurface, size: 20.0),
+                          // 返回按钮（与艺术家V3页面一致：GlassButton + arrow_back_ios_new）
+                          GlassButton(
+                            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                            iconSize: 20,
+                            width: 44,
+                            height: 44,
+                            useOwnLayer: true,
+                            settings: _navButtonSettings,
+                            quality: _navButtonQuality,
+                            onTap: () => context.pop(),
                           ),
                           const SizedBox(width: 8.0),
-                          // 折叠后标题
+                          // 折叠后标题（滚动时淡入）
                           Expanded(
                             child: Opacity(
                               opacity: navTitleOpacity,
                               child: Text(
                                 album.name,
                                 style: TextStyle(
-                                  fontSize: 18.0,
+                                  fontSize: 17.0,
                                   fontWeight: FontWeight.bold,
                                   color: scheme.onSurface,
                                 ),
@@ -232,11 +311,68 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
                               ),
                             ),
                           ),
-                          // 更多按钮（玻璃效果）
-                          _GlassButton(
-                            onTap: () {},
-                            child: Text("更多", style: TextStyle(color: scheme.onSurface)),
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          // 更多按钮（GlassMenu 三点菜单，与艺术家V3页面一致）
+                          GlassMenu(
+                            menuWidth: 220,
+                            quality: _navButtonQuality,
+                            triggerBuilder: (context, toggleMenu) =>
+                                GlassButton(
+                              onTap: toggleMenu,
+                              icon: const Icon(Icons.more_horiz, size: 22),
+                              iconSize: 22,
+                              width: 44,
+                              height: 44,
+                              useOwnLayer: true,
+                              settings: _navButtonSettings,
+                              quality: _navButtonQuality,
+                            ),
+                            items: [
+                              const GlassMenuLabel(title: '排序方式'),
+                              ...sortMethods.map((sm) => GlassMenuItem(
+                                    title: sm.name,
+                                    icon: Icon(sm.icon, size: 20),
+                                    trailing: sm.name ==
+                                            currSortMethod?.name
+                                        ? const Icon(CupertinoIcons.checkmark_alt,
+                                            size: 16)
+                                        : null,
+                                    onTap: () => setSortMethod(sm),
+                                  )),
+                              const GlassMenuDivider(),
+                              GlassMenuItem(
+                                title: currSortOrder == SortOrder.ascending
+                                    ? '升序'
+                                    : '降序',
+                                icon: Icon(
+                                  currSortOrder == SortOrder.ascending
+                                      ? Symbols.arrow_upward
+                                      : Symbols.arrow_downward,
+                                  size: 20,
+                                ),
+                                onTap: () => setSortOrder(
+                                  currSortOrder == SortOrder.ascending
+                                      ? SortOrder.decending
+                                      : SortOrder.ascending,
+                                ),
+                              ),
+                              const GlassMenuDivider(),
+                              GlassMenuItem(
+                                title: currContentView == ContentView.list
+                                    ? '列表视图'
+                                    : '表格视图',
+                                icon: Icon(
+                                  currContentView == ContentView.list
+                                      ? Symbols.list
+                                      : Symbols.table,
+                                  size: 20,
+                                ),
+                                onTap: () => setContentView(
+                                  currContentView == ContentView.list
+                                      ? ContentView.table
+                                      : ContentView.list,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -252,43 +388,6 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew> {
   }
 }
 
-/// 玻璃效果按钮
-class _GlassButton extends StatelessWidget {
-  const _GlassButton({required this.onTap, required this.child, this.padding});
-  final VoidCallback onTap;
-  final Widget child;
-  final EdgeInsetsGeometry? padding;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 4.0,
-            offset: const Offset(0, 1.0),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20.0),
-          child: Padding(
-            padding: padding ?? const EdgeInsets.all(8.0),
-            child: child,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// 专辑信息区
 class _AlbumInfoSection extends StatelessWidget {
   const _AlbumInfoSection({required this.album, required this.scheme});
@@ -296,7 +395,8 @@ class _AlbumInfoSection extends StatelessWidget {
   final ColorScheme scheme;
 
   String _formatTotalDuration(List<Audio> audios) {
-    final totalSeconds = audios.fold<int>(0, (sum, audio) => sum + audio.duration);
+    final totalSeconds =
+        audios.fold<int>(0, (sum, audio) => sum + audio.duration);
     final minutes = totalSeconds ~/ 60;
     final seconds = totalSeconds % 60;
     return '$minutes 分钟 ${seconds.toString().padLeft(2, '0')} 秒';
@@ -324,7 +424,9 @@ class _AlbumInfoSection extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8.0),
               child: _CachedCoverImage(
-                coverFuture: album.works.first.cover,
+                coverFuture: album.works.isEmpty
+                    ? Future.value(null)
+                    : album.works.first.cover,
                 width: 120.0,
                 height: 120.0,
                 scheme: scheme,
@@ -347,12 +449,14 @@ class _AlbumInfoSection extends StatelessWidget {
                 const SizedBox(height: 4.0),
                 Text(
                   album.name,
-                  style: TextStyle(fontSize: 14.0, color: scheme.onSurfaceVariant),
+                  style: TextStyle(
+                      fontSize: 14.0, color: scheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 4.0),
                 Text(
                   '${album.works.length} 歌曲, ${_formatTotalDuration(album.works)}',
-                  style: TextStyle(fontSize: 13.0, color: scheme.onSurfaceVariant),
+                  style: TextStyle(
+                      fontSize: 13.0, color: scheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -387,7 +491,8 @@ class _CachedCoverImage extends StatelessWidget {
             width: width,
             height: height,
             color: scheme.surfaceContainerHighest,
-            child: const Center(child: CircularProgressIndicator(strokeWidth: 2.0)),
+            child: const Center(
+                child: CircularProgressIndicator(strokeWidth: 2.0)),
           );
         }
         if (snapshot.data == null) {
@@ -419,7 +524,8 @@ class _CachedCoverImage extends StatelessWidget {
 
 /// 操作按钮组件
 class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.icon, required this.label, required this.onTap});
+  const _ActionButton(
+      {required this.icon, required this.label, required this.onTap});
   final IconData icon;
   final String label;
   final VoidCallback onTap;
@@ -444,7 +550,11 @@ class _ActionButton extends StatelessWidget {
             children: [
               Icon(icon, size: 20.0, color: scheme.onSurface),
               const SizedBox(width: 8.0),
-              Text(label, style: TextStyle(fontSize: 14.0, fontWeight: FontWeight.w500, color: scheme.onSurface)),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 14.0,
+                      fontWeight: FontWeight.w500,
+                      color: scheme.onSurface)),
             ],
           ),
         ),
@@ -455,7 +565,10 @@ class _ActionButton extends StatelessWidget {
 
 /// 专辑歌曲项
 class _AlbumAudioTile extends StatelessWidget {
-  const _AlbumAudioTile({required this.audio, required this.audioIndex, required this.playlist});
+  const _AlbumAudioTile(
+      {required this.audio,
+      required this.audioIndex,
+      required this.playlist});
   final Audio audio;
   final int audioIndex;
   final List<Audio> playlist;
@@ -463,7 +576,8 @@ class _AlbumAudioTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isPlaying = PlayService.instance.playbackService.nowPlaying == audio;
+    final isPlaying =
+        PlayService.instance.playbackService.nowPlaying == audio;
 
     return Material(
       color: Colors.transparent,
@@ -473,9 +587,12 @@ class _AlbumAudioTile extends StatelessWidget {
           PlayService.instance.playbackService.play(audioIndex, playlist);
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           decoration: BoxDecoration(
-            color: isPlaying ? scheme.primaryContainer.withValues(alpha: 0.3) : null,
+            color: isPlaying
+                ? scheme.primaryContainer.withValues(alpha: 0.3)
+                : null,
           ),
           child: Row(
             children: [
@@ -499,18 +616,34 @@ class _AlbumAudioTile extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(audio.title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 15.0, fontWeight: isPlaying ? FontWeight.bold : FontWeight.normal,
-                                  color: isPlaying ? scheme.primary : scheme.onSurface)),
+                          child: Text(audio.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 15.0,
+                                  fontWeight: isPlaying
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: isPlaying
+                                      ? scheme.primary
+                                      : scheme.onSurface)),
                         ),
                         if (audio.isCloudAudio)
-                          Padding(padding: const EdgeInsets.only(left: 4.0),
-                              child: Icon(Symbols.cloud, size: 14.0, color: scheme.onSurfaceVariant)),
+                          Padding(
+                              padding: const EdgeInsets.only(left: 4.0),
+                              child: Icon(Symbols.cloud,
+                                  size: 14.0,
+                                  color: scheme.onSurfaceVariant)),
                       ],
                     ),
                     const SizedBox(height: 2.0),
-                    Text('${audio.artist} - ${audio.album}', maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13.0, color: scheme.onSurfaceVariant)),
+                    Text(
+                        '${audio.artist} - ${audio.album}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 13.0,
+                            color: scheme.onSurfaceVariant)),
                   ],
                 ),
               ),
@@ -518,10 +651,18 @@ class _AlbumAudioTile extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(_formatDuration(audio.duration), style: TextStyle(fontSize: 13.0, color: scheme.onSurfaceVariant)),
+                  Text(_formatDuration(audio.duration),
+                      style: TextStyle(
+                          fontSize: 13.0, color: scheme.onSurfaceVariant)),
                   const SizedBox(height: 2.0),
-                  Text(audio.fileSize != null ? _formatFileSize(audio.fileSize!) : '',
-                      style: TextStyle(fontSize: 11.0, color: scheme.onSurfaceVariant.withValues(alpha: 0.7))),
+                  Text(
+                      audio.fileSize != null
+                          ? _formatFileSize(audio.fileSize!)
+                          : '',
+                      style: TextStyle(
+                          fontSize: 11.0,
+                          color:
+                              scheme.onSurfaceVariant.withValues(alpha: 0.7))),
                 ],
               ),
             ],

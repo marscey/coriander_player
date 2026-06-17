@@ -76,6 +76,11 @@ dependencies:
   # Windows上使用bass库
   # 在Flutter 3.3+中，使用条件依赖可以更好地管理平台特定代码
   
+  # iOS 26 Liquid Glass 风格组件库
+  liquid_glass_widgets: ^0.16.1
+  # Cupertino 图标（GlassSearchableBottomBar 内部依赖）
+  cupertino_icons: ^1.0.8
+
   # 移动端特定依赖
   # 用于Android和iOS平台的音频处理
   # audio_session: ^0.1.16 # 移动端音频会话管理

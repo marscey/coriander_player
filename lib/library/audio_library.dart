@@ -75,11 +75,14 @@ class AudioLibrary extends ChangeNotifier {
       instance.albumCollection.clear();
       instance.genreCollection.clear();
       instance._buildCollections();
-
-      await instance._loadCloudAudios();
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
+      // index.json 加载失败时，确保 AudioLibrary 实例存在
+      _instance ??= AudioLibrary._([]);
     }
+
+    // 无论 index.json 是否加载成功，都尝试加载云音频
+    await instance._loadCloudAudios();
   }
 
   static Future<String> _getCloudAudiosFilePath() async {

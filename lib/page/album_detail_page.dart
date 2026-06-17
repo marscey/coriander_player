@@ -39,7 +39,7 @@ class AlbumDetailPage extends StatelessWidget {
       tertiaryContent: album.artistsMap.values.toList(),
       tertiaryContentBuilder: (context, artist, i, multiSelectController) =>
           ListTile(
-        onTap: () => context.push(app_paths.ARTIST_DETAIL_PAGE, extra: artist),
+        onTap: () => context.push(app_paths.ARTIST_DETAIL_PAGE_NEW, extra: artist),
         title: Text(artist.name),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
       ),

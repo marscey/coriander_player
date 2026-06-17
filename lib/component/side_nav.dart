@@ -133,23 +133,23 @@ class SideNav extends StatelessWidget {
 /// 移动端底部导航栏的导航项
 /// key: 显示在底部导航栏中的项 index (0-4)
 /// value: 对应 StatefulShellRoute 的分支 index
-const _mobileNavBranchMapping = [0, 1, 3, 5, 6];
+const _mobileNavBranchMapping = [0, 1, 2, 4, 6];
 
 /// 移动端底部导航栏显示的5个导航项
 final _mobileDestinations = <DestinationDesc>[
   destinations[0], // 音乐库
-  destinations[1], // 类别
-  destinations[3], // 连接
-  destinations[5], // 搜索
+  destinations[1], // 歌单
+  destinations[2], // 类别
+  destinations[4], // 连接
   destinations[6], // 设置
 ];
 
 /// Maestro 自动化测试用的语义标识符
 const _mobileTabIds = [
   'tab_library',
+  'tab_playlist',
   'tab_category',
   'tab_cloud',
-  'tab_search',
   'tab_settings'
 ];
 

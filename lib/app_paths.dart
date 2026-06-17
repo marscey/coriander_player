@@ -6,8 +6,10 @@ const String AUDIO_DETAIL_PAGE = "/audios/detail";
 const String CATEGORIES_PAGE = "/categories";
 const String ARTISTS_PAGE = "/categories/artists";
 const String ARTIST_DETAIL_PAGE = "/categories/artists/detail";
+const String ARTIST_DETAIL_PAGE_NEW = "/artist-detail";
 const String ALBUMS_PAGE = "/categories/albums";
 const String ALBUM_DETAIL_PAGE = "/categories/albums/detail";
+const String ALBUM_DETAIL_PAGE_NEW = "/album-detail";
 const String GENRES_PAGE = "/categories/genres";
 const String GENRE_DETAIL_PAGE = "/categories/genres/detail";
 
@@ -34,10 +36,11 @@ const String CLOUD_BROWSER_PAGE =
     "/cloud/browser"; // 实际路径: /cloud/browser/:connectionId
 
 /// 可以作为 start page 的 pages
+/// 顺序与移动端底部导航栏一致：音乐库、歌单、类别、连接、设置
 const List<String> START_PAGES = [
   AUDIOS_PAGE,
   PLAYLISTS_PAGE,
   CATEGORIES_PAGE,
-  FOLDERS_PAGE,
   CLOUD_CONNECTIONS_PAGE,
+  SETTINGS_PAGE,
 ];

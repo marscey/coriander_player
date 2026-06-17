@@ -302,7 +302,7 @@ class _NowPlayingMoreAction extends StatelessWidget {
                 final Artist artist = AudioLibrary
                     .instance.artistCollection[nowPlaying.splitedArtists[i]]!;
                 context.push(
-                  app_paths.ARTIST_DETAIL_PAGE,
+                  app_paths.ARTIST_DETAIL_PAGE_NEW,
                   extra: artist,
                 );
               },

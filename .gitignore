@@ -59,7 +59,8 @@ AGENTS.md
 
 # 测试相关
 # Maestro 测试产物
-/test/maestro/
-/test/reports/
+test/meastro/
+
+test/reports/
 
 docs/

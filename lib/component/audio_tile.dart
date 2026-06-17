@@ -87,7 +87,7 @@ class _AudioTileState extends State<AudioTile> {
                 final Artist artist = AudioLibrary
                     .instance.artistCollection[audio.splitedArtists[i]]!;
                 context.push(
-                  app_paths.ARTIST_DETAIL_PAGE,
+                  app_paths.ARTIST_DETAIL_PAGE_NEW,
                   extra: artist,
                 );
               },
@@ -239,10 +239,25 @@ class _AudioTileState extends State<AudioTile> {
       builder: (context, controller, _) {
         final textColor =
             (widget.focus || _isNowPlaying) ? scheme.primary : scheme.onSurface;
-        final placeholder = Icon(
-          Symbols.broken_image,
-          size: 48.0,
-          color: scheme.onSurface,
+        final placeholder = ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  scheme.primary.withValues(alpha: 0.8),
+                  scheme.primary.withValues(alpha: 0.4),
+                ],
+              ),
+            ),
+            child: Icon(
+              Symbols.music_note,
+              color: scheme.onSurface.withValues(alpha: 0.7),
+              size: 24,
+            ),
+          ),
         );
 
         return Semantics(

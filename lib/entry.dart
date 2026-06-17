@@ -6,6 +6,7 @@ import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/page/albums_page.dart';
 import 'package:coriander_player/page/album_detail_page_new.dart';
 import 'package:coriander_player/page/artist_detail_page.dart';
+import 'package:coriander_player/page/artist_detail_page_v3.dart';
 import 'package:coriander_player/page/artists_page.dart';
 import 'package:coriander_player/page/audio_detail_page.dart';
 import 'package:coriander_player/page/audios_page.dart';
@@ -326,6 +327,48 @@ class Entry extends StatelessWidget {
             );
           },
           child: const NowPlayingPage(),
+        ),
+      ),
+
+      /// artist detail page (immersive full-screen on mobile)
+      GoRoute(
+        path: app_paths.ARTIST_DETAIL_PAGE_NEW,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          transitionsBuilder: (context, animation, _, child) {
+            final tween = Tween(
+              begin: const Offset(0, 1),
+              end: const Offset(0, 0),
+            );
+
+            return SlideTransition(
+              position: tween.animate(
+                CurvedAnimation(parent: animation, curve: Curves.fastOutSlowIn),
+              ),
+              child: child,
+            );
+          },
+          child: ArtistDetailPageV3(artist: state.extra as Artist),
+        ),
+      ),
+
+      /// album detail page (top-level route, avoids StatefulShellRoute issues)
+      GoRoute(
+        path: app_paths.ALBUM_DETAIL_PAGE_NEW,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          transitionsBuilder: (context, animation, _, child) {
+            final tween = Tween(
+              begin: const Offset(0, 1),
+              end: const Offset(0, 0),
+            );
+
+            return SlideTransition(
+              position: tween.animate(
+                CurvedAnimation(parent: animation, curve: Curves.fastOutSlowIn),
+              ),
+              child: child,
+            );
+          },
+          child: AlbumDetailPageNew(album: state.extra as Album),
         ),
       ),
 

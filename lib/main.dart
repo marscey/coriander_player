@@ -21,6 +21,7 @@ import 'package:coriander_player/theme_provider.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -211,6 +212,9 @@ Future<void> loadPrefFont() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 预热 Liquid Glass shader，消除首次渲染白闪
+  await LiquidGlassWidgets.initialize();
+
   MediaKit.ensureInitialized();
 
   await RustLib.init();
@@ -272,5 +276,7 @@ Future<void> main() async {
 
   final cloudServiceManager = CloudServiceManager();
 
-  runApp(App(welcome: welcome, cloudServiceManager: cloudServiceManager));
+  runApp(LiquidGlassWidgets.wrap(
+    child: App(welcome: welcome, cloudServiceManager: cloudServiceManager),
+  ));
 }

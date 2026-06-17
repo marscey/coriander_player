@@ -26,7 +26,7 @@ class ArtistTile extends StatelessWidget {
         identifier: "artist_tile",
         button: true,
         child: InkWell(
-          onTap: () => context.push(app_paths.ARTIST_DETAIL_PAGE, extra: artist),
+          onTap: () => context.push(app_paths.ARTIST_DETAIL_PAGE_NEW, extra: artist),
           borderRadius: BorderRadius.circular(8.0),
           child: Padding(
             padding: const EdgeInsets.all(8.0),

@@ -49,10 +49,25 @@ class _PlaylistAudioItemState extends State<PlaylistAudioItem> {
     final defaultTextColor = widget.textColor ?? scheme.onSurface;
     final activeTextColor = scheme.primary;
     final itemTextColor = widget.isNowPlaying ? activeTextColor : defaultTextColor;
-    final placeholder = Icon(
-      Symbols.broken_image,
-      size: 40.0,
-      color: defaultTextColor,
+    final placeholder = ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              scheme.primary.withValues(alpha: 0.8),
+              scheme.primary.withValues(alpha: 0.4),
+            ],
+          ),
+        ),
+        child: Icon(
+          Symbols.music_note,
+          color: defaultTextColor.withValues(alpha: 0.7),
+          size: 20,
+        ),
+      ),
     );
     final showIndex = AppSettings.instance.showTrackIndex;
 
