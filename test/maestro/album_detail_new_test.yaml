@@ -1,0 +1,27 @@
+appId: com.senyepss.corianderPlayer
+---
+# 测试专辑详情页面
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "音乐库"
+
+# 长按第一首歌
+- longPressOn:
+    id: "audio_tile_0"
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# 点击详细信息
+- tapOn: "详细信息"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# 点击专辑
+- tapOn:
+    id: "album_tile"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# 截图初始状态
+- takeScreenshot: test/reports/screenshots/album-new-02-album-detail

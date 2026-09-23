@@ -1,0 +1,20 @@
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- assertVisible: "音乐库"
+- tapOn: "连接"
+- assertVisible: "云服务连接"
+- tapOn: "添加连接"
+- tapOn: "连接名称"
+- inputText: "测试音乐"
+- tapOn: "服务器地址"
+- inputText: "http://106.13.25.163:5244/dav"
+- tapOn: "用户名"
+- inputText: "musicyep"
+- tapOn: "密码"
+- inputText: "Muy@s-0122"
+- tapOn: "测试连接"
+- takeScreenshot: 01-test-connection
+- tapOn: "保存"
+- waitForAnimationToEnd
+- takeScreenshot: 02-connection-saved

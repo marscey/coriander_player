@@ -50,17 +50,9 @@ app.*.map.json
 /.fvm
 lib/page/settings_page/cpfeedback_key.dart
 
-# Claude
-CLAUDE.md
+# Claude（保留个人偏好目录忽略；CLAUDE.md 为团队规范，纳入版本控制）
 .claude/
 
-# Codex
-AGENTS.md
-
 # 测试相关
-# Maestro 测试产物
-test/meastro/
-
+# Maestro 测试产物（源流程 YAML 纳入版本控制，仅忽略运行产物）
 test/reports/
-
-docs/

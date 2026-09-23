@@ -1,0 +1,33 @@
+appId: com.senyepss.corianderPlayer
+---
+# 测试艺术家详情页标题栏
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "音乐库"
+
+# 长按第一首歌
+- longPressOn:
+    id: "audio_tile_0"
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# 点击详细信息
+- tapOn: "详细信息"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# 截图音乐详情页
+- takeScreenshot: test/reports/screenshots/nav-consistency-01-audio-detail
+
+# 点击艺术家
+- tapOn:
+    id: "artist_tile"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# 截图艺术家详情页
+- takeScreenshot: test/reports/screenshots/nav-consistency-02-artist-detail
+
+# 验证导航成功（标题栏显示艺术家名称）
+- assertVisible: "I Put A Spell On You"

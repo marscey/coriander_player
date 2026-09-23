@@ -1,0 +1,37 @@
+appId: com.senyepss.corianderPlayer
+---
+# 测试专辑/艺术家页面新布局
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "音乐库"
+
+# 长按第一首歌
+- longPressOn:
+    id: "audio_tile_0"
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# 点击详细信息
+- tapOn: "详细信息"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# 截图音乐详情页
+- takeScreenshot: test/reports/screenshots/album-layout-01-audio-detail
+
+# 点击艺术家
+- tapOn:
+    id: "artist_tile"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# 截图艺术家详情页（新布局）
+- takeScreenshot: test/reports/screenshots/album-layout-02-artist-detail
+
+# 验证搜索栏存在
+- assertVisible: "搜索歌曲、歌手和专辑..."
+
+# 验证操作按钮
+- assertVisible: "顺序播放"
+- assertVisible: "随机播放"

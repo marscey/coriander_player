@@ -1,0 +1,161 @@
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "音乐库"
+- assertVisible: "Coriander Player"
+- takeScreenshot: test/reports/screenshots/maestro-01-launch
+
+---
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "音乐库"
+- assertVisible: "最近播放"
+- assertVisible: "连接"
+- assertVisible: "搜索"
+- assertVisible: "设置"
+- takeScreenshot: test/reports/screenshots/maestro-02-navbar-5items
+
+---
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- assertNotVisible: "全屏"
+- assertNotVisible: "最小化"
+- assertNotVisible: "关闭"
+- assertNotVisible: "退出全屏"
+- assertNotVisible: "最大化"
+- assertNotVisible: "还原"
+- takeScreenshot: test/reports/screenshots/maestro-03-no-desktop-ui
+
+---
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: "最近播放"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "最近播放"
+- takeScreenshot: test/reports/screenshots/maestro-04-nav-recent
+
+---
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: "连接"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: test/reports/screenshots/maestro-05-nav-cloud
+
+---
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: "搜索"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "搜索"
+- takeScreenshot: test/reports/screenshots/maestro-06-nav-search
+
+---
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: "设置"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "设置"
+- takeScreenshot: test/reports/screenshots/maestro-07-nav-settings
+
+---
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: "搜索"
+- waitForAnimationToEnd:
+    timeout: 1000
+- assertVisible: "音乐库"
+- assertVisible: "最近播放"
+- assertVisible: "连接"
+- assertVisible: "搜索"
+- assertVisible: "设置"
+- takeScreenshot: test/reports/screenshots/maestro-08-navbar-persistent
+
+---
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "Coriander Player"
+- assertVisible: "Enjoy music"
+- takeScreenshot: test/reports/screenshots/maestro-09-mini-player
+
+---
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: test/reports/screenshots/maestro-10-style-anim-01
+- tapOn: "最近播放"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: test/reports/screenshots/maestro-10-style-anim-02
+- tapOn: "设置"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: test/reports/screenshots/maestro-10-style-anim-03
+
+---
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: test/reports/screenshots/maestro-11-library-empty
+- scroll:
+    direction: DOWN
+- takeScreenshot: test/reports/screenshots/maestro-11-library-scrolled
+
+---
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: "搜索"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: test/reports/screenshots/maestro-12-search-input
+- tapOn:
+    point: "50%,50%"
+- takeScreenshot: test/reports/screenshots/maestro-12-search-tapped
+
+---
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "音乐库"
+- assertVisible: "最近播放"
+- assertVisible: "连接"
+- assertVisible: "搜索"
+- assertVisible: "设置"
+- assertVisible: "Coriander Player"
+- takeScreenshot: test/reports/screenshots/maestro-13-final-layout

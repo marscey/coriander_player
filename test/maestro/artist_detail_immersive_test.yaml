@@ -1,0 +1,123 @@
+appId: com.senyepss.corianderPlayer
+---
+# ============================================================
+# 艺术家详情页沉浸式状态栏测试
+# 覆盖场景：
+#   1. 进入页面 → 首帧兜底色检查
+#   2. 等待背景图加载 → 模糊效果截图
+#   3. 状态栏区域视觉（无色块断层）
+#   4. 向下滚动 → 大标题淡出过程
+#   5. 滚动过阈值 → 状态栏图标颜色切换后截图
+#   6. 向上滚回顶部 → 恢复初始状态
+# ============================================================
+# Maestro iOS 使用要点：
+#   - scroll 命令不接受参数（等同于 swipe UP）
+#   - 需用 swipe + direction/start/end 控制精确滚动距离
+#   - idb-companion 是 iOS 模拟器通信的必要依赖
+
+# ---------- 场景 1：导航到艺术家详情页 + 首帧截图 ----------
+- launchApp
+- extendedWaitUntil:
+    visible: "音乐库"
+    timeout: 10000
+- takeScreenshot: test/reports/screenshots/immersive-statusbar-01-launch
+
+- longPressOn:
+    id: "audio_tile_0"
+- waitForAnimationToEnd:
+    timeout: 1000
+
+- tapOn: "详细信息"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+- tapOn:
+    id: "artist_tile"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# 首帧截图：此时背景图可能尚未加载完成，验证兜底色是否合理
+# （不应出现纯白/纯黑闪烁）
+- takeScreenshot: test/reports/screenshots/immersive-statusbar-02-first-frame
+
+# ---------- 场景 2：等待背景图异步加载完成 ----------
+# 等待背景图异步加载完成（固定延迟，确保 Future 解析+模糊渲染完成）
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# 背景图加载完成后截图：应看到模糊背景覆盖全屏（含状态栏区域）
+- takeScreenshot: test/reports/screenshots/immersive-statusbar-03-bg-loaded
+
+# ---------- 场景 3：状态栏区域静态视觉检查 ----------
+# 此时页面在顶部，状态栏下方应为模糊背景+暗色渐变
+# 截图用于人工/工具对比：状态栏区域与下方内容之间无断层
+- takeScreenshot: test/reports/screenshots/immersive-statusbar-04-top-static
+
+# 验证大标题可见（未滚动时 opacity=1.0）
+- assertVisible:
+    text: "周杰伦"
+    optional: true
+
+# ---------- 场景 4：向下滚动 — 大标题淡出过程 ----------
+# 重要：必须使用坐标式 swipe，起点必须在歌曲列表区域内！
+# 页面布局（iPhone 16 竖屏）：
+#   0-12%  : 状态栏 + 自定义顶栏（不滚动）
+#   12-35% : 大标题 + 专辑封面信息区（SliverToBoxAdapter）
+#   35-90%: 歌曲列表区域 ← 滑动起点应在此范围
+#   90-100%: 底部导航栏（不滚动）
+# swipe UP = 手指上滑 = 内容向下滚 = 列表向上移动
+
+# 第 1 次滑动：小幅度，大标题开始变淡（offset ~40px）
+- swipe:
+    start: 30%, 60%
+    end: 30%, 30%
+    duration: 400
+- takeScreenshot: test/reports/screenshots/immersive-statusbar-05-scroll-halfway
+
+# 第 2 次滑动：继续，大标题接近完全淡出（offset ~80px，接近阈值）
+- swipe:
+    start: 30%, 60%
+    end: 30%, 25%
+    duration: 400
+- takeScreenshot: test/reports/screenshots/immersive-statusbar-06-scroll-near-threshold
+
+# ---------- 场景 5：滚过阈值 — 状态栏样式切换后截图 ----------
+# 第 3 次滑动：确保 offset > 100px（触发 AnnotatedRegion 切换为深色图标）
+- swipe:
+    start: 30%, 70%
+    end: 30%, 20%
+    duration: 500
+- waitForAnimationToEnd:
+    timeout: 800
+
+# 此时应已触发 AnnotatedRegion 切换：状态栏图标变为深色
+# 状态栏区域下方显示的是 scheme.surface 色（非模糊背景）
+- takeScreenshot: test/reports/screenshots/immersive-statusbar-07-past-threshold
+
+# 第 4 次滑动：大幅滚到底部附近，验证深色状态栏在长距离滚动下保持稳定
+- swipe:
+    start: 30%, 80%
+    end: 30%, 10%
+    duration: 600
+- takeScreenshot: test/reports/screenshots/immersive-statusbar-08-scrolled-deep
+
+# ---------- 场景 6：向上滚回顶部 — 恢复初始状态 ----------
+# swipe DOWN = 手指下滑 = 内容向上滚回 = 回到顶部
+# 从列表中下部滑到上部
+- swipe:
+    start: 30%, 30%
+    end: 30%, 75%
+    duration: 600
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# 回到顶部后截图：应恢复浅色图标模式 + 模糊背景
+- takeScreenshot: test/reports/screenshots/immersive-statusbar-09-back-to-top
+
+# 验证大标题恢复可见
+- assertVisible:
+    text: "周杰伦"
+    optional: true
+
+# 最终完整布局截图
+- takeScreenshot: test/reports/screenshots/immersive-statusbar-10-final-layout

@@ -1,11 +1,14 @@
-import 'dart:io';
-
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/platform_dependency_manager.dart';
 import 'package:coriander_player/play_service/engine/bass_player_engine.dart';
 import 'package:coriander_player/play_service/engine/media_kit_player_engine.dart';
 import 'package:coriander_player/play_service/engine/player_engine.dart';
 import 'package:coriander_player/play_service/engine/player_engine_type.dart';
 
+/// 播放器引擎的创建入口。
+///
+/// 平台支持性判断统一由 [PlatformDependencyManager] 提供（单一真相源），
+/// 与设置页（PlayerEngineSelector）及 main.dart 启动校正逻辑共享同一来源。
 class PlayerEngineFactory {
   static PlayerEngine createEngine(PlayerEngineType type) {
     switch (type) {
@@ -16,30 +19,27 @@ class PlayerEngineFactory {
     }
   }
 
-  /// BASS 引擎仅在桌面平台可用
-  static bool _isBassSupported() {
-    return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
-  }
-
   // 根据平台和配置获取默认引擎
   static PlayerEngine getDefaultEngine() {
-    final config = AppSettings.instance;
-    final engineType = config.playerEngineType;
+    final engineType = AppSettings.instance.playerEngineType;
+    final dependencyManager = PlatformDependencyManager.instance;
 
     // 如果配置了引擎类型，验证平台兼容性
     if (engineType != null) {
-      if (engineType == PlayerEngineType.bass && !_isBassSupported()) {
-        // 配置了 BASS 但当前平台不支持，回退到 MediaKit
-        return createEngine(PlayerEngineType.mediaKit);
+      if (dependencyManager.isPlayerEngineSupported(engineType)) {
+        return createEngine(engineType);
       }
-      return createEngine(engineType);
+      // 配置的引擎当前平台不支持，回退到 MediaKit
+      return createEngine(PlayerEngineType.mediaKit);
     }
 
-    // 根据平台选择默认引擎
-    if (_isBassSupported()) {
+    // 未配置时按平台默认：桌面端（Windows/macOS/Linux）支持 BASS 则优先 BASS，
+    // 移动端使用 MediaKit。
+    // 注意：此处不用 getRecommendedPlayerEngine()——它对 Linux 推荐 MediaKit，
+    // 与历史默认行为（Linux 默认 BASS）不同。
+    if (dependencyManager.isPlayerEngineSupported(PlayerEngineType.bass)) {
       return createEngine(PlayerEngineType.bass);
     }
-    // 移动端默认使用 MediaKit
     return createEngine(PlayerEngineType.mediaKit);
   }
 }

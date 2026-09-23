@@ -1,1 +1,6 @@
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    # cargokit 构建工具的独立 Dart 包（有自己的 pubspec，未参与主项目依赖解析）
+    - rust_builder/**
