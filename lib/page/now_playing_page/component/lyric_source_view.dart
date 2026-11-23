@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/lyric/lrc.dart';
 import 'package:coriander_player/lyric/lyric.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
@@ -59,7 +60,7 @@ class _SetLyricSourceBtn extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     ALWAYS_SHOW_LYRIC_VIEW_CONTROLS = true;
 
-    showModalBottomSheet(
+    showAdaptiveSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),

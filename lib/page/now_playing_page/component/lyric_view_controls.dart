@@ -1,4 +1,5 @@
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/page/now_playing_page/component/lyric_source_view.dart';
 import 'package:coriander_player/play_service/lyric_service.dart';
 import 'package:coriander_player/play_service/play_service.dart';
@@ -196,7 +197,7 @@ class _LyricOffsetBtn extends StatelessWidget {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          return AlertDialog(
+          return AdaptiveDialog(
             title: const Text("歌词时间微调"),
             content: Column(
               mainAxisSize: MainAxisSize.min,

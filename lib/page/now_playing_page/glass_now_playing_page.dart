@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/auto_scroll_text.dart';
 import 'package:coriander_player/glass_theme/glass_presets.dart';
@@ -396,7 +397,7 @@ class _GlassNowPlayingMoreAction extends StatelessWidget {
 
   void _showAddToPlaylistSheet(BuildContext context, Audio audio) {
     final playlists = PlaylistManager.instance.allPlaylists;
-    showModalBottomSheet(
+    showAdaptiveSheet(
       context: context,
       builder: (context) => SafeArea(
         child: Column(

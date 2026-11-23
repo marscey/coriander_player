@@ -120,7 +120,18 @@ class AppPreference {
   int startPage = 0;
 
   /// 是否启用 Liquid Glass 界面（重启后生效）
+  ///
+  /// 这是“用户意愿”的原始值，不要直接用来判断界面形态；
+  /// 需要判断当前是否按 Glass 渲染时统一用 [glassActive]。
   bool liquidGlassEnabled = false;
+
+  /// Glass 界面当前是否生效
+  ///
+  /// 移动端临时口径：开关打开且为移动平台。
+  /// 桌面端接入 Glass 时，只需修改这一处（例如放开为
+  /// `liquidGlassEnabled && (PlatformHelper.isMobile || desktopGlassReady)`），
+  /// 全项目三十多处判断会一起跟上。
+  bool get glassActive => liquidGlassEnabled && PlatformHelper.isMobile;
 
   var playbackPref = PlaybackPreference(PlayMode.forward, 1.0);
 

@@ -12,6 +12,7 @@ import 'dart:io';
 import '../../cloud_service/cloud_audio_player.dart';
 import '../../library/genre_service.dart';
 import 'package:coriander_player/component/playing_indicator.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 
 enum FileSortBy {
   name,
@@ -1506,7 +1507,7 @@ class _ScanToLibraryDialogState extends State<_ScanToLibraryDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return AdaptiveDialog(
       title: Text('扫描: ${widget.folderName}'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1580,7 +1581,7 @@ class _AddToLibraryDialogState extends State<_AddToLibraryDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return AdaptiveDialog(
       title: const Text('添加到音乐库'),
       content: Column(
         mainAxisSize: MainAxisSize.min,

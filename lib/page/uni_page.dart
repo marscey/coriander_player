@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/playlist.dart';
@@ -407,7 +408,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
     final scheme = Theme.of(context).colorScheme;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AdaptiveDialog(
         title: const Text('确认移除'),
         content: Text('确定将 ${selected.length} 首音频从音乐库中移除吗？'),
         actions: [
@@ -450,7 +451,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          return AlertDialog(
+          return AdaptiveDialog(
             title: const Text("批量刮削元数据"),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -503,7 +504,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
       showTextOnSnackBar('没有可用的歌单，请先创建歌单');
       return;
     }
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
 
     void addToPlaylist(Playlist playlist) {
       PlaylistManager.instance.addAudiosToPlaylist(playlist, selected);
@@ -551,7 +552,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
       // 普通模式：保持 AlertDialog
       showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => AdaptiveDialog(
           title: const Text('添加到歌单'),
           content: SizedBox(
             width: double.maxFinite,
@@ -578,7 +579,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
 
   @override
   Widget build(BuildContext context) {
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
     final List<Widget> actions = [];
     if (widget.primaryAction != null) {
       actions.add(widget.primaryAction!);
@@ -625,7 +626,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
 
   Widget result(
       MultiSelectController<T>? multiSelectController, List<Widget> actions) {
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
     // Glass 模式下：多选操作通过 menuItems + 全选按钮处理，finalActions 只用普通 actions
     // 普通模式下：多选时使用 multiSelectViewActions（展开按钮组）
     final isInMultiSelectView =

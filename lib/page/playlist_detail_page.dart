@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/component/audio_tile.dart';
 import 'package:coriander_player/glass_theme/glass_presets.dart';
 import 'package:coriander_player/library/audio_library.dart';
@@ -518,7 +519,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage>
     final existingPaths = widget.playlist.audios.keys.toSet();
     final selected = <Audio>{};
 
-    showModalBottomSheet(
+    showAdaptiveSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

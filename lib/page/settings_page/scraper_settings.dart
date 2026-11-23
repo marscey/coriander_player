@@ -1,4 +1,5 @@
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/metadata/metadata_store.dart';
 import 'package:coriander_player/metadata/scraper_orchestrator.dart';
 import 'package:coriander_player/component/settings_tile.dart';
@@ -65,7 +66,7 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
 
     if (useGlass) {
       return GlassDialog(
@@ -289,7 +290,7 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
   /// 编辑 API 地址
   Future<void> _editApiBase(ScraperConfig config) async {
     final controller = TextEditingController(text: config.apiBase ?? '');
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
     final scheme = Theme.of(context).colorScheme;
 
     final result = await showDialog<String>(
@@ -319,7 +320,7 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
                 ),
               ),
             )
-          : AlertDialog(
+          : AdaptiveDialog(
               title: const Text("修改 API 地址"),
               content: TextField(
                 controller: controller,

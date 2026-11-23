@@ -1,4 +1,5 @@
 import 'package:coriander_player/component/build_index_state_view.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/component/playing_indicator.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/genre_service.dart';
@@ -334,7 +335,7 @@ class _FoldersPageState extends State<FoldersPage> {
     final folderName = p.basename(path);
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AdaptiveDialog(
         title: const Text('移除文件夹'),
         content: Text('确定要移除文件夹「$folderName」吗？\n\n这不会删除磁盘上的文件，只是从音乐库中移除。'),
         actions: [

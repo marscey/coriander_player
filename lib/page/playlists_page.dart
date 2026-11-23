@@ -102,7 +102,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
 
   Widget _buildPlaylistTile(BuildContext context, Playlist item, int i,
       bool isBuiltInDivider) {
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
     final scheme = Theme.of(context).colorScheme;
 
     if (useGlass) {

@@ -41,7 +41,7 @@ class CategoriesPage extends StatelessWidget {
       ),
     ];
 
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
 
     if (useGlass) {
       return GlassPageScaffold(

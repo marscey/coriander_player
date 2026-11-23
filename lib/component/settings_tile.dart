@@ -30,7 +30,7 @@ class SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
     final grouped = inGroup || _isInGroup(context);
 
     final content = Row(
@@ -109,7 +109,7 @@ class SettingsGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
     final scheme = Theme.of(context).colorScheme;
 
     if (!useGlass) {

@@ -15,6 +15,7 @@ import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:coriander_player/page/glass_page_scaffold.dart';
 
 class UpdatingPage extends StatelessWidget {
   const UpdatingPage({super.key});
@@ -23,22 +24,30 @@ class UpdatingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
+    final content = FutureBuilder(
+      future: getAppDataDir(),
+      builder: (context, snapshot) {
+        if (snapshot.data == null) {
+          return const Center(
+            child: Text("Fail to get app data dir."),
+          );
+        }
+
+        return UpdatingStateView(indexPath: snapshot.data!);
+      },
+    );
+
+    if (AppPreference.instance.glassActive) {
+      return GlassPageScaffold(
+        title: "更新音乐索引",
+        showBackButton: false,
+        body: Center(child: content),
+      );
+    }
+
     return Scaffold(
       backgroundColor: scheme.surface,
-      body: Center(
-        child: FutureBuilder(
-          future: getAppDataDir(),
-          builder: (context, snapshot) {
-            if (snapshot.data == null) {
-              return const Center(
-                child: Text("Fail to get app data dir."),
-              );
-            }
-
-            return UpdatingStateView(indexPath: snapshot.data!);
-          },
-        ),
-      ),
+      body: Center(child: content),
     );
   }
 }

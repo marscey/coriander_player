@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/component/app_shell.dart';
 import 'package:coriander_player/component/playlist_audio_item.dart';
 import 'package:coriander_player/component/playing_indicator.dart';
@@ -468,7 +469,7 @@ class _PlayBarPill extends StatelessWidget {
 
   void _showPlaylistBottomSheet(BuildContext context) {
     final playbackService = PlayService.instance.playbackService;
-    showModalBottomSheet(
+    showAdaptiveSheet(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:coriander_player/component/app_shell.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/component/rectangle_progress_indicator.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:coriander_player/component/playlist_audio_item.dart';
@@ -124,7 +125,7 @@ class _NowPlayingForegroundState extends State<_NowPlayingForeground> {
 
   void _showPlaylistBottomSheet(BuildContext context) {
     final playbackService = PlayService.instance.playbackService;
-    showModalBottomSheet(
+    showAdaptiveSheet(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/build_index_state_view.dart';
+import 'package:coriander_player/glass_theme/glass_dialog.dart';
+import 'package:coriander_player/page/glass_page_scaffold.dart';
 import 'package:coriander_player/hotkeys_helper.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/library/genre_service.dart';
@@ -22,9 +24,73 @@ import 'dart:io';
 class WelcomingPage extends StatelessWidget {
   const WelcomingPage({super.key});
 
+  /// 跳过引导：写入空索引（代表“已初始化”），直接进入主界面
+  ///
+  /// 引导不是强制流程：用户可以不扫描、稍后在设置里添加文件夹。
+  Future<void> _skip(BuildContext context) async {
+    try {
+      final dir = await getAppDataDir();
+      final indexFile =
+          File(PlatformHelper.joinPaths([dir.path, "index.json"]));
+      if (!indexFile.existsSync()) {
+        indexFile.writeAsStringSync('{"folders":[],"version":110}');
+      }
+      await AudioLibrary.initFromIndex();
+      await GenreService.instance.refresh();
+      LOGGER.i("[welcome] 用户跳过引导，进入空音乐库");
+    } catch (err, trace) {
+      LOGGER.e("[welcome] 跳过引导失败: $err", stackTrace: trace);
+    }
+    if (!context.mounted) return;
+    context.go(app_paths.START_PAGES[AppPreference.instance.startPage]);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final useGlass = AppPreference.instance.glassActive;
     final scheme = Theme.of(context).colorScheme;
+
+    final content = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          "你的音乐放在哪些文件夹呢？",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: scheme.onSurface,
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          "软件会扫描这些文件夹（包括所有子文件夹）下的音乐并建立索引。",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+        ),
+        Text(
+          "也可以先跳过，之后在设置中随时添加。",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+        ),
+        const SizedBox(height: 16),
+        FolderSelectorView(
+          useGlass: useGlass,
+          onSkip: () => _skip(context),
+        ),
+      ],
+    );
+
+    if (useGlass) {
+      return GlassPageScaffold(
+        title: "欢迎使用",
+        showBackButton: false,
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24.0, 8.0, 24.0, 120.0),
+          child: content,
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: scheme.surface,
@@ -34,34 +100,18 @@ class WelcomingPage extends StatelessWidget {
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 48.0),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                "你的音乐放在哪些文件夹呢？",
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 22,
-                ),
-              ),
-              Text(
-                "软件会扫描这些文件夹（包括所有子文件夹）下的音乐并建立索引。",
-                style: TextStyle(color: scheme.onSurface),
-              ),
-              const SizedBox(height: 16),
-              const FolderSelectorView(),
-            ],
-          ),
-        ),
+        child: Center(child: content),
       ),
     );
   }
 }
 
 class FolderSelectorView extends StatefulWidget {
-  const FolderSelectorView({super.key});
+  const FolderSelectorView(
+      {super.key, this.useGlass = false, required this.onSkip});
+
+  final bool useGlass;
+  final VoidCallback onSkip;
 
   @override
   State<FolderSelectorView> createState() => _FolderSelectorViewState();
@@ -72,13 +122,29 @@ class _FolderSelectorViewState extends State<FolderSelectorView> {
   final List<String> folders = [];
   final applicationSupportDirectory = getAppDataDir();
 
+  Widget _primaryButton({
+    required String label,
+    required VoidCallback? onTap,
+    bool primary = false,
+  }) {
+    if (widget.useGlass) {
+      return GlassDialogButton(
+        label: label,
+        onTap: onTap,
+        primary: primary,
+      );
+    }
+    return primary
+        ? FilledButton(onPressed: onTap, child: Text(label))
+        : OutlinedButton(onPressed: onTap, child: Text(label));
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return SizedBox(
-      width: 400,
-      height: 400,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 400.0, maxHeight: 400.0),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 150),
         child: selecting
@@ -134,32 +200,41 @@ class _FolderSelectorViewState extends State<FolderSelectorView> {
     return Column(
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            FilledButton(
-              onPressed: () async {
+            _primaryButton(
+              label: "添加文件夹",
+              onTap: () async {
                 LOGGER.d("[welcome] 点击添加文件夹");
                 final path = await pickSingleFolder();
                 if (path == null) return;
-
                 setState(() {
                   folders.add(path);
                 });
               },
-              child: const Text("添加文件夹"),
             ),
-            FilledButton(
-              onPressed: () {
-                setState(() {
-                  selecting = false;
-                });
-              },
-              child: const Text("扫描"),
+            const SizedBox(width: 12.0),
+            _primaryButton(
+              label: "扫描",
+              primary: true,
+              // 没有选择任何文件夹时不允许扫描，避免空扫描把应用卡在异常状态
+              onTap: folders.isEmpty
+                  ? null
+                  : () {
+                      setState(() {
+                        selecting = false;
+                      });
+                    },
             ),
           ],
         ),
-        const SizedBox(height: 16.0),
-        Expanded(
+        const SizedBox(height: 8.0),
+        TextButton(
+          onPressed: widget.onSkip,
+          child: const Text("跳过，稍后设置"),
+        ),
+        const SizedBox(height: 8.0),
+        Flexible(
           child: ListView.builder(
             itemCount: folders.length,
             itemBuilder: (context, i) => ListTile(

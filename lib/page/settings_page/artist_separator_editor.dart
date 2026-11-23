@@ -48,7 +48,7 @@ class __ArtistSeparatorEditDialogState
   final currEditController = TextEditingController();
   bool editing = false;
   // 在 initState 前即可读取，用于决定列表项使用 glass 还是 material 风格
-  final bool _useGlass = AppPreference.instance.liquidGlassEnabled;
+  final bool _useGlass = AppPreference.instance.glassActive;
 
   /// 构建已有分隔符列表项（glass / material 双风格）
   Widget _buildSeparatorItem(String item) {
@@ -181,7 +181,7 @@ class __ArtistSeparatorEditDialogState
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
 
     if (useGlass) {
       return GlassDialog(

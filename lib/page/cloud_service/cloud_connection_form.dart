@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../cloud_service/cloud_connection.dart';
 import '../../cloud_service/cloud_service_manager.dart';
 import '../../cloud_service/webdav_service.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 
 class CloudConnectionForm extends StatefulWidget {
   final CloudConnection? connection;
@@ -35,7 +36,7 @@ class _CloudConnectionFormState extends State<CloudConnectionForm> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return AdaptiveDialog(
       title: Text(widget.connection == null ? '添加云服务连接' : '编辑云服务连接'),
       content: SizedBox(
         width: 400,

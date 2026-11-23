@@ -24,7 +24,7 @@ class ThemeSelector extends StatelessWidget {
         onPressed: () async {
           final seedColor = await showDialog<Color>(
             context: context,
-            builder: (context) => AppPreference.instance.liquidGlassEnabled
+            builder: (context) => AppPreference.instance.glassActive
                 ? const GlassThemePickerDialog()
                 : const ThemePickerDialog(),
           );

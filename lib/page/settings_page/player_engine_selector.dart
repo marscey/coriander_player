@@ -1,4 +1,5 @@
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/settings_tile.dart';
 import 'package:coriander_player/glass_theme/glass_dialog.dart';
@@ -71,7 +72,7 @@ class _PlayerEngineSelectorState extends State<PlayerEngineSelector> {
           LOGGER.i("[EngineSelector] User selected: ${newSelection.first}");
 
           if (context.mounted) {
-            final useGlass = AppPreference.instance.liquidGlassEnabled;
+            final useGlass = AppPreference.instance.glassActive;
             showDialog(
               context: context,
               barrierDismissible: false,
@@ -85,7 +86,7 @@ class _PlayerEngineSelectorState extends State<PlayerEngineSelector> {
                         ],
                       ),
                     )
-                  : AlertDialog(
+                  : AdaptiveDialog(
                       content: Row(
                         children: [
                           CircularProgressIndicator(),

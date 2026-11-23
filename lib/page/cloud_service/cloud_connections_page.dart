@@ -1,4 +1,5 @@
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/component/unified_list_tile.dart';
 import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
 import 'package:coriander_player/page/page_scaffold.dart';
@@ -72,7 +73,7 @@ class _CloudConnectionsPageState extends State<CloudConnectionsPage> {
             ? null
             : "${connections.length} 个连接";
 
-        final useGlass = AppPreference.instance.liquidGlassEnabled;
+        final useGlass = AppPreference.instance.glassActive;
 
         final tileList = connections
             .map((c) => _buildConnectionTile(c))
@@ -320,7 +321,7 @@ class _CloudConnectionsPageState extends State<CloudConnectionsPage> {
   }
 
   void _showAddConnectionDialog(BuildContext context) {
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
     showDialog(
       context: context,
       builder: (context) => useGlass
@@ -330,7 +331,7 @@ class _CloudConnectionsPageState extends State<CloudConnectionsPage> {
   }
 
   void _showEditConnectionDialog(CloudConnection connection) {
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
     showDialog(
       context: context,
       builder: (context) => useGlass
@@ -368,7 +369,7 @@ class _CloudConnectionsPageState extends State<CloudConnectionsPage> {
   Future<void> _deleteConnection(CloudConnection connection) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => AdaptiveDialog(
         title: const Text('确认删除'),
         content:
             Text('确定要删除连接 "${connection.displayName ?? connection.name}" 吗？'),

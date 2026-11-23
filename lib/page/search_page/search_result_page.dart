@@ -83,7 +83,7 @@ class _SearchResultPageState extends State<SearchResultPage> {
 
   @override
   Widget build(BuildContext context) {
-    final useGlass = AppPreference.instance.liquidGlassEnabled &&
+    final useGlass = AppPreference.instance.glassActive &&
         (Theme.of(context).platform == TargetPlatform.iOS ||
             Theme.of(context).platform == TargetPlatform.android);
 

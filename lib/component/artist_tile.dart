@@ -16,7 +16,7 @@ class ArtistTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
 
     final placeholder = Icon(
       Symbols.person,

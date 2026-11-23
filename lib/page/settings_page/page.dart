@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/settings_tile.dart';
 import 'package:coriander_player/page/page_scaffold.dart';
@@ -25,7 +26,7 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
 
     return Padding(
       padding: useGlass
@@ -52,16 +53,20 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final showTestConfig = PlatformHelper.isMobile && kDebugMode;
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
 
     final settingItems = <Widget>[
-      const _SectionHeader(title: "音乐库"),
-      const SettingsGroup(
-        children: [
-          AudioLibraryEditor(),
-        ],
-      ),
-      const SizedBox(height: 8.0),
+      // 移动端不提供本地文件夹管理（iOS/Android 无「音乐库目录」概念），
+      // 连标题一起隐藏，避免出现空分组。
+      if (!PlatformHelper.isMobile) ...[
+        const _SectionHeader(title: "音乐库"),
+        const SettingsGroup(
+          children: [
+            AudioLibraryEditor(),
+          ],
+        ),
+        const SizedBox(height: 8.0),
+      ],
       const _SectionHeader(title: "缓存"),
       const CacheManagementSettings(),
       const SizedBox(height: 8.0),
@@ -242,7 +247,7 @@ class DebugLogTile extends StatelessWidget {
           logs = '读取日志失败: $e';
         }
         if (!context.mounted) return;
-        showModalBottomSheet(
+        showAdaptiveSheet(
           context: context,
           isScrollControlled: true,
           builder: (ctx) => _DebugLogSheet(logs: logs),

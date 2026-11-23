@@ -8,6 +8,8 @@ import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/page/albums_page.dart';
 import 'package:coriander_player/page/album_detail_page_new.dart';
 import 'package:coriander_player/page/artist_detail_page_v3.dart';
+import 'package:coriander_player/page/artist_detail_page_material.dart';
+import 'package:coriander_player/page/album_detail_page_material.dart';
 import 'package:coriander_player/page/artists_page.dart';
 import 'package:coriander_player/page/audio_detail_page.dart';
 import 'package:coriander_player/page/glass_audio_detail_page.dart';
@@ -22,6 +24,7 @@ import 'package:coriander_player/page/folders_page.dart';
 import 'package:coriander_player/page/genres_page.dart';
 import 'package:coriander_player/page/now_playing_page/page.dart';
 import 'package:coriander_player/page/playlist_detail_page.dart';
+import 'package:coriander_player/page/playlist_detail_page_material.dart';
 import 'package:coriander_player/page/playlists_page.dart';
 import 'package:coriander_player/page/search_page/search_page.dart';
 import 'package:coriander_player/page/search_page/search_result_page.dart';
@@ -177,7 +180,7 @@ class Entry extends StatelessWidget {
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           // 根据 Liquid Glass 开关选择不同的 Shell
-          if (AppPreference.instance.liquidGlassEnabled && PlatformHelper.isMobile) {
+          if (AppPreference.instance.glassActive) {
             return GlassAppShell(navigationShell: navigationShell);
           }
           return AppShell(navigationShell: navigationShell);
@@ -198,7 +201,7 @@ class Entry extends StatelessWidget {
                 GoRoute(
                   path: "detail",
                   pageBuilder: (context, state) => _platformPage(
-                    child: (AppPreference.instance.liquidGlassEnabled &&
+                    child: (AppPreference.instance.glassActive &&
                             PlatformHelper.isMobile)
                         ? GlassAudioDetailPage(audio: state.extra as Audio)
                         : AudioDetailPage(audio: state.extra as Audio),
@@ -219,7 +222,10 @@ class Entry extends StatelessWidget {
                   pageBuilder: (context, state) {
                     final playlist = state.extra as Playlist;
                     return _platformPage(
-                        child: PlaylistDetailPage(playlist: playlist));
+                      child: AppPreference.instance.glassActive
+                          ? PlaylistDetailPage(playlist: playlist)
+                          : PlaylistDetailPageMaterial(playlist: playlist),
+                    );
                   },
                 ),
               ],
@@ -240,8 +246,10 @@ class Entry extends StatelessWidget {
                     GoRoute(
                       path: "detail",
                       pageBuilder: (context, state) => _platformPage(
-                        child: ArtistDetailPageV3(
-                            artist: state.extra as Artist),
+                        child: AppPreference.instance.glassActive
+                            ? ArtistDetailPageV3(artist: state.extra as Artist)
+                            : ArtistDetailPageMaterial(
+                                artist: state.extra as Artist),
                       ),
                     ),
                   ],
@@ -254,8 +262,10 @@ class Entry extends StatelessWidget {
                     GoRoute(
                       path: "detail",
                       pageBuilder: (context, state) => _platformPage(
-                        child:
-                            AlbumDetailPageNew(album: state.extra as Album),
+                        child: AppPreference.instance.glassActive
+                            ? AlbumDetailPageNew(album: state.extra as Album)
+                            : AlbumDetailPageMaterial(
+                                album: state.extra as Album),
                       ),
                     ),
                   ],
@@ -310,7 +320,7 @@ class Entry extends StatelessWidget {
                     final connectionId =
                         state.pathParameters['connectionId']!;
                     final args = state.extra as CloudBrowserArgs?;
-                    final useGlass = AppPreference.instance.liquidGlassEnabled
+                    final useGlass = AppPreference.instance.glassActive
                         && PlatformHelper.isMobile;
                     return _platformPage(
                       child: useGlass
@@ -378,7 +388,9 @@ class Entry extends StatelessWidget {
       GoRoute(
         path: app_paths.ALBUM_DETAIL_PAGE_NEW,
         pageBuilder: (context, state) => _platformPage(
-          child: AlbumDetailPageNew(album: state.extra as Album),
+          child: AppPreference.instance.glassActive
+              ? AlbumDetailPageNew(album: state.extra as Album)
+              : AlbumDetailPageMaterial(album: state.extra as Album),
         ),
       ),
 

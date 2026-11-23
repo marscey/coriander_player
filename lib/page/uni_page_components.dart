@@ -1,4 +1,5 @@
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/metadata/metadata_service.dart';
 import 'package:coriander_player/page/uni_page.dart';
@@ -58,7 +59,7 @@ class RemoveFromLibrary extends StatelessWidget {
               : () {
                   showDialog(
                     context: context,
-                    builder: (ctx) => AlertDialog(
+                    builder: (ctx) => AdaptiveDialog(
                       title: const Text('确认移除'),
                       content: Text('确定将 ${selected.length} 首音频从音乐库中移除吗？'),
                       actions: [
@@ -365,7 +366,7 @@ class BatchScrapeMetadata extends StatelessWidget {
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          return AlertDialog(
+          return AdaptiveDialog(
             title: const Text("批量刮削元数据"),
             content: Column(
               mainAxisSize: MainAxisSize.min,

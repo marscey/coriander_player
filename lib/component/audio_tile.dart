@@ -1,4 +1,5 @@
 import 'package:coriander_player/component/playing_indicator.dart';
+import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/component/auto_scroll_text.dart';
 import 'package:coriander_player/component/scroll_aware_future_builder.dart';
 import 'package:coriander_player/utils.dart';
@@ -236,7 +237,7 @@ class _AudioTileState extends State<AudioTile> {
           onPressed: () {
             showDialog(
               context: context,
-              builder: (context) => AppPreference.instance.liquidGlassEnabled
+              builder: (context) => AppPreference.instance.glassActive
                   ? GlassEditTagDialog(audio: audio)
                   : EditTagDialog(audio: audio),
             ).then((saved) {
@@ -256,7 +257,7 @@ class _AudioTileState extends State<AudioTile> {
           onPressed: () {
             showDialog(
               context: context,
-              builder: (context) => AppPreference.instance.liquidGlassEnabled
+              builder: (context) => AppPreference.instance.glassActive
                   ? GlassEditTagDialog(audio: audio, autoSearch: true)
                   : EditTagDialog(audio: audio, autoSearch: true),
             ).then((saved) {
@@ -276,7 +277,7 @@ class _AudioTileState extends State<AudioTile> {
           onPressed: () {
             showDialog(
               context: context,
-              builder: (ctx) => AlertDialog(
+              builder: (ctx) => AdaptiveDialog(
                 title: const Text('确认移除'),
                 content: Text('确定将"${audio.title}"从音乐库中移除吗？'),
                 actions: [
@@ -644,7 +645,7 @@ class _AudioTileState extends State<AudioTile> {
   void _showMobileContextMenu(BuildContext context, Audio audio) {
     final scheme = Theme.of(context).colorScheme;
     HapticFeedback.mediumImpact();
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
 
     // 菜单项定义（顺序与桌面端右键菜单基本一致）
     final items = <_ContextMenuEntry>[
@@ -694,7 +695,7 @@ class _AudioTileState extends State<AudioTile> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => AppPreference.instance.liquidGlassEnabled
+              builder: (context) => AppPreference.instance.glassActive
                   ? GlassEditTagDialog(audio: audio)
                   : EditTagDialog(audio: audio),
             ),
@@ -714,7 +715,7 @@ class _AudioTileState extends State<AudioTile> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => AppPreference.instance.liquidGlassEnabled
+              builder: (context) => AppPreference.instance.glassActive
                   ? GlassEditTagDialog(audio: audio, autoSearch: true)
                   : EditTagDialog(audio: audio, autoSearch: true),
             ),
@@ -738,7 +739,7 @@ class _AudioTileState extends State<AudioTile> {
     if (useGlass) {
       // Glass 模式：底部弹出 + GlassContainer（项目 sheetSettings 预设）
       // 与项目其他玻璃组件（GlassDialog/GlassMenuItem）视觉统一
-      showModalBottomSheet(
+      showAdaptiveSheet(
         context: context,
         useRootNavigator: true,
         isScrollControlled: true,
@@ -843,7 +844,7 @@ class _AudioTileState extends State<AudioTile> {
       );
     } else {
       // 普通模式：保持 showModalBottomSheet，但用可滚动 ListView 包裹
-      showModalBottomSheet(
+      showAdaptiveSheet(
         context: context,
         useRootNavigator: true,
         isScrollControlled: true,
@@ -900,7 +901,7 @@ class _AudioTileState extends State<AudioTile> {
   /// 移除音频的二次确认对话框（Glass 模式用 GlassDialog）
   void _confirmRemoveAudio(BuildContext context, Audio audio) {
     final scheme = Theme.of(context).colorScheme;
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
 
     void doRemove() {
       AudioLibrary.instance.removeAudio(audio);
@@ -944,7 +945,7 @@ class _AudioTileState extends State<AudioTile> {
     } else {
       showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
+        builder: (ctx) => AdaptiveDialog(
           title: const Text('确认移除'),
           content: Text('确定将"${audio.title}"从音乐库中移除吗？'),
           actions: [
@@ -974,7 +975,7 @@ class _AudioTileState extends State<AudioTile> {
       return;
     }
     final scheme = Theme.of(context).colorScheme;
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
 
     void addToPlaylist(int i) {
       final target = playlists[i];
@@ -990,7 +991,7 @@ class _AudioTileState extends State<AudioTile> {
 
     if (useGlass) {
       // Glass 模式：底部弹出 + GlassContainer（与上下文菜单风格统一）
-      showModalBottomSheet(
+      showAdaptiveSheet(
         context: context,
         useRootNavigator: true,
         isScrollControlled: true,
@@ -1066,7 +1067,7 @@ class _AudioTileState extends State<AudioTile> {
         ),
       );
     } else {
-      showModalBottomSheet(
+      showAdaptiveSheet(
         context: context,
         useRootNavigator: true,
         isScrollControlled: true,

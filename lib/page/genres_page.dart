@@ -76,7 +76,7 @@ class _GenreTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final useGlass = AppPreference.instance.glassActive;
     return Tooltip(
       message: genre.name,
       child: Semantics(

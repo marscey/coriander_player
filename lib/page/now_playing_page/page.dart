@@ -110,7 +110,7 @@ class _NowPlayingPageState extends State<NowPlayingPage>
   @override
   Widget build(BuildContext context) {
     // Glass 模式：移动端使用独立的 GlassNowPlayingPage
-    if (AppPreference.instance.liquidGlassEnabled && PlatformHelper.isMobile) {
+    if (AppPreference.instance.glassActive) {
       return const GlassNowPlayingPage();
     }
 
