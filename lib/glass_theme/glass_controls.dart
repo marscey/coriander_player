@@ -30,10 +30,14 @@ class AppSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!_glass) {
-      return Switch(
-        value: value,
-        onChanged: onChanged,
-        activeTrackColor: activeColor,
+      // 玻璃容器里可能没有 Material 祖先，这里显式兜一层透明 Material
+      return Material(
+        type: MaterialType.transparency,
+        child: Switch(
+          value: value,
+          onChanged: onChanged,
+          activeTrackColor: activeColor,
+        ),
       );
     }
 
@@ -132,7 +136,9 @@ class AppSlider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!_glass) {
-      return SizedBox(
+      return Material(
+        type: MaterialType.transparency,
+        child: SizedBox(
         height: height,
         child: Slider(
           value: value.clamp(min, max),
@@ -145,6 +151,7 @@ class AppSlider extends StatelessWidget {
           divisions: divisions,
           label: label,
         ),
+      ),
       );
     }
 
@@ -470,12 +477,15 @@ class AppCheckbox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!_glass) {
-      return Checkbox(
-        value: value,
-        onChanged: onChanged,
-        tristate: tristate,
-        visualDensity: visualDensity ?? VisualDensity.compact,
-        materialTapTargetSize: materialTapTargetSize,
+      return Material(
+        type: MaterialType.transparency,
+        child: Checkbox(
+          value: value,
+          onChanged: onChanged,
+          tristate: tristate,
+          visualDensity: visualDensity ?? VisualDensity.compact,
+          materialTapTargetSize: materialTapTargetSize,
+        ),
       );
     }
 

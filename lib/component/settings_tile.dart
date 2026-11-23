@@ -67,7 +67,7 @@ class SettingsTile extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 16.0),
-        action,
+        Material(type: MaterialType.transparency, child: action),
       ],
     );
 
@@ -127,15 +127,10 @@ class SettingsGroup extends StatelessWidget {
     }
 
     return _SettingsGroupScope(
-      child: Container(
-        decoration: BoxDecoration(
-          color: scheme.surface.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(14.0),
-          border: Border.all(
-            color: scheme.onSurface.withValues(alpha: 0.05),
-            width: 0.5,
-          ),
-        ),
+      child: GlassContainer(
+        useOwnLayer: true,
+        shape: const LiquidRoundedSuperellipse(borderRadius: 14),
+        settings: listTileSettings(glassIsDark(context)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
