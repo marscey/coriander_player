@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/component/app_shell.dart';
 import 'package:coriander_player/component/playlist_audio_item.dart';
@@ -710,7 +711,7 @@ class _PlayBarContentState extends State<_PlayBarContent> {
       return SizedBox(
         width: 22,
         height: 22,
-        child: CircularProgressIndicator(
+        child: AppSpinner(
           strokeWidth: 2.0,
           valueColor: AlwaysStoppedAnimation<Color>(scheme.onSurface),
         ),

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/component/auto_scroll_text.dart';
 import 'package:coriander_player/cloud_service/cloud_connection.dart';
 import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
@@ -1155,7 +1156,7 @@ class _GlassCloudFileBrowserState extends State<GlassCloudFileBrowser> {
                   ),
                 ),
                 if (_isSelectionMode)
-                  Checkbox(
+                  AppCheckbox(
                     value: isSelected,
                     onChanged: (selected) {
                       setState(() {

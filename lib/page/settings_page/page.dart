@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/settings_tile.dart';
@@ -183,7 +184,7 @@ class _AutoTestConfigSwitchState extends State<AutoTestConfigSwitch> {
   Widget build(BuildContext context) {
     return SettingsTile(
       description: "自动配置测试云服务和导入音频",
-      action: Switch(
+      action: AppSwitch(
         value: settings.autoTestConfig,
         onChanged: (value) async {
           setState(() {
@@ -210,7 +211,7 @@ class _LiquidGlassSwitchState extends State<LiquidGlassSwitch> {
     return SettingsTile(
       description: "启用 Glass 界面风格",
       subtitle: "启用后需重启应用生效",
-      action: Switch(
+      action: AppSwitch(
         value: AppPreference.instance.liquidGlassEnabled,
         onChanged: (value) async {
           setState(() {

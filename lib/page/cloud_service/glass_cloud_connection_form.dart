@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:provider/provider.dart';
 import '../../cloud_service/cloud_connection.dart';
 import '../../cloud_service/cloud_service_manager.dart';
@@ -125,7 +126,7 @@ class _GlassCloudConnectionFormState extends State<GlassCloudConnectionForm> {
                 },
               ),
               const SizedBox(height: 16),
-              if (_isTesting) const LinearProgressIndicator(),
+              if (_isTesting) const AppProgressBar(),
             ],
           ),
         ),

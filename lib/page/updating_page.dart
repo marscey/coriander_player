@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/cloud_service/cloud_audio_player.dart';
 import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
@@ -176,7 +177,7 @@ class _UpdatingStateViewState extends State<UpdatingStateView> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              LinearProgressIndicator(
+              AppProgressBar(
                 value: snapshot.data?.progress,
                 borderRadius: BorderRadius.circular(2.0),
               ),

@@ -1,4 +1,5 @@
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/metadata/metadata_store.dart';
 import 'package:coriander_player/metadata/scraper_orchestrator.dart';
@@ -82,7 +83,7 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
           ),
         ],
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: AppSpinner())
             : ListView.builder(
                 itemCount: _configs.length,
                 itemBuilder: (context, index) {
@@ -121,7 +122,7 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
               // 刮削源列表
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: AppSpinner())
                     : ListView.builder(
                         itemCount: _configs.length,
                         itemBuilder: (context, index) {
@@ -225,7 +226,7 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
                   ),
                 const SizedBox(width: 4.0),
                 // 启用/禁用开关（保留 Material Switch，项目无 GlassSwitch）
-                Switch(
+                AppSwitch(
                   value: config.enabled,
                   onChanged: (value) async {
                     await MetadataStore.instance.toggleScraper(config.id, value);
@@ -273,7 +274,7 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
               onPressed: () => _editApiBase(config),
             ),
           // 启用/禁用开关
-          Switch(
+          AppSwitch(
             value: config.enabled,
             onChanged: (value) async {
               await MetadataStore.instance.toggleScraper(config.id, value);

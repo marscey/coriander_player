@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/component/audio_tile.dart';
 import 'package:coriander_player/glass_theme/glass_presets.dart';
 import 'package:coriander_player/library/audio_library.dart';
@@ -528,7 +529,7 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew>
                                 ),
                               ),
                         _ => Center(
-                            child: CircularProgressIndicator(
+                            child: AppSpinner(
                               strokeWidth: 2.0,
                               color: scheme.onSurface,
                             ),
@@ -620,7 +621,7 @@ class _AlbumDetailPageNewState extends State<AlbumDetailPageNew>
               const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
           child: Row(
             children: [
-              Checkbox(
+              AppCheckbox(
                 value: isSelected,
                 onChanged: (val) {
                   if (val == true) {

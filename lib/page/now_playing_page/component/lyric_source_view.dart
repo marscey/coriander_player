@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/lyric/lrc.dart';
 import 'package:coriander_player/lyric/lyric.dart';
@@ -31,7 +32,7 @@ class SetLyricSourceBtn extends StatelessWidget {
             icon: SizedBox(
               height: 20,
               width: 20,
-              child: CircularProgressIndicator(),
+              child: AppSpinner(),
             ),
           );
           final lyricNullable = snapshot.data;
@@ -353,7 +354,7 @@ class _SetLyricSourceBodyState extends State<_SetLyricSourceBody> {
                   child: SizedBox(
                     width: 24,
                     height: 24,
-                    child: CircularProgressIndicator(),
+                    child: AppSpinner(),
                   ),
                 );
               }
@@ -399,7 +400,7 @@ class _LyricSourceTileState extends State<_LyricSourceTile> {
         child: SizedBox(
           width: 24,
           height: 24,
-          child: CircularProgressIndicator(),
+          child: AppSpinner(),
         ),
       ),
     );

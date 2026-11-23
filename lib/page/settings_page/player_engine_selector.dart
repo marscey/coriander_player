@@ -1,4 +1,5 @@
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/settings_tile.dart';
@@ -80,7 +81,7 @@ class _PlayerEngineSelectorState extends State<PlayerEngineSelector> {
                   ? GlassDialog(
                       child: Row(
                         children: [
-                          CircularProgressIndicator(),
+                          AppSpinner(),
                           SizedBox(width: 16),
                           Text('正在切换播放器引擎...'),
                         ],
@@ -89,7 +90,7 @@ class _PlayerEngineSelectorState extends State<PlayerEngineSelector> {
                   : AdaptiveDialog(
                       content: Row(
                         children: [
-                          CircularProgressIndicator(),
+                          AppSpinner(),
                           SizedBox(width: 16),
                           Text('正在切换播放器引擎...'),
                         ],

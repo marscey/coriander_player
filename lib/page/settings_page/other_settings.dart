@@ -1,4 +1,5 @@
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/component/build_index_state_view.dart';
 import 'package:coriander_player/component/settings_tile.dart';
 import 'package:coriander_player/library/audio_library.dart';
@@ -292,7 +293,7 @@ class _BluetoothLyricSwitchState extends State<BluetoothLyricSwitch> {
     return SettingsTile(
       description: "蓝牙歌词",
       subtitle: "在锁屏和蓝牙设备歌曲名称处显示当前歌词",
-      action: Switch(
+      action: AppSwitch(
         value: settings.bluetoothLyric,
         onChanged: (value) async {
           setState(() {
@@ -320,7 +321,7 @@ class _ShowTrackIndexSwitchState extends State<ShowTrackIndexSwitch> {
   Widget build(BuildContext context) {
     return SettingsTile(
       description: "显示序号",
-      action: Switch(
+      action: AppSwitch(
         value: settings.showTrackIndex,
         onChanged: (value) async {
           setState(() {
@@ -349,7 +350,7 @@ class _MarqueeEnabledSwitchState extends State<MarqueeEnabledSwitch> {
     return SettingsTile(
       description: "跑马灯效果",
       subtitle: "过长标题/文件名滚动显示（默认关闭，可能影响性能）",
-      action: Switch(
+      action: AppSwitch(
         value: settings.marqueeEnabled,
         onChanged: (value) async {
           setState(() {
@@ -381,7 +382,7 @@ class _MarqueeSpeedControlState extends State<MarqueeSpeedControl> {
       action: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Slider(
+          AppSlider(
             value: settings.marqueeSpeed,
             min: 10.0,
             max: 120.0,

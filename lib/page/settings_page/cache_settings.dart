@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
 import 'package:coriander_player/component/settings_tile.dart';
@@ -181,7 +182,7 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
             const SizedBox(
               width: 20.0,
               height: 20.0,
-              child: CircularProgressIndicator(strokeWidth: 2.0),
+              child: AppSpinner(strokeWidth: 2.0),
             ),
           GlassDialogButton(
             label: "关闭",
@@ -275,7 +276,7 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
                     const SizedBox(
                       width: 20.0,
                       height: 20.0,
-                      child: CircularProgressIndicator(strokeWidth: 2.0),
+                      child: AppSpinner(strokeWidth: 2.0),
                     ),
                   const SizedBox(width: 8.0),
                   TextButton(
@@ -584,7 +585,7 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
                 const SizedBox(height: 8.0),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4.0),
-                  child: LinearProgressIndicator(
+                  child: AppProgressBar(
                     value: usagePercent / 100,
                     backgroundColor: scheme.surfaceContainer,
                     valueColor: AlwaysStoppedAnimation<Color>(
@@ -700,7 +701,7 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
             const SizedBox(height: 8.0),
             ClipRRect(
               borderRadius: BorderRadius.circular(4.0),
-              child: LinearProgressIndicator(
+              child: AppProgressBar(
                 value: usagePercent / 100,
                 backgroundColor: scheme.surfaceContainer,
                 valueColor: AlwaysStoppedAnimation<Color>(

@@ -1,4 +1,5 @@
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/settings_tile.dart';
 import 'package:coriander_player/glass_theme/glass_dialog.dart';
@@ -83,7 +84,7 @@ class _CheckForUpdateState extends State<CheckForUpdate> {
               child: SizedBox(
                 width: 16.0,
                 height: 16.0,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: AppSpinner(strokeWidth: 2),
               ),
             ),
         ],

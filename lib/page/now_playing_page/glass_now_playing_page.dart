@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/auto_scroll_text.dart';
@@ -741,7 +742,7 @@ class _GlassNowPlayingSliderState extends State<_GlassNowPlayingSlider> {
                                 ? displayBuffer
                                 : (bufferSnapshot.data ?? displayBuffer);
                             final bufferValue = buf.clamp(0.0, sliderMax);
-                            return Slider(
+                            return AppSlider(
                               thumbColor: scheme.primary,
                               activeColor: scheme.primary,
                               min: 0.0,
@@ -869,7 +870,7 @@ class _GlassNowPlayingMainControls extends StatelessWidget {
                 child: SizedBox(
                   width: 28,
                   height: 28,
-                  child: CircularProgressIndicator(
+                  child: AppSpinner(
                     strokeWidth: 2.5,
                     valueColor:
                         AlwaysStoppedAnimation<Color>(scheme.onSurface),

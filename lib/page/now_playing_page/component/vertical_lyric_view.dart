@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:coriander_player/lyric/lrc.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/lyric/lyric.dart';
 import 'package:coriander_player/page/now_playing_page/component/lyric_view_controls.dart';
 import 'package:coriander_player/page/now_playing_page/component/lyric_view_tile.dart';
@@ -33,7 +34,7 @@ class _VerticalLyricViewState extends State<VerticalLyricView> {
       child: SizedBox(
         width: 24,
         height: 24,
-        child: CircularProgressIndicator(),
+        child: AppSpinner(),
       ),
     );
 

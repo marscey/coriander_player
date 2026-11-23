@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/library/audio_library.dart';
@@ -456,7 +457,7 @@ class _UniPageState<T> extends State<UniPage<T>> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                LinearProgressIndicator(
+                AppProgressBar(
                     value: total > 0 ? completed / total : 0),
                 const SizedBox(height: 12),
                 Text("已完成 $completed / $total"),

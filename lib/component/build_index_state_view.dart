@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:coriander_player/src/rust/api/tag_reader.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 
@@ -54,7 +55,7 @@ class _BuildIndexStateViewState extends State<BuildIndexStateView> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            LinearProgressIndicator(
+            AppProgressBar(
               value: snapshot.data?.progress,
               borderRadius: BorderRadius.circular(2.0),
             ),

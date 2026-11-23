@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
 import 'package:coriander_player/glass_theme/glass_dialog.dart';
 import 'package:coriander_player/glass_theme/glass_presets.dart';
@@ -364,7 +365,7 @@ class _GlassEditTagDialogState extends State<GlassEditTagDialog> {
                   ? const SizedBox(
                       width: 14.0,
                       height: 14.0,
-                      child: CircularProgressIndicator(strokeWidth: 2.0),
+                      child: AppSpinner(strokeWidth: 2.0),
                     )
                   : const Icon(Symbols.search, size: 16.0),
               label: const Text("在线搜索", style: TextStyle(fontSize: 13)),
@@ -503,7 +504,7 @@ class _GlassEditTagDialogState extends State<GlassEditTagDialog> {
                 ? const SizedBox(
                     width: 16.0,
                     height: 16.0,
-                    child: CircularProgressIndicator(
+                    child: AppSpinner(
                         strokeWidth: 2.0, color: Colors.white),
                   )
                 : const Icon(Symbols.search, size: 18.0),
@@ -570,7 +571,7 @@ class _GlassEditTagDialogState extends State<GlassEditTagDialog> {
 
   Widget _buildCoverPreview(ColorScheme scheme) {
     if (_isLoadingCover) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2.0));
+      return const Center(child: AppSpinner(strokeWidth: 2.0));
     }
 
     if (_selectedCoverData != null) {

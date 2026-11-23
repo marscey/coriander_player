@@ -31,7 +31,7 @@
 - ✅ **P1-1 预设单一真相源**（`b541994` 之后）：`glass_presets.dart` 重写为全函数式预设（`navButtonSettings` / `topBarSettings` / `tabBarSettings` / `pillSettings` / `searchPillSettings` / `playBarPillSettings` / `cardSettings` / `listTileSettings` / `settingsTileSettings` / `searchSettings` / `sheetSettings` / `dialogSettings` / `buttonGroupSettings`），全部接受 `isDark`；删除壳层 `_barGlassSettings`、Artist V3 的 `_navButtonSettings`/`_barGlassSettings`/`_navButtonQuality`，6 处裸写 `LiquidGlassSettings` 与 3 处 `copyWith` 调参全部收编。校验：`lib/` 内除 `glass_presets.dart` 已无 `LiquidGlassSettings(`。
 - ✅ **P1-2 深色模式全量**：所有预设按 `isDark` 出 tint，`sheetSettings` / `dialogSettings` 深色改用 0xE6/0xD9 深底保证文字可读；`buildGlassBackground` 深色暗化层加深（0.35/0.12）。
 - ✅ **P1-4 假玻璃替换**：`settings_tile.dart` 的 `Container + surface alpha` 改为真 `GlassContainer(listTileSettings)`。
-- ⬜ **P1-3 玻璃控件层**（`glass_controls.dart`：Switch / Slider / TextField / ProgressBar / Checkbox / PopupMenu）——下一步。
+- ✅ **P1-3 玻璃控件层**：新增 `lib/glass_theme/glass_controls.dart` —— `AppSwitch`（胶囊滑块）、`AppSlider`（玻璃轨道 + 玻璃圆钮 + 缓冲段）、`AppProgressBar`（玻璃槽 + 高光/扫光不确定态）、`AppSpinner`、`AppCheckbox`、`glassInputDecoration()`（玻璃输入框装饰）、`GlassPopupMenuStyle`；非玻璃态内部自动回退原生控件。已替换 27 个玻璃相关文件里的全部 `Switch(` / `Slider(` / `Checkbox(` / `LinearProgressIndicator(` / `CircularProgressIndicator(`（`grep` 校验玻璃文件内已归零）。输入框装饰已提供，逐页替换并入 P2 各组。
 
 ## 四、任务清单
 

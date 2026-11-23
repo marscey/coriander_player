@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:coriander_player/src/rust/api/installed_font.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/services.dart';
@@ -96,7 +97,7 @@ class _DynamicThemeSwitchState extends State<DynamicThemeSwitch> {
   Widget build(BuildContext context) {
     return SettingsTile(
       description: "动态主题",
-      action: Switch(
+      action: AppSwitch(
         value: settings.dynamicTheme,
         onChanged: (_) async {
           setState(() {
@@ -123,7 +124,7 @@ class _UseSystemThemeSwitchState extends State<UseSystemThemeSwitch> {
   Widget build(BuildContext context) {
     return SettingsTile(
       description: "启动时使用系统主题",
-      action: Switch(
+      action: AppSwitch(
         value: settings.useSystemTheme,
         onChanged: (_) async {
           setState(() {
@@ -151,7 +152,7 @@ class _UseSystemThemeModeSwitchState extends State<UseSystemThemeModeSwitch> {
   Widget build(BuildContext context) {
     return SettingsTile(
       description: "启动时使用系统主题模式",
-      action: Switch(
+      action: AppSwitch(
         value: settings.useSystemThemeMode,
         onChanged: (_) async {
           setState(() {

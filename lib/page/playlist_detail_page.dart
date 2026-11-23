@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/component/audio_tile.dart';
 import 'package:coriander_player/glass_theme/glass_presets.dart';
@@ -602,7 +603,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage>
                       final isSelected = selected.contains(audio);
 
                       return ListTile(
-                        leading: Checkbox(
+                        leading: AppCheckbox(
                           value: isSelected || alreadyIn,
                           onChanged: alreadyIn
                               ? null
@@ -719,7 +720,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage>
                                 ),
                               ),
                         _ => Center(
-                            child: CircularProgressIndicator(
+                            child: AppSpinner(
                               strokeWidth: 2.0,
                               color: scheme.onSurface,
                             ),
@@ -887,7 +888,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage>
           padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
           child: Row(
             children: [
-              Checkbox(
+              AppCheckbox(
                 value: isSelected,
                 onChanged: (val) {
                   if (val == true) {

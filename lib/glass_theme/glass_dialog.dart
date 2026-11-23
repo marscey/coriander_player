@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'glass_presets.dart';
@@ -158,7 +159,7 @@ class GlassDialogButton extends StatelessWidget {
         SizedBox(
           width: 16,
           height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2, color: textColor),
+          child: AppSpinner(strokeWidth: 2, color: textColor),
         )
       else if (icon != null)
         Icon(icon, size: 18, color: textColor),

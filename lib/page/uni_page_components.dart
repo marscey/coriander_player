@@ -1,4 +1,5 @@
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/metadata/metadata_service.dart';
@@ -371,7 +372,7 @@ class BatchScrapeMetadata extends StatelessWidget {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                LinearProgressIndicator(
+                AppProgressBar(
                     value: total > 0 ? completed / total : 0),
                 const SizedBox(height: 12),
                 Text("已完成 $completed / $total"),

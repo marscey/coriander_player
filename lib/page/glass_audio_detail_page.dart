@@ -1,4 +1,5 @@
 import 'package:coriander_player/utils.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/component/album_tile.dart';
 import 'package:coriander_player/component/artist_tile.dart';
@@ -81,7 +82,7 @@ class GlassAudioDetailPage extends StatelessWidget {
                         _ => SizedBox(
                             width: coverSize,
                             height: coverSize,
-                            child: const Center(child: CircularProgressIndicator()),
+                            child: const Center(child: AppSpinner()),
                           ),
                       };
 

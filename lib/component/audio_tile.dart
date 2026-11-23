@@ -1,4 +1,5 @@
 import 'package:coriander_player/component/playing_indicator.dart';
+import 'package:coriander_player/glass_theme/glass_controls.dart';
 import 'package:coriander_player/glass_theme/app_dialog.dart';
 import 'package:coriander_player/component/auto_scroll_text.dart';
 import 'package:coriander_player/component/scroll_aware_future_builder.dart';
@@ -431,7 +432,7 @@ class _AudioTileState extends State<AudioTile> {
                     Padding(
                       padding: EdgeInsets.only(
                           right: PlatformHelper.isMobile ? 8.0 : 12.0),
-                      child: Checkbox(
+                      child: AppCheckbox(
                         value: widget.multiSelectController!.selected
                             .contains(audio),
                         onChanged: (_) {
