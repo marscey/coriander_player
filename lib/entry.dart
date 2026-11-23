@@ -1,18 +1,21 @@
 import 'dart:io';
 
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/component/app_shell.dart';
+import 'package:coriander_player/component/glass_app_shell.dart';
 import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/page/albums_page.dart';
 import 'package:coriander_player/page/album_detail_page_new.dart';
-import 'package:coriander_player/page/artist_detail_page.dart';
 import 'package:coriander_player/page/artist_detail_page_v3.dart';
 import 'package:coriander_player/page/artists_page.dart';
 import 'package:coriander_player/page/audio_detail_page.dart';
+import 'package:coriander_player/page/glass_audio_detail_page.dart';
 import 'package:coriander_player/page/audios_page.dart';
 import 'package:coriander_player/page/categories_page.dart';
 import 'package:coriander_player/page/cloud_service/cloud_connections_page.dart';
 import 'package:coriander_player/page/cloud_service/cloud_file_browser.dart';
+import 'package:coriander_player/page/cloud_service/glass_cloud_file_browser.dart';
 import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
 import 'package:coriander_player/page/folder_detail_page.dart';
 import 'package:coriander_player/page/folders_page.dart';
@@ -29,6 +32,7 @@ import 'package:coriander_player/page/welcoming_page.dart';
 import 'package:coriander_player/library/playlist.dart';
 import 'package:coriander_player/theme_provider.dart';
 import 'package:coriander_player/utils.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -38,17 +42,29 @@ import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
-class SlideTransitionPage<T> extends CustomTransitionPage<T> {
-  const SlideTransitionPage({
-    required super.child,
-    super.name,
-    super.arguments,
-    super.restorationId,
-    super.key,
-  }) : super(
+// ─── 移动端导航转场页面 ──────────────────────────────────
+
+/// Tab 一级页面 — 无转场动画（即时切换）
+class _NoTransitionPage<T> extends CustomTransitionPage<T> {
+  _NoTransitionPage({required super.child})
+      : super(
           transitionsBuilder: _transitionsBuilder,
-          transitionDuration: const Duration(milliseconds: 150),
-          reverseTransitionDuration: const Duration(milliseconds: 150),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+        );
+
+  static Widget _transitionsBuilder(
+          _, __, ___, Widget child) =>
+      child;
+}
+
+/// 移动端模态转场 — 从底部滑入（NowPlaying 等模态覆盖场景）
+class _MobileModalPage<T> extends CustomTransitionPage<T> {
+  _MobileModalPage({required super.child, super.maintainState})
+      : super(
+          transitionsBuilder: _transitionsBuilder,
+          transitionDuration: const Duration(milliseconds: 400),
+          reverseTransitionDuration: const Duration(milliseconds: 350),
         );
 
   static Widget _transitionsBuilder(
@@ -57,18 +73,38 @@ class SlideTransitionPage<T> extends CustomTransitionPage<T> {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    final tween = Tween(
-      begin: const Offset(0, 0.10),
-      end: const Offset(0, 0),
-    );
+    final slideIn = Tween<Offset>(
+      begin: const Offset(0, 1.0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: animation,
+      curve: Curves.fastOutSlowIn,
+    ));
 
     return SlideTransition(
-      position: tween.animate(
-        CurvedAnimation(parent: animation, curve: Curves.fastOutSlowIn),
-      ),
+      position: slideIn,
       child: child,
     );
   }
+}
+
+/// 根据平台选择合适的页面类型
+///
+/// - 移动端：CupertinoPage（支持 iOS 左滑手势返回 + 原生右滑入转场）
+/// - 桌面端：MaterialPage
+Page<dynamic> _platformPage({required Widget child, bool maintainState = true}) {
+  if (PlatformHelper.isMobile) {
+    return CupertinoPage(child: child, maintainState: maintainState);
+  }
+  return MaterialPage(child: child, maintainState: maintainState);
+}
+
+/// Tab 一级页面 — 无转场动画
+Page<dynamic> _tabRootPage({required Widget child}) {
+  if (PlatformHelper.isMobile) {
+    return _NoTransitionPage(child: child);
+  }
+  return MaterialPage(child: child);
 }
 
 class Entry extends StatelessWidget {
@@ -139,8 +175,13 @@ class Entry extends StatelessWidget {
         welcome ? app_paths.WELCOMING_PAGE : app_paths.UPDATING_DIALOG,
     routes: [
       StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) =>
-            AppShell(navigationShell: navigationShell),
+        builder: (context, state, navigationShell) {
+          // 根据 Liquid Glass 开关选择不同的 Shell
+          if (AppPreference.instance.liquidGlassEnabled && PlatformHelper.isMobile) {
+            return GlassAppShell(navigationShell: navigationShell);
+          }
+          return AppShell(navigationShell: navigationShell);
+        },
         branches: [
           // 0: 音乐库
           StatefulShellBranch(routes: [
@@ -148,16 +189,20 @@ class Entry extends StatelessWidget {
               path: app_paths.AUDIOS_PAGE,
               pageBuilder: (context, state) {
                 if (state.extra != null) {
-                  return SlideTransitionPage(
+                  return _tabRootPage(
                       child: AudiosPage(locateTo: state.extra as Audio));
                 }
-                return const SlideTransitionPage(child: AudiosPage());
+                return _tabRootPage(child: const AudiosPage());
               },
               routes: [
                 GoRoute(
                   path: "detail",
-                  builder: (context, state) =>
-                      AudioDetailPage(audio: state.extra as Audio),
+                  pageBuilder: (context, state) => _platformPage(
+                    child: (AppPreference.instance.liquidGlassEnabled &&
+                            PlatformHelper.isMobile)
+                        ? GlassAudioDetailPage(audio: state.extra as Audio)
+                        : AudioDetailPage(audio: state.extra as Audio),
+                  ),
                 ),
               ],
             ),
@@ -166,15 +211,15 @@ class Entry extends StatelessWidget {
           StatefulShellBranch(routes: [
             GoRoute(
               path: app_paths.PLAYLISTS_PAGE,
-              pageBuilder: (context, state) => const SlideTransitionPage(
-                child: PlaylistsPage(),
-              ),
+              pageBuilder: (context, state) =>
+                  _tabRootPage(child: const PlaylistsPage()),
               routes: [
                 GoRoute(
                   path: "detail",
-                  builder: (context, state) {
+                  pageBuilder: (context, state) {
                     final playlist = state.extra as Playlist;
-                    return PlaylistDetailPage(playlist: playlist);
+                    return _platformPage(
+                        child: PlaylistDetailPage(playlist: playlist));
                   },
                 ),
               ],
@@ -184,46 +229,47 @@ class Entry extends StatelessWidget {
           StatefulShellBranch(routes: [
             GoRoute(
               path: app_paths.CATEGORIES_PAGE,
-              pageBuilder: (context, state) => const SlideTransitionPage(
-                child: CategoriesPage(),
-              ),
+              pageBuilder: (context, state) =>
+                  _tabRootPage(child: const CategoriesPage()),
               routes: [
                 GoRoute(
                   path: "artists",
-                  pageBuilder: (context, state) => const SlideTransitionPage(
-                    child: ArtistsPage(),
-                  ),
+                  pageBuilder: (context, state) =>
+                      _platformPage(child: const ArtistsPage()),
                   routes: [
                     GoRoute(
                       path: "detail",
-                      builder: (context, state) =>
-                          ArtistDetailPage(artist: state.extra as Artist),
+                      pageBuilder: (context, state) => _platformPage(
+                        child: ArtistDetailPageV3(
+                            artist: state.extra as Artist),
+                      ),
                     ),
                   ],
                 ),
                 GoRoute(
                   path: "albums",
-                  pageBuilder: (context, state) => const SlideTransitionPage(
-                    child: AlbumsPage(),
-                  ),
+                  pageBuilder: (context, state) =>
+                      _platformPage(child: const AlbumsPage()),
                   routes: [
                     GoRoute(
                       path: "detail",
-                      builder: (context, state) =>
-                          AlbumDetailPageNew(album: state.extra as Album),
+                      pageBuilder: (context, state) => _platformPage(
+                        child:
+                            AlbumDetailPageNew(album: state.extra as Album),
+                      ),
                     ),
                   ],
                 ),
                 GoRoute(
                   path: "genres",
-                  pageBuilder: (context, state) => const SlideTransitionPage(
-                    child: GenresPage(),
-                  ),
+                  pageBuilder: (context, state) =>
+                      _platformPage(child: const GenresPage()),
                   routes: [
                     GoRoute(
                       path: "detail",
-                      builder: (context, state) =>
-                          GenreDetailPage(genre: state.extra as Genre),
+                      pageBuilder: (context, state) => _platformPage(
+                        child: GenreDetailPage(genre: state.extra as Genre),
+                      ),
                     ),
                   ],
                 ),
@@ -234,16 +280,18 @@ class Entry extends StatelessWidget {
           StatefulShellBranch(routes: [
             GoRoute(
               path: app_paths.FOLDERS_PAGE,
-              pageBuilder: (context, state) => const SlideTransitionPage(
-                child: FoldersPage(),
-              ),
+              pageBuilder: (context, state) =>
+                  _tabRootPage(child: const FoldersPage()),
               routes: [
                 GoRoute(
                   path: "detail",
-                  builder: (context, state) {
+                  pageBuilder: (context, state) {
                     final args = state.extra as FolderDetailArgs;
-                    return FolderDetailPage(
-                        folder: args.folder, locateToPath: args.locateToPath);
+                    return _platformPage(
+                      child: FolderDetailPage(
+                          folder: args.folder,
+                          locateToPath: args.locateToPath),
+                    );
                   },
                 ),
               ],
@@ -253,19 +301,29 @@ class Entry extends StatelessWidget {
           StatefulShellBranch(routes: [
             GoRoute(
               path: app_paths.CLOUD_CONNECTIONS_PAGE,
-              pageBuilder: (context, state) => const SlideTransitionPage(
-                child: CloudConnectionsPage(),
-              ),
+              pageBuilder: (context, state) =>
+                  _tabRootPage(child: const CloudConnectionsPage()),
               routes: [
                 GoRoute(
                   path: "browser/:connectionId",
-                  builder: (context, state) {
-                    final connectionId = state.pathParameters['connectionId']!;
+                  pageBuilder: (context, state) {
+                    final connectionId =
+                        state.pathParameters['connectionId']!;
                     final args = state.extra as CloudBrowserArgs?;
-                    return CloudFileBrowser(
-                      connectionId: connectionId,
-                      initialPath: args?.initialPath ?? '',
-                      locateToPath: args?.locateToPath,
+                    final useGlass = AppPreference.instance.liquidGlassEnabled
+                        && PlatformHelper.isMobile;
+                    return _platformPage(
+                      child: useGlass
+                          ? GlassCloudFileBrowser(
+                              connectionId: connectionId,
+                              initialPath: args?.initialPath ?? '',
+                              locateToPath: args?.locateToPath,
+                            )
+                          : CloudFileBrowser(
+                              connectionId: connectionId,
+                              initialPath: args?.initialPath ?? '',
+                              locateToPath: args?.locateToPath,
+                            ),
                     );
                   },
                 ),
@@ -276,31 +334,16 @@ class Entry extends StatelessWidget {
           StatefulShellBranch(routes: [
             GoRoute(
               path: app_paths.SEARCH_PAGE,
-              pageBuilder: (context, state) => const SlideTransitionPage(
-                child: SearchPage(),
-              ),
+              pageBuilder: (context, state) =>
+                  _tabRootPage(child: const SearchPage()),
               routes: [
                 GoRoute(
                   path: "result",
-                  builder: (context, state) {
+                  pageBuilder: (context, state) {
                     final result = state.extra as UnionSearchResult;
-                    return SearchResultPage(searchResult: result);
+                    return _platformPage(
+                        child: SearchResultPage(searchResult: result));
                   },
-                ),
-              ],
-            ),
-          ]),
-          // 6: 设置
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: app_paths.SETTINGS_PAGE,
-              pageBuilder: (context, state) => const SlideTransitionPage(
-                child: SettingsPage(),
-              ),
-              routes: [
-                GoRoute(
-                  path: "issue",
-                  builder: (context, state) => const SettingsIssuePage(),
                 ),
               ],
             ),
@@ -308,66 +351,33 @@ class Entry extends StatelessWidget {
         ],
       ),
 
-      /// now playing page
+      /// settings page — 顶级路由（不嵌套在 shell 内，无底部导航栏和迷你播放器）
+      GoRoute(
+        path: app_paths.SETTINGS_PAGE,
+        pageBuilder: (context, state) =>
+            _platformPage(child: const SettingsPage()),
+        routes: [
+          GoRoute(
+            path: "issue",
+            pageBuilder: (context, state) =>
+                _platformPage(child: const SettingsIssuePage()),
+          ),
+        ],
+      ),
+
+      /// now playing page — 模态底部滑入
       GoRoute(
         path: app_paths.NOW_PLAYING_PAGE,
-        pageBuilder: (context, state) => CustomTransitionPage(
+        pageBuilder: (context, state) => _MobileModalPage(
           maintainState: false,
-          transitionsBuilder: (context, animation, _, child) {
-            final tween = Tween(
-              begin: const Offset(0, 1),
-              end: const Offset(0, 0),
-            );
-
-            return SlideTransition(
-              position: tween.animate(
-                CurvedAnimation(parent: animation, curve: Curves.fastOutSlowIn),
-              ),
-              child: child,
-            );
-          },
           child: const NowPlayingPage(),
         ),
       ),
 
-      /// artist detail page (immersive full-screen on mobile)
-      GoRoute(
-        path: app_paths.ARTIST_DETAIL_PAGE_NEW,
-        pageBuilder: (context, state) => CustomTransitionPage(
-          transitionsBuilder: (context, animation, _, child) {
-            final tween = Tween(
-              begin: const Offset(0, 1),
-              end: const Offset(0, 0),
-            );
-
-            return SlideTransition(
-              position: tween.animate(
-                CurvedAnimation(parent: animation, curve: Curves.fastOutSlowIn),
-              ),
-              child: child,
-            );
-          },
-          child: ArtistDetailPageV3(artist: state.extra as Artist),
-        ),
-      ),
-
-      /// album detail page (top-level route, avoids StatefulShellRoute issues)
+      /// album detail page (top-level route) — 右侧推入
       GoRoute(
         path: app_paths.ALBUM_DETAIL_PAGE_NEW,
-        pageBuilder: (context, state) => CustomTransitionPage(
-          transitionsBuilder: (context, animation, _, child) {
-            final tween = Tween(
-              begin: const Offset(0, 1),
-              end: const Offset(0, 0),
-            );
-
-            return SlideTransition(
-              position: tween.animate(
-                CurvedAnimation(parent: animation, curve: Curves.fastOutSlowIn),
-              ),
-              child: child,
-            );
-          },
+        pageBuilder: (context, state) => _platformPage(
           child: AlbumDetailPageNew(album: state.extra as Album),
         ),
       ),
@@ -375,17 +385,15 @@ class Entry extends StatelessWidget {
       /// welcoming page
       GoRoute(
         path: app_paths.WELCOMING_PAGE,
-        pageBuilder: (context, state) => const SlideTransitionPage(
-          child: WelcomingPage(),
-        ),
+        pageBuilder: (context, state) =>
+            _platformPage(child: const WelcomingPage()),
       ),
 
       /// updating dialog
       GoRoute(
         path: app_paths.UPDATING_DIALOG,
-        pageBuilder: (context, state) => const SlideTransitionPage(
-          child: UpdatingPage(),
-        ),
+        pageBuilder: (context, state) =>
+            _platformPage(child: const UpdatingPage()),
       ),
     ],
   );

@@ -1,3 +1,4 @@
+import 'package:coriander_player/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -130,6 +131,16 @@ class _AutoScrollTextState extends State<AutoScrollText>
 
   @override
   Widget build(BuildContext context) {
+    // 全局跑马灯开关：关闭时直接渲染普通 Text（性能与体验更好）
+    if (!AppSettings.instance.marqueeEnabled) {
+      return Text(
+        widget.text,
+        style: widget.style,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
     if (!_needsScroll) {
       return Text(
         widget.text,

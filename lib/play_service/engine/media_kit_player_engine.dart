@@ -19,6 +19,8 @@ class MediaKitPlayerEngine implements PlayerEngine {
   Duration _currentDuration = Duration.zero;
   Duration _currentBuffer = Duration.zero;
   bool _isDisposed = false;
+  int _lastLoggedBufferSeconds = -1;
+  bool _isNetworkSource = false;
 
   List<StreamSubscription> _playerSubscriptions = [];
 
@@ -107,6 +109,13 @@ class MediaKitPlayerEngine implements PlayerEngine {
       _currentDuration = duration;
       _durationStreamController?.add(_currentDuration);
       LOGGER.i("[MediaKit] duration updated: ${duration.inMilliseconds}ms");
+
+      // 本地文件：duration 就绪后，buffer 直接设为满格（见 buffer getter）
+      // mpv 对本地文件的 buffer 报告的是预读取进度，不是下载进度
+      if (!_isNetworkSource) {
+        _currentBuffer = duration;
+        _bufferStreamController?.add(_currentBuffer);
+      }
     }
   }
 
@@ -119,9 +128,15 @@ class MediaKitPlayerEngine implements PlayerEngine {
 
   void _onBufferChanged(Duration buffer) {
     if (_isDisposed) return;
+    // 本地文件：忽略 mpv 的预读取 buffer 报告，使用 duration 作为满格 buffer
+    if (!_isNetworkSource) return;
     if (buffer.inMilliseconds >= 0) {
       _currentBuffer = buffer;
       _bufferStreamController?.add(_currentBuffer);
+      if ((buffer.inSeconds - _lastLoggedBufferSeconds).abs() >= 1 || buffer.inSeconds == 0) {
+        debugLog("[DEBUG-CACHE] MediaKit buffer (network): ${buffer.inSeconds}s / duration=${_currentDuration.inSeconds}s");
+        _lastLoggedBufferSeconds = buffer.inSeconds;
+      }
     }
   }
 
@@ -133,11 +148,14 @@ class MediaKitPlayerEngine implements PlayerEngine {
     if (_isDisposed || _player == null) return;
 
     LOGGER.i("[MediaKit] setSource START: path=$path, isNetwork=$isNetwork, hasHeaders=${httpHeaders != null}");
+    debugLog("[DEBUG-CACHE] MediaKit setSource: isNetwork=$isNetwork, path=$path");
 
+    _isNetworkSource = isNetwork;
     _currentMediaPath = null;
     _currentDuration = Duration.zero;
     _currentPosition = Duration.zero;
     _currentBuffer = Duration.zero;
+    _lastLoggedBufferSeconds = -1;
     _currentState = bass_player.PlayerState.stopped;
     _playerStateStreamController?.add(_currentState);
 
@@ -161,6 +179,7 @@ class MediaKitPlayerEngine implements PlayerEngine {
     _currentDuration = _player!.state.duration;
     _currentBuffer = _player!.state.buffer;
     LOGGER.i("[MediaKit] duration after open: ${_currentDuration.inMilliseconds}ms");
+    debugLog("[DEBUG-CACHE] MediaKit setSource DONE: duration=${_currentDuration.inSeconds}s, buffer=${_currentBuffer.inSeconds}s");
     LOGGER.i("[MediaKit] setSource DONE");
   }
 
@@ -234,6 +253,12 @@ class MediaKitPlayerEngine implements PlayerEngine {
   @override
   Duration get buffer {
     if (_isDisposed || _player == null) return Duration.zero;
+    // 本地文件：buffer 直接返回 duration（无需"缓冲"的概念）
+    // 绕过 stream 时序问题，确保 UI 立即看到正确的 buffer 值
+    if (!_isNetworkSource && _currentDuration.inMilliseconds > 0) {
+      debugLog("[DEBUG-CACHE] buffer getter: local file, returning duration=${_currentDuration.inSeconds}s");
+      return _currentDuration;
+    }
     final b = _currentBuffer;
     return b.inMilliseconds >= 0 ? b : Duration.zero;
   }

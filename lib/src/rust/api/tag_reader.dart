@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `_get_lyric_from_lofty`, `_get_lyric_from_lrc_file`, `_get_picture_by_lofty`, `_get_picture_by_windows`, `_update_index_below_1_1_0`, `ensure_tag_exists`, `new_with_path`, `read_by_lofty`, `read_by_win_music_properties`, `read_from_folder_recursively`, `read_from_folder`, `read_from_path`, `to_json_value`, `to_json_value`
+// These functions are ignored because they are not marked as `pub`: `_get_lyric_from_lofty`, `_get_lyric_from_lrc_file`, `_get_picture_by_lofty`, `_get_picture_by_windows`, `_update_index_below_1_1_0`, `construct_flac_virtual_file`, `construct_full_virtual_file`, `construct_mp4_virtual_file`, `ensure_tag_exists`, `find_atom_offset_in_head`, `find_moov_offset_in_tail`, `metadata_to_json`, `new_with_path`, `read_by_lofty`, `read_by_win_music_properties`, `read_from_folder_recursively`, `read_from_folder`, `read_from_path`, `to_json_value`, `to_json_value`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioFolder`, `Audio`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `fmt`, `fmt`
 
@@ -16,6 +16,36 @@ Future<Uint8List?> getPictureFromPath(
         {required String path, required int width, required int height}) =>
     RustLib.instance.api.crateApiTagReaderGetPictureFromPath(
         path: path, width: width, height: height);
+
+/// for Flutter
+/// 从文件头部 + 尾部字节中解析音频封面（内嵌封面）。
+/// 用于云音频列表惰性加载：列表滚动时对可见项异步发 Range 请求拉取头部+尾部字节，
+/// 调用本函数解析封面，无需下载完整文件。
+///
+/// [head_bytes]: 文件头部字节（建议至少 256KB 以覆盖大多数封面）
+/// [tail_bytes]: 文件尾部字节（M4A/MP4 必需，其他格式可传空）
+/// [file_size]: 文件总大小（字节，M4A/MP4 必需，其他格式可传 0）
+/// [file_name]: 文件名（用于格式检测）
+/// [width]: 目标宽度（像素）
+/// [height]: 目标高度（像素）
+///
+/// 返回缩放后的 PNG 字节，失败返回 None。
+/// MP3/FLAC 封面在文件头部，仅需 head_bytes；
+/// M4A/MP4 封面在 moov atom（通常在文件尾部），需要 head + tail + file_size。
+Future<Uint8List?> getPictureFromBytes(
+        {required List<int> headBytes,
+        required List<int> tailBytes,
+        required int fileSize,
+        required String fileName,
+        required int width,
+        required int height}) =>
+    RustLib.instance.api.crateApiTagReaderGetPictureFromBytes(
+        headBytes: headBytes,
+        tailBytes: tailBytes,
+        fileSize: fileSize,
+        fileName: fileName,
+        width: width,
+        height: height);
 
 /// for Flutter
 /// 只支持读取 ID3V2, VorbisComment, Mp4Ilst 存储的内嵌歌词
@@ -47,8 +77,40 @@ Stream<IndexActionState> updateIndex({required String indexPath}) =>
     RustLib.instance.api.crateApiTagReaderUpdateIndex(indexPath: indexPath);
 
 /// for Flutter
+/// 探测 MP4/M4A 文件 tail 字节中 moov atom 的位置和大小
+///
+/// 用于扫描入库时判断 moov 是否完整在 tail 中：
+/// - 若不完整（moov_size > tail 剩余字节），调用方需重新下载从 moov 绝对偏移到文件尾的字节
+/// - 若完整，可直接调用 [read_metadata_from_bytes]
+///
+/// [tail_bytes]: 文件尾部字节
+/// [file_size]: 文件总大小（字节）
+///
+/// 返回 JSON 字符串: {"moov_abs_offset": u64, "moov_size": u64, "tail_len": usize, "complete": bool}
+/// 未找到 moov 返回 None。
+Future<String?> probeMoovInTail(
+        {required List<int> tailBytes, required int fileSize}) =>
+    RustLib.instance.api.crateApiTagReaderProbeMoovInTail(
+        tailBytes: tailBytes, fileSize: fileSize);
+
+/// for Flutter
+/// 探测 MP4/M4A 文件 head 字节中 moov atom 的位置和大小
+///
+/// 用于扫描入库时判断 moov 是否在 head 中且完整：
+/// - moov 在 head 中且完整 → 直接用现有 head+tail 解析
+/// - moov 在 head 中但不完整（moov_size > head 剩余字节）→ 调用方需下载 0~moov_end 的字节作为新 head
+/// - moov 不在 head 中 → 调用方应改用 probe_moov_in_tail 检测尾部
+///
+/// [head_bytes]: 文件头部字节
+///
+/// 返回 JSON 字符串: {"moov_offset": u64, "moov_size": u64, "moov_end": u64, "head_len": usize, "complete": bool}
+/// 未找到 moov 返回 None。
+Future<String?> probeMoovInHead({required List<int> headBytes}) =>
+    RustLib.instance.api.crateApiTagReaderProbeMoovInHead(headBytes: headBytes);
+
+/// for Flutter
 /// 从部分字节（文件头 + 文件尾）中解析音频元数据。
-/// [head_bytes]: 文件头部字节（建议至少 64KB）
+/// [head_bytes]: 文件头部字节（建议至少 64KB）；若包含完整文件则直接解析
 /// [tail_bytes]: 文件尾部字节（建议至少 128KB）
 /// [file_size]: 文件总大小（字节）
 /// [file_name]: 文件名（用于格式检测和作为标题回退）

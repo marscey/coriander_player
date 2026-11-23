@@ -1,14 +1,20 @@
+import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/component/unified_list_tile.dart';
+import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
 import 'package:coriander_player/page/page_scaffold.dart';
+import 'package:coriander_player/page/glass_page_scaffold.dart';
+import 'package:coriander_player/play_service/play_service.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 import '../../app_paths.dart' as app_paths;
 import '../../cloud_service/cloud_connection.dart';
-import '../../cloud_service/cloud_service_manager.dart';
-import '../../play_service/play_service.dart';
-import 'package:coriander_player/component/playing_indicator.dart';
-import 'cloud_file_browser.dart';
 import 'cloud_connection_form.dart';
+import 'glass_cloud_connection_form.dart';
+import 'cloud_file_browser.dart';
 
 class CloudConnectionsPage extends StatefulWidget {
   const CloudConnectionsPage({super.key});
@@ -18,55 +24,42 @@ class CloudConnectionsPage extends StatefulWidget {
 }
 
 class _CloudConnectionsPageState extends State<CloudConnectionsPage> {
+  bool _hasPlayingCloudAudio = false;
+
   @override
   void initState() {
     super.initState();
-    PlayService.instance.playbackService.addListener(_onPlaybackChanged);
+    _refreshPlayingStatus();
+    PlayService.instance.playbackService.addListener(_refreshPlayingStatus);
   }
 
   @override
   void dispose() {
-    PlayService.instance.playbackService.removeListener(_onPlaybackChanged);
+    PlayService.instance.playbackService.removeListener(_refreshPlayingStatus);
     super.dispose();
   }
 
-  void _onPlaybackChanged() {
-    if (mounted) setState(() {});
-  }
-
-  bool _isConnectionPlaying(CloudConnection connection) {
+  void _refreshPlayingStatus() {
     final nowPlaying = PlayService.instance.playbackService.nowPlaying;
-    return nowPlaying != null &&
-        nowPlaying.isCloudAudio &&
-        nowPlaying.connectionId == connection.id;
-  }
-
-  bool get _hasPlayingCloudAudio {
-    final nowPlaying = PlayService.instance.playbackService.nowPlaying;
-    return nowPlaying != null && nowPlaying.isCloudAudio;
+    if (!mounted) return;
+    setState(() {
+      _hasPlayingCloudAudio = nowPlaying?.isCloudAudio ?? false;
+    });
   }
 
   void _locatePlayingConnection() {
     final nowPlaying = PlayService.instance.playbackService.nowPlaying;
-    if (nowPlaying == null || !nowPlaying.isCloudAudio) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('当前未在播放云音频')),
-      );
-      return;
-    }
+    if (nowPlaying == null || !nowPlaying.isCloudAudio) return;
     final connectionId = nowPlaying.connectionId;
     if (connectionId == null) return;
 
-    // 计算播放文件所在的目录路径
-    final playingPath = nowPlaying.path;
-    final dirPath = playingPath.contains('/')
-        ? playingPath.substring(0, playingPath.lastIndexOf('/'))
+    final dirPath = nowPlaying.path.contains('/')
+        ? nowPlaying.path.substring(0, nowPlaying.path.lastIndexOf('/'))
         : '';
 
-    // 跳转到连接的文件浏览器，带上初始路径和定位目标
     context.push(
       '${app_paths.CLOUD_BROWSER_PAGE}/$connectionId',
-      extra: CloudBrowserArgs(dirPath, playingPath),
+      extra: CloudBrowserArgs(dirPath, nowPlaying.path),
     );
   }
 
@@ -75,205 +68,281 @@ class _CloudConnectionsPageState extends State<CloudConnectionsPage> {
     return Consumer<CloudServiceManager>(
       builder: (context, manager, child) {
         final connections = manager.connections;
+        final subtitle = connections.isEmpty
+            ? null
+            : "${connections.length} 个连接";
 
-        final List<Widget> actions = [];
-        if (_hasPlayingCloudAudio) {
-          actions.add(LocatePlayingButton(
-            hasPlayingAudio: _hasPlayingCloudAudio,
-            onLocate: _locatePlayingConnection,
-          ));
+        final useGlass = AppPreference.instance.liquidGlassEnabled;
+
+        final tileList = connections
+            .map((c) => _buildConnectionTile(c))
+            .toList();
+
+        if (useGlass) {
+          // Glass 模式菜单项
+          final glassMenuItems = <Widget>[
+            if (_hasPlayingCloudAudio)
+              GlassMenuItem(
+                title: '定位播放文件',
+                icon: const Icon(Symbols.location_on, size: 20),
+                onTap: _locatePlayingConnection,
+              ),
+            GlassMenuItem(
+              title: '添加连接',
+              icon: const Icon(Symbols.add, size: 20),
+              onTap: () => _showAddConnectionDialog(context),
+            ),
+          ];
+
+          if (connections.isEmpty) {
+            return GlassPageScaffold(
+              title: "云服务连接",
+              subtitle: subtitle,
+              menuItems: glassMenuItems,
+              showBackButton: false,
+              showSettingsButton: true,
+              body: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: GlassPageHeader(
+                      title: "云服务连接",
+                      subtitle: subtitle,
+                    ),
+                  ),
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16.0, 0.0, 16.0, 140.0),
+                      child: _buildEmptyState(),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return GlassPageScaffold(
+            title: "云服务连接",
+            subtitle: subtitle,
+            menuItems: glassMenuItems,
+            showBackButton: false,
+            showSettingsButton: true,
+            body: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: GlassPageHeader(
+                    title: "云服务连接",
+                    subtitle: subtitle,
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12.0, 0.0, 12.0, 140.0),
+                  sliver: SliverList.separated(
+                    itemCount: tileList.length,
+                    itemBuilder: (context, i) => tileList[i],
+                    separatorBuilder: (context, i) =>
+                        const SizedBox(height: 8.0),
+                  ),
+                ),
+              ],
+            ),
+          );
         }
-        actions.add(FilledButton.icon(
-          onPressed: () => _showAddConnectionDialog(context),
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('添加连接'),
-          style: const ButtonStyle(
-            fixedSize: WidgetStatePropertyAll(Size.fromHeight(40)),
+
+        // 普通模式
+        final actions = <Widget>[
+          if (_hasPlayingCloudAudio)
+            IconButton(
+              tooltip: "定位播放文件",
+              onPressed: _locatePlayingConnection,
+              icon: const Icon(Symbols.location_on),
+            ),
+          IconButton(
+            tooltip: "添加连接",
+            onPressed: () => _showAddConnectionDialog(context),
+            icon: const Icon(Symbols.add),
           ),
-        ));
+        ];
 
         return PageScaffold(
           title: "云服务连接",
-          subtitle: connections.isEmpty ? null : "${connections.length} 个连接",
+          subtitle: subtitle,
           actions: actions,
+          showBackButton: false,
           body: connections.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.cloud_off,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.outline),
-                      const SizedBox(height: 16),
-                      Text('暂无云服务连接',
-                          style: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant)),
-                      const SizedBox(height: 8),
-                      Text('点击上方按钮添加连接',
-                          style: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                              fontSize: 13)),
-                    ],
-                  ),
-                )
+              ? _buildEmptyState()
               : ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 96.0),
-                  itemCount: connections.length,
-                  itemBuilder: (context, index) {
-                    final connection = connections[index];
-                    return _buildConnectionItem(context, connection, manager);
-                  },
+                  padding: const EdgeInsets.fromLTRB(12.0, 0.0, 12.0, 96.0),
+                  itemCount: tileList.length,
+                  itemExtent: 64,
+                  itemBuilder: (context, i) => tileList[i],
                 ),
         );
       },
     );
   }
 
-  Widget _buildConnectionItem(
-    BuildContext context,
-    CloudConnection connection,
-    CloudServiceManager manager,
-  ) {
+  Widget _buildConnectionTile(CloudConnection connection) {
+    final typeName = _getServiceTypeName(connection.type);
+    final sub = connection.serverUrl;
     final isPlaying = _isConnectionPlaying(connection);
 
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: ListTile(
-        leading: PlayingIndicatorOverlay(
-          size: PlayingIndicatorSize.medium,
-          isActivelyPlaying: isPlaying,
-          child: Icon(Icons.cloud, size: 36),
-        ),
-        title: Text(
-          connection.displayName ?? connection.name,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('类型: ${_getServiceTypeName(connection.type)}'),
-            Text('服务器: ${connection.serverUrl}'),
-            Text('最后同步: ${_formatDate(connection.lastSync)}'),
-          ],
-        ),
-        trailing: PopupMenuButton(
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'browse',
-              child: ListTile(
-                leading: Icon(Icons.folder_open),
-                title: Text('浏览文件'),
-              ),
+    return UnifiedListTile(
+      icon: CupertinoIcons.cloud,
+      title: connection.displayName ?? connection.name,
+      subtitle: "$typeName · $sub",
+      isPlaying: isPlaying,
+      onTap: () {
+        context.push('${app_paths.CLOUD_BROWSER_PAGE}/${connection.id}');
+      },
+      iconBackgroundColor: isPlaying
+          ? Theme.of(context).colorScheme.primaryContainer
+          : null,
+      iconColor: isPlaying
+          ? Theme.of(context).colorScheme.onPrimaryContainer
+          : null,
+      trailing: PopupMenuButton(
+        itemBuilder: (context) => [
+          const PopupMenuItem(
+            value: 'edit',
+            child: ListTile(
+              leading: Icon(Icons.edit),
+              title: Text('编辑连接'),
             ),
-            const PopupMenuItem(
-              value: 'edit',
-              child: ListTile(
-                leading: Icon(Icons.edit),
-                title: Text('编辑连接'),
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'test',
-              child: ListTile(
-                leading: Icon(Icons.check_circle),
-                title: Text('测试连接'),
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: ListTile(
-                leading: Icon(Icons.delete, color: Colors.red),
-                title: Text('删除连接', style: TextStyle(color: Colors.red)),
-              ),
-            ),
-          ],
-          onSelected: (value) => _handleConnectionAction(
-            context,
-            connection,
-            manager,
-            value,
           ),
-        ),
-        onTap: () {
-          context.push(
-            '${app_paths.CLOUD_BROWSER_PAGE}/${connection.id}',
-          );
-        },
+          const PopupMenuItem(
+            value: 'test',
+            child: ListTile(
+              leading: Icon(Icons.check_circle),
+              title: Text('测试连接'),
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'copy',
+            child: ListTile(
+              leading: Icon(Icons.copy),
+              title: Text('复制连接'),
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'delete',
+            child: ListTile(
+              leading: Icon(Icons.delete, color: Colors.red),
+              title: Text('删除连接', style: TextStyle(color: Colors.red)),
+            ),
+          ),
+        ],
+        onSelected: (value) => _handleConnectionAction(connection, value),
       ),
     );
+  }
+
+  bool _isConnectionPlaying(CloudConnection connection) {
+    final nowPlaying = PlayService.instance.playbackService.nowPlaying;
+    return nowPlaying?.isCloudAudio ?? false
+        ? nowPlaying!.connectionId == connection.id
+        : false;
   }
 
   String _getServiceTypeName(CloudServiceType type) {
     switch (type) {
       case CloudServiceType.webdav:
-        return 'WebDAV';
+        return "WebDAV";
     }
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      return '今天 ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-    } else if (difference.inDays == 1) {
-      return '昨天 ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}天前';
-    } else {
-      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-    }
-  }
-
-  void _handleConnectionAction(
-    BuildContext context,
-    CloudConnection connection,
-    CloudServiceManager manager,
-    String action,
-  ) async {
+  void _handleConnectionAction(CloudConnection connection, String action) async {
     switch (action) {
-      case 'browse':
-        context.push(
-          '${app_paths.CLOUD_BROWSER_PAGE}/${connection.id}',
-        );
-        break;
       case 'edit':
-        _showEditConnectionDialog(context, connection);
+        _showEditConnectionDialog(connection);
         break;
       case 'test':
-        await _testConnection(context, connection);
+        await _testConnection(connection);
+        break;
+      case 'copy':
+        await _copyConnection(connection);
         break;
       case 'delete':
-        await _deleteConnection(context, connection, manager);
+        await _deleteConnection(connection);
         break;
     }
+  }
+
+  Future<void> _copyConnection(CloudConnection connection) async {
+    final originalName = connection.displayName ?? connection.name;
+    final newName = '${connection.name}_副本';
+    final newDisplayName =
+        connection.displayName != null ? '${originalName}_副本' : null;
+    final newConnection = connection.copyWith(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: newName,
+      displayName: newDisplayName,
+      lastSync: DateTime.now(),
+    );
+    await context.read<CloudServiceManager>().addConnection(newConnection);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已复制连接「$originalName」为新连接')),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            CupertinoIcons.cloud,
+            size: 64,
+            color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "暂无云服务连接",
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "点击 ⋯ 菜单添加连接",
+            style: TextStyle(
+              color: scheme.onSurfaceVariant,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAddConnectionDialog(BuildContext context) {
+    final useGlass = AppPreference.instance.liquidGlassEnabled;
     showDialog(
       context: context,
-      builder: (context) => const CloudConnectionForm(),
+      builder: (context) => useGlass
+          ? const GlassCloudConnectionForm()
+          : const CloudConnectionForm(),
     );
   }
 
-  void _showEditConnectionDialog(
-      BuildContext context, CloudConnection connection) {
+  void _showEditConnectionDialog(CloudConnection connection) {
+    final useGlass = AppPreference.instance.liquidGlassEnabled;
     showDialog(
       context: context,
-      builder: (context) => CloudConnectionForm(connection: connection),
+      builder: (context) => useGlass
+          ? GlassCloudConnectionForm(connection: connection)
+          : CloudConnectionForm(connection: connection),
     );
   }
 
-  Future<void> _testConnection(
-      BuildContext context, CloudConnection connection) async {
-    final manager = context.read<CloudServiceManager>();
-    final service = manager.getService(connection.id);
-
+  Future<void> _testConnection(CloudConnection connection) async {
+    final service = context.read<CloudServiceManager>().getService(connection.id);
     if (service == null) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('连接测试失败：服务不可用')),
       );
@@ -296,11 +365,7 @@ class _CloudConnectionsPageState extends State<CloudConnectionsPage> {
     }
   }
 
-  Future<void> _deleteConnection(
-    BuildContext context,
-    CloudConnection connection,
-    CloudServiceManager manager,
-  ) async {
+  Future<void> _deleteConnection(CloudConnection connection) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -321,7 +386,8 @@ class _CloudConnectionsPageState extends State<CloudConnectionsPage> {
     );
 
     if (confirmed == true) {
-      await manager.removeConnection(connection.id);
+      if (!context.mounted) return;
+      await context.read<CloudServiceManager>().removeConnection(connection.id);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('连接已删除')),

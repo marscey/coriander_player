@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:coriander_player/play_service/play_service.dart';
+import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 
 class RectangleProgressIndicator extends StatefulWidget {
@@ -28,11 +29,25 @@ class _RectangleProgressIndicatorState
   @override
   void initState() {
     super.initState();
+    final playbackService = PlayService.instance.playbackService;
+    _updateProgress();
+    playbackService.addListener(_onServiceChanged);
     subscription =
-        PlayService.instance.playbackService.positionStream.listen((event) {
-      final len = PlayService.instance.playbackService.length;
-      progress.value = len > 0 ? (event / len).clamp(0.0, 1.0) : 0.0;
+        playbackService.positionStream.listen((event) {
+      _updateProgress();
     });
+  }
+
+  void _onServiceChanged() {
+    _updateProgress();
+  }
+
+  void _updateProgress() {
+    final playbackService = PlayService.instance.playbackService;
+    final len = playbackService.displayLength;
+    final pos = playbackService.displayPosition;
+    print("[DEBUG] MiniProgress: len=$len, pos=$pos, isRestored=${playbackService.isRestoredState}");
+    progress.value = len > 0 ? (pos / len).clamp(0.0, 1.0) : 0.0;
   }
 
   @override
@@ -47,8 +62,9 @@ class _RectangleProgressIndicatorState
 
   @override
   void dispose() {
-    super.dispose();
+    PlayService.instance.playbackService.removeListener(_onServiceChanged);
     subscription.cancel();
+    super.dispose();
   }
 }
 

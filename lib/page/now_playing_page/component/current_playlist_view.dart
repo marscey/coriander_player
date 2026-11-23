@@ -51,41 +51,52 @@ class _CurrentPlaylistViewState extends State<CurrentPlaylistView> {
           SizedBox(height: topPadding + 56.0),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              children: [
-                Text(
-                  "播放列表",
-                  style: TextStyle(
-                    color: scheme.onSecondaryContainer,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Spacer(),
-                LocatePlayingButton(
-                  hasPlayingAudio: playbackService.nowPlaying != null,
-                  onLocate: _toNowPlaying,
-                ),
-              ],
+            child: ListenableBuilder(
+              listenable: Listenable.merge([
+                playbackService,
+                playbackService.playlist,
+              ]),
+              builder: (context, _) {
+                return Row(
+                  children: [
+                    Text(
+                      "播放列表",
+                      style: TextStyle(
+                        color: scheme.onSecondaryContainer,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    LocatePlayingButton(
+                      hasPlayingAudio: playbackService.nowPlaying != null,
+                      onLocate: _toNowPlaying,
+                    ),
+                  ],
+                );
+              },
             ),
           ),
           Expanded(
             child: ListenableBuilder(
-              listenable: playbackService.shuffle,
+              listenable: Listenable.merge([
+                playbackService,
+                playbackService.playlist,
+                playbackService.shuffle,
+              ]),
               builder: (context, _) {
-                return ListView.builder(
+                return ListView.separated(
                   controller: scrollController,
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   itemCount: playbackService.playlist.value.length,
-                  itemExtent: 56.0,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 6.0),
                   itemBuilder: (context, index) {
                     final item = playbackService.playlist.value[index];
-                    final isNowPlaying =
-                        playbackService.nowPlaying?.path == item.path;
                     return PlaylistAudioItem(
+                      key: ValueKey(item.path),
                       audio: item,
                       index: index,
-                      isNowPlaying: isNowPlaying,
                       textColor: scheme.onSecondaryContainer,
                       onTap: () {
                         playbackService.playIndexOfPlaylist(index);

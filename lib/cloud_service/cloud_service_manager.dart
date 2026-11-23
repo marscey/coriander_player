@@ -211,6 +211,13 @@ class CloudServiceManager extends ChangeNotifier {
   Future<void> updateConnection(CloudConnection connection) async {
     final index = _connections.indexWhere((c) => c.id == connection.id);
     if (index != -1) {
+      final old = _connections[index];
+      // 连接信息变化时失效缓存的 WebDavService，下次访问按新配置重建
+      if (old.serverUrl != connection.serverUrl ||
+          old.username != connection.username ||
+          old.password != connection.password) {
+        _services.remove(connection.id);
+      }
       _connections[index] = connection;
       await _saveConnections();
       notifyListeners();

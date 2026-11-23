@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'package:coriander_player/src/rust/api/installed_font.dart';
+import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/services.dart';
+import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/settings_tile.dart';
 import 'package:coriander_player/page/settings_page/theme_picker_dialog.dart';
+import 'package:coriander_player/page/settings_page/glass_theme_picker_dialog.dart';
 import 'package:coriander_player/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -21,7 +24,9 @@ class ThemeSelector extends StatelessWidget {
         onPressed: () async {
           final seedColor = await showDialog<Color>(
             context: context,
-            builder: (context) => const ThemePickerDialog(),
+            builder: (context) => AppPreference.instance.liquidGlassEnabled
+                ? const GlassThemePickerDialog()
+                : const ThemePickerDialog(),
           );
           if (seedColor == null) return;
 
@@ -164,6 +169,8 @@ class SelectFontCombobox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 移动端不显示自定义字体设置（移动端使用系统默认字体）
+    if (PlatformHelper.isMobile) return const SizedBox.shrink();
     return SettingsTile(
       description: "自定义字体",
       action: FilledButton.icon(

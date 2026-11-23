@@ -1,0 +1,74 @@
+appId: com.senyepss.corianderPlayer
+---
+- launchApp:
+    clearKeychain: true
+    clearState: true
+
+- takeScreenshot: 01_launch_screen
+
+# 等待首页加载
+- assertVisible: "音乐"
+- takeScreenshot: 02_music_page
+
+# ===== Tab 切换测试：歌单 =====
+- tapOn: "歌单"
+- assertVisible: "歌单"
+- takeScreenshot: 03_playlists_page
+
+# 进入歌单详情 - 测试右侧滑入
+- tapOn: "收藏"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 04_playlist_detail
+
+# 返回 - 测试左滑手势返回
+- pressKey: Esc
+- takeScreenshot: 05_back_from_playlist
+
+# ===== Tab 切换测试：类别 =====
+- tapOn: "类别"
+- assertVisible: "类别"
+- takeScreenshot: 06_categories_page
+
+# 进入艺术家列表 - 测试右侧滑入
+- tapOn: "艺术家"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 07_artists_page
+
+# 返回
+- pressKey: Esc
+- takeScreenshot: 08_back_from_artists
+
+# 进入专辑列表
+- tapOn: "专辑"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 09_albums_page
+
+# 返回
+- pressKey: Esc
+- takeScreenshot: 10_back_from_albums
+
+# ===== Tab 切换测试：连接 =====
+- tapOn: "连接"
+- assertVisible: "连接"
+- takeScreenshot: 11_connections_page
+
+# ===== Tab 切换测试：音乐（首页） =====
+- tapOn: "音乐"
+- assertVisible: "音乐"
+- takeScreenshot: 12_music_page_2
+
+# ===== 测试设置页面 =====
+- tapOn: "设置"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: 13_settings_page
+
+# 返回设置页面
+- pressKey: Esc
+- takeScreenshot: 14_back_from_settings
+
+# 完成测试
+- takeScreenshot: 15_final_state

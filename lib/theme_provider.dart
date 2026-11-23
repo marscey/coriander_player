@@ -98,11 +98,22 @@ class ThemeProvider extends ChangeNotifier {
     });
   }
 
+  /// 记录已成功应用主题的音频路径。
+  /// 只在 .then() 回调内（封面非 null）时设置，确保只有第一个拿到封面的回调生效。
+  String? _themeAppliedForPath;
+
   void applyThemeFromAudio(Audio audio) {
     if (!AppSettings.instance.dynamicTheme) return;
 
+    // 已为这首歌成功应用过主题，跳过
+    if (_themeAppliedForPath == audio.path) return;
+
     audio.cover.then((image) {
-      if (image == null) return;
+      if (image == null) return; // 封面未加载，不锁定，允许下次重试
+
+      // 双重检查：多个异步回调可能都已进入，只让第一个执行
+      if (_themeAppliedForPath == audio.path) return;
+      _themeAppliedForPath = audio.path;
 
       applyThemeFromImage(image, themeMode);
 

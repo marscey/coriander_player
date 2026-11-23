@@ -356,13 +356,15 @@ class MetadataService {
   /// 自动刮削元数据（播放时后台调用）
   /// 只有当刮削结果与音频元数据完全匹配时，才会自动保存
   /// [audio] 音频对象
+  /// [forceScrape] 强制重新刮削，即使已有 scrapedAt 记录（用于元数据缺失场景）
   /// [onScraped] 刮削完成回调，返回是否完全匹配和刮削结果
   Future<void> autoScrape(
     Audio audio, {
+    bool forceScrape = false,
     Function(bool isExactMatch, ScrapeOutput? output)? onScraped,
   }) async {
     try {
-      LOGGER.i("[MetadataService] Auto-scraping for: ${audio.title}");
+      LOGGER.i("[MetadataService] Auto-scraping for: ${audio.title} (forceScrape=$forceScrape)");
 
       final audioId = await computeAudioId(audio);
       if (audioId == null) {
@@ -373,11 +375,14 @@ class MetadataService {
 
       // 检查是否已有缓存
       final cached = await MetadataStore.instance.getMetadata(audioId);
-      if (cached?.scrapedAt != null) {
+      if (cached?.scrapedAt != null && !forceScrape) {
         // 已经刮削过，不再重复刮削
         LOGGER.i("[MetadataService] Already scraped for: ${audio.title}");
         onScraped?.call(true, null);
         return;
+      }
+      if (cached?.scrapedAt != null && forceScrape) {
+        LOGGER.i("[MetadataService] Re-scraping for: ${audio.title} (metadata incomplete)");
       }
 
       // 执行刮削

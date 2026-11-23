@@ -119,6 +119,9 @@ class AppPreference {
 
   int startPage = 0;
 
+  /// 是否启用 Liquid Glass 界面（重启后生效）
+  bool liquidGlassEnabled = false;
+
   var playbackPref = PlaybackPreference(PlayMode.forward, 1.0);
 
   var nowPlayingPagePref = NowPlayingPagePreference(
@@ -145,6 +148,7 @@ class AppPreference {
         "playlistDetailPagePref": playlistDetailPagePref.toMap(),
         "recentPlaysPagePref": recentPlaysPagePref.toMap(),
         "startPage": startPage,
+        "liquidGlassEnabled": liquidGlassEnabled,
         "playbackPref": playbackPref.toMap(),
         "nowPlayingPagePref": nowPlayingPagePref.toMap(),
       };
@@ -201,6 +205,7 @@ class AppPreference {
         prefMap["recentPlaysPagePref"],
       );
       instance.startPage = prefMap["startPage"];
+      instance.liquidGlassEnabled = prefMap["liquidGlassEnabled"] ?? false;
       instance.playbackPref =
           PlaybackPreference.fromMap(prefMap["playbackPref"]);
       instance.nowPlayingPagePref =

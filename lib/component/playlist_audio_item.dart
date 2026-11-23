@@ -1,7 +1,10 @@
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/cloud_service/cloud_cover_prefetcher.dart';
+import 'package:coriander_player/component/auto_scroll_text.dart';
 import 'package:coriander_player/component/playing_indicator.dart';
 import 'package:coriander_player/component/scroll_aware_future_builder.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -9,7 +12,6 @@ import 'package:material_symbols_icons/symbols.dart';
 class PlaylistAudioItem extends StatefulWidget {
   final Audio audio;
   final int index;
-  final bool isNowPlaying;
   final VoidCallback? onTap;
   final Color? textColor;
 
@@ -17,7 +19,6 @@ class PlaylistAudioItem extends StatefulWidget {
     super.key,
     required this.audio,
     required this.index,
-    required this.isNowPlaying,
     this.onTap,
     this.textColor,
   });
@@ -27,28 +28,52 @@ class PlaylistAudioItem extends StatefulWidget {
 }
 
 class _PlaylistAudioItemState extends State<PlaylistAudioItem> {
+  int? _lastTapTime;
+
   @override
   void initState() {
     super.initState();
-    AppSettings.instance.addListener(_onSettingsChanged);
+    AppSettings.instance.addListener(_onChanged);
+    PlayService.instance.playbackService.addListener(_onChanged);
+    AudioLibrary.instance.addListener(_onChanged);
   }
 
   @override
   void dispose() {
-    AppSettings.instance.removeListener(_onSettingsChanged);
+    AppSettings.instance.removeListener(_onChanged);
+    PlayService.instance.playbackService.removeListener(_onChanged);
+    AudioLibrary.instance.removeListener(_onChanged);
     super.dispose();
   }
 
-  void _onSettingsChanged() {
+  void _onChanged() {
     if (mounted) setState(() {});
   }
+
+  bool get _isNowPlaying {
+    final nowPlaying = PlayService.instance.playbackService.nowPlaying;
+    return nowPlaying != null && nowPlaying.path == widget.audio.path;
+  }
+
+  bool get _isUnavailable =>
+      PlayService.instance.playbackService.unavailablePaths
+          .contains(widget.audio.path);
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final defaultTextColor = widget.textColor ?? scheme.onSurface;
     final activeTextColor = scheme.primary;
-    final itemTextColor = widget.isNowPlaying ? activeTextColor : defaultTextColor;
+    final isUnavailable = _isUnavailable;
+    final isNowPlaying = _isNowPlaying;
+
+    if (!isUnavailable) {
+      CloudCoverPrefetcher.instance.prefetch(widget.audio);
+    }
+
+    final itemTextColor = isUnavailable
+        ? scheme.onSurface.withValues(alpha: 0.38)
+        : (isNowPlaying ? activeTextColor : defaultTextColor);
     final placeholder = ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: Container(
@@ -72,7 +97,20 @@ class _PlaylistAudioItemState extends State<PlaylistAudioItem> {
     final showIndex = AppSettings.instance.showTrackIndex;
 
     return InkWell(
-      onTap: widget.onTap,
+      onTap: () {
+        if (isNowPlaying) {
+          final now = DateTime.now().millisecondsSinceEpoch;
+          if (_lastTapTime != null && now - _lastTapTime! < 300) {
+            _lastTapTime = null;
+            widget.onTap?.call();
+          } else {
+            _lastTapTime = now;
+          }
+        } else {
+          _lastTapTime = null;
+          widget.onTap?.call();
+        }
+      },
       borderRadius: BorderRadius.circular(8.0),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
@@ -86,7 +124,7 @@ class _PlaylistAudioItemState extends State<PlaylistAudioItem> {
                   child: Text(
                     '${widget.index + 1}',
                     style: TextStyle(
-                      color: widget.isNowPlaying ? activeTextColor : defaultTextColor,
+                      color: isNowPlaying ? activeTextColor : defaultTextColor,
                       fontSize: 13,
                     ),
                     textAlign: TextAlign.end,
@@ -95,8 +133,11 @@ class _PlaylistAudioItemState extends State<PlaylistAudioItem> {
               if (showIndex) const SizedBox(width: 8.0),
               PlayingIndicatorOverlay(
                 size: PlayingIndicatorSize.small,
-                isActivelyPlaying: widget.isNowPlaying,
+                isActivelyPlaying: isNowPlaying,
+                isBuffering: isNowPlaying &&
+                    PlayService.instance.playbackService.isBuffering,
                 child: ScrollAwareFutureBuilder(
+                  key: ValueKey(widget.audio.coverImage),
                   future: () => widget.audio.cover,
                   builder: (context, snapshot) {
                     if (snapshot.data == null) return placeholder;
@@ -118,18 +159,15 @@ class _PlaylistAudioItemState extends State<PlaylistAudioItem> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      widget.audio.title,
+                    AutoScrollText(
+                      text: widget.audio.title,
                       style: TextStyle(color: itemTextColor, fontSize: 14),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      scrollSpeed: AppSettings.instance.marqueeSpeed,
                     ),
-                    Text(
-                      widget.audio.subtitleText,
-                      style: TextStyle(
-                          color: itemTextColor, fontSize: 12),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    AutoScrollText(
+                      text: widget.audio.subtitleText,
+                      style: TextStyle(color: itemTextColor, fontSize: 12),
+                      scrollSpeed: AppSettings.instance.marqueeSpeed,
                     ),
                   ],
                 ),

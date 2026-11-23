@@ -13,6 +13,7 @@ import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/library/audio_library.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
 import 'package:coriander_player/page/now_playing_page/component/current_playlist_view.dart';
+import 'package:coriander_player/page/now_playing_page/glass_now_playing_page.dart';
 import 'package:coriander_player/page/settings_page/edit_tag_dialog.dart';
 import 'package:coriander_player/page/now_playing_page/component/filled_icon_button_style.dart';
 import 'package:coriander_player/page/now_playing_page/component/vertical_lyric_view.dart';
@@ -108,6 +109,11 @@ class _NowPlayingPageState extends State<NowPlayingPage>
 
   @override
   Widget build(BuildContext context) {
+    // Glass 模式：移动端使用独立的 GlassNowPlayingPage
+    if (AppPreference.instance.liquidGlassEnabled && PlatformHelper.isMobile) {
+      return const GlassNowPlayingPage();
+    }
+
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
@@ -302,7 +308,7 @@ class _NowPlayingMoreAction extends StatelessWidget {
                 final Artist artist = AudioLibrary
                     .instance.artistCollection[nowPlaying.splitedArtists[i]]!;
                 context.push(
-                  app_paths.ARTIST_DETAIL_PAGE_NEW,
+                  app_paths.ARTIST_DETAIL_PAGE,
                   extra: artist,
                 );
               },
@@ -577,6 +583,19 @@ class _NowPlayingMainControls extends StatelessWidget {
           stream: playbackService.playerStateStream,
           initialData: playbackService.playerState,
           builder: (context, snapshot) {
+            // 恢复播放加载期间显示 loading 并禁用
+            if (playbackService.isStartingFromRestored) {
+              return IconButton(
+                tooltip: "加载中",
+                onPressed: null,
+                icon: const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+                style: LargeFilledIconButtonStyle(primary: true, scheme: scheme),
+              );
+            }
             final playerState = snapshot.data!;
             late void Function() onTap;
             if (playerState == PlayerState.playing) {
@@ -635,59 +654,73 @@ class _NowPlayingSliderState extends State<_NowPlayingSlider> {
             secondaryActiveTrackColor: scheme.primary.withValues(alpha: 0.45),
             inactiveTrackColor: scheme.onSurface.withValues(alpha: 0.12),
           ),
-          child: StreamBuilder(
-            stream: playbackService.durationStream,
-            initialData: playbackService.length,
-            builder: (context, durationSnapshot) {
-              final sliderMax = (durationSnapshot.data ?? 0.0) > 0
-                  ? (durationSnapshot.data ?? 0.0)
-                  : 1.0;
+          child: ListenableBuilder(
+            listenable: playbackService,
+            builder: (context, _) {
+              final isRestored = playbackService.isRestoredState;
+              final defaultDuration = playbackService.displayLength;
+              final defaultPosition = playbackService.displayPosition;
+              final defaultBuffer = playbackService.displayBuffer;
+              print("[DEBUG] NowPlayingSlider: isRestored=$isRestored, displayLen=$defaultDuration, displayPos=$defaultPosition");
               return StreamBuilder(
-                stream: playbackService.bufferStream,
-                initialData: playbackService.buffer,
-                builder: (context, bufferSnapshot) => StreamBuilder(
-                  stream: playbackService.playerStateStream,
-                  initialData: playbackService.playerState,
-                  builder: (context, playerStateSnapshot) => ListenableBuilder(
-                    listenable: dragPosition,
-                    builder: (context, _) => StreamBuilder(
-                      stream: playbackService.positionStream,
-                      initialData: playbackService.position,
-                      builder: (context, positionSnapshot) {
-                        final sliderValue = isDragging
-                            ? dragPosition.value
-                            : (positionSnapshot.data! > sliderMax
-                                    ? sliderMax
-                                    : positionSnapshot.data!)
-                                .clamp(0.0, sliderMax);
-                        final bufferValue =
-                            (bufferSnapshot.data ?? 0.0).clamp(0.0, sliderMax);
-                        return Slider(
-                          thumbColor: scheme.primary,
-                          activeColor: scheme.primary,
-                          min: 0.0,
-                          max: sliderMax,
-                          value: sliderValue,
-                          secondaryTrackValue: bufferValue,
-                          label: Duration(
-                            milliseconds: (dragPosition.value * 1000).toInt(),
-                          ).toStringHMMSS(),
-                          onChangeStart: (value) {
-                            isDragging = true;
-                            dragPosition.value = value;
+                stream: playbackService.durationStream,
+                builder: (context, durationSnapshot) {
+                  final duration = isRestored
+                      ? defaultDuration
+                      : (durationSnapshot.data ?? defaultDuration);
+                  final sliderMax =
+                      (duration > 0) ? duration : 1.0;
+                  return StreamBuilder(
+                    stream: playbackService.bufferStream,
+                    builder: (context, bufferSnapshot) => StreamBuilder(
+                      stream: playbackService.playerStateStream,
+                      initialData: playbackService.playerState,
+                      builder: (context, playerStateSnapshot) => ListenableBuilder(
+                        listenable: dragPosition,
+                        builder: (context, _) => StreamBuilder(
+                          stream: playbackService.positionStream,
+                          builder: (context, positionSnapshot) {
+                            final pos = isRestored
+                                ? defaultPosition
+                                : (positionSnapshot.data ?? defaultPosition);
+                            final sliderValue = isDragging
+                                ? dragPosition.value
+                                : (pos > sliderMax
+                                        ? sliderMax
+                                        : pos)
+                                    .clamp(0.0, sliderMax);
+                            final buf = isRestored
+                                ? defaultBuffer
+                                : (bufferSnapshot.data ?? defaultBuffer);
+                            final bufferValue = buf.clamp(0.0, sliderMax);
+                            return Slider(
+                              thumbColor: scheme.primary,
+                              activeColor: scheme.primary,
+                              min: 0.0,
+                              max: sliderMax,
+                              value: sliderValue,
+                              secondaryTrackValue: bufferValue,
+                              label: Duration(
+                                milliseconds: (dragPosition.value * 1000).toInt(),
+                              ).toStringHMMSS(),
+                              onChangeStart: (value) {
+                                isDragging = true;
+                                dragPosition.value = value;
+                              },
+                              onChanged: (value) {
+                                dragPosition.value = value;
+                              },
+                              onChangeEnd: (value) {
+                                isDragging = false;
+                                playbackService.seek(value);
+                              },
+                            );
                           },
-                          onChanged: (value) {
-                            dragPosition.value = value;
-                          },
-                          onChangeEnd: (value) {
-                            isDragging = false;
-                            playbackService.seek(value);
-                          },
-                        );
-                      },
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               );
             },
           ),
@@ -697,29 +730,43 @@ class _NowPlayingSliderState extends State<_NowPlayingSlider> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              StreamBuilder(
-                stream: playbackService.positionStream,
-                initialData: playbackService.position,
-                builder: (context, snapshot) {
-                  final pos = snapshot.data!;
-                  return Text(
-                    Duration(
-                      milliseconds: (pos * 1000).toInt(),
-                    ).toStringHMMSS(),
-                    style: TextStyle(color: scheme.onSecondaryContainer),
+              ListenableBuilder(
+                listenable: playbackService,
+                builder: (context, _) {
+                  final isRestored = playbackService.isRestoredState;
+                  return StreamBuilder(
+                    stream: playbackService.positionStream,
+                    builder: (context, snapshot) {
+                      final pos = isRestored
+                          ? playbackService.displayPosition
+                          : (snapshot.data ?? playbackService.displayPosition);
+                      return Text(
+                        Duration(
+                          milliseconds: (pos * 1000).toInt(),
+                        ).toStringHMMSS(),
+                        style: TextStyle(color: scheme.onSecondaryContainer),
+                      );
+                    },
                   );
                 },
               ),
-              StreamBuilder(
-                stream: playbackService.durationStream,
-                initialData: playbackService.length,
-                builder: (context, snapshot) {
-                  final dur = snapshot.data ?? 0.0;
-                  return Text(
-                    Duration(
-                      milliseconds: (dur * 1000).toInt(),
-                    ).toStringHMMSS(),
-                    style: TextStyle(color: scheme.onSecondaryContainer),
+              ListenableBuilder(
+                listenable: playbackService,
+                builder: (context, _) {
+                  final isRestored = playbackService.isRestoredState;
+                  return StreamBuilder(
+                    stream: playbackService.durationStream,
+                    builder: (context, snapshot) {
+                      final dur = isRestored
+                          ? playbackService.displayLength
+                          : (snapshot.data ?? playbackService.displayLength);
+                      return Text(
+                        Duration(
+                          milliseconds: (dur * 1000).toInt(),
+                        ).toStringHMMSS(),
+                        style: TextStyle(color: scheme.onSecondaryContainer),
+                      );
+                    },
                   );
                 },
               ),

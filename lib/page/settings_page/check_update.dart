@@ -1,4 +1,7 @@
+import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
+import 'package:coriander_player/component/settings_tile.dart';
+import 'package:coriander_player/glass_theme/glass_dialog.dart';
 import 'package:coriander_player/src/rust/api/utils.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
@@ -17,72 +20,75 @@ class _CheckForUpdateState extends State<CheckForUpdate> {
   bool isChecking = false;
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      FilledButton.icon(
-        icon: const Icon(Symbols.update),
-        label: const Text("检查更新"),
-        onPressed: isChecking
-            ? null
-            : () async {
-                setState(() {
-                  isChecking = true;
-                });
+    return SettingsTile(
+      description: "检查更新",
+      subtitle: "当前版本：${AppSettings.version}",
+      action: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FilledButton.icon(
+            icon: const Icon(Symbols.update),
+            label: const Text("检查更新"),
+            onPressed: isChecking
+                ? null
+                : () async {
+                    setState(() {
+                      isChecking = true;
+                    });
 
-                try {
-                  final newest = await AppSettings.github.repositories
-                      .listReleases(
-                        RepositorySlug("Ferry-200", "coriander_player"),
-                      )
-                      .first;
-                  final newestVer = int.tryParse(
-                        newest.tagName?.substring(1).replaceAll(".", "") ?? "",
-                      ) ??
-                      0;
-                  final currVer = int.tryParse(
-                        AppSettings.version.replaceAll(".", ""),
-                      ) ??
-                      0;
-                  if (newestVer > currVer) {
-                    if (context.mounted) {
-                      showDialog(
-                        context: context,
-                        builder: (context) => NewestUpdateView(release: newest),
-                      );
+                    try {
+                      final newest = await AppSettings.github.repositories
+                          .listReleases(
+                            RepositorySlug("Ferry-200", "coriander_player"),
+                          )
+                          .first;
+                      final newestVer = int.tryParse(
+                            newest.tagName?.substring(1).replaceAll(".", "") ?? "",
+                          ) ??
+                          0;
+                      final currVer = int.tryParse(
+                            AppSettings.version.replaceAll(".", ""),
+                          ) ??
+                          0;
+                      if (newestVer > currVer) {
+                        if (context.mounted) {
+                          showDialog(
+                            context: context,
+                            builder: (context) => NewestUpdateView(release: newest),
+                          );
+                        }
+                      } else {
+                        if (context.mounted) {
+                          showTextOnSnackBar("无新版本");
+                        }
+                      }
+                    } catch (err, trace) {
+                      LOGGER.e(err, stackTrace: trace);
+                      if (context.mounted) {
+                        showTextOnSnackBar("网络异常");
+                      }
+                      setState(() {
+                        isChecking = false;
+                      });
                     }
-                  } else {
-                    if (context.mounted) {
-                      showTextOnSnackBar("无新版本");
-                    }
-                  }
-                } catch (err, trace) {
-                  LOGGER.e(err, stackTrace: trace);
-                  if (context.mounted) {
-                    showTextOnSnackBar("网络异常");
-                  }
-                  setState(() {
-                    isChecking = false;
-                  });
-                }
 
-                setState(() {
-                  isChecking = false;
-                });
-              },
-      ),
-      const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 8.0),
-        child: Text("当前版本：${AppSettings.version}"),
-      ),
-      if (isChecking)
-        const Padding(
-          padding: EdgeInsets.only(left: 16.0),
-          child: SizedBox(
-            width: 16.0,
-            height: 16.0,
-            child: CircularProgressIndicator(),
+                    setState(() {
+                      isChecking = false;
+                    });
+                  },
           ),
-        ),
-    ]);
+          if (isChecking)
+            const Padding(
+              padding: EdgeInsets.only(left: 12.0),
+              child: SizedBox(
+                width: 16.0,
+                height: 16.0,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -97,6 +103,57 @@ class NewestUpdateView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final useGlass = AppPreference.instance.liquidGlassEnabled;
+
+    if (useGlass) {
+      return GlassDialog(
+        titleWidget: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              release.name ?? "新版本",
+              style: TextStyle(
+                color: scheme.onSurface,
+                fontSize: 18.0,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 16.0),
+            Text(
+              "${release.tagName}\n${release.publishedAt}",
+              style: TextStyle(color: scheme.onSurface),
+            ),
+          ],
+        ),
+        actions: [
+          GlassDialogButton(
+            label: "取消",
+            onTap: () => Navigator.pop(context),
+          ),
+          GlassDialogButton(
+            label: "获取更新",
+            icon: Symbols.arrow_outward,
+            primary: true,
+            onTap: () {
+              if (release.htmlUrl != null) {
+                launchInBrowser(uri: release.htmlUrl!);
+              }
+              Navigator.pop(context);
+            },
+          ),
+        ],
+        child: Markdown(
+          data: release.body ?? "",
+          onTapLink: (text, href, title) {
+            if (href != null) {
+              launchInBrowser(uri: href);
+            }
+          },
+          padding: EdgeInsets.zero,
+          styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)),
+        ),
+      );
+    }
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

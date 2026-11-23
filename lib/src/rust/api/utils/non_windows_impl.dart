@@ -6,7 +6,7 @@
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-/// 在非Windows平台上，该函数直接返回false
+/// 在非Windows平台上，使用系统命令打开文件管理器
 Future<bool> showInExplorer({required String path}) =>
     RustLib.instance.api.crateApiUtilsNonWindowsImplShowInExplorer(path: path);
 

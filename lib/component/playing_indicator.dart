@@ -192,9 +192,12 @@ class _PlayingIndicatorState extends State<PlayingIndicator>
 ///
 /// 将原始图标变暗（通过 opacity），然后在上面叠加波形条指示器。
 /// 背景完全透明，通过图标变暗与波形条形成对比。
+///
+/// 当 [isBuffering] 为 true 时，显示缓冲加载指示器而非波形条。
 class PlayingIndicatorOverlay extends StatelessWidget {
   final PlayingIndicatorSize size;
   final bool isActivelyPlaying;
+  final bool isBuffering;
   final Color? barColor;
   final Widget child;
 
@@ -202,6 +205,7 @@ class PlayingIndicatorOverlay extends StatelessWidget {
     super.key,
     required this.size,
     required this.isActivelyPlaying,
+    this.isBuffering = false,
     this.barColor,
     required this.child,
   });
@@ -209,6 +213,35 @@ class PlayingIndicatorOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!isActivelyPlaying) return child;
+
+    // 缓冲状态：显示加载指示器
+    if (isBuffering) {
+      final iconSize = switch (size) {
+        PlayingIndicatorSize.small => 18.0,
+        PlayingIndicatorSize.medium => 24.0,
+        PlayingIndicatorSize.large => 30.0,
+      };
+      return Stack(
+        children: [
+          Opacity(
+            opacity: 0.35,
+            child: child,
+          ),
+          Positioned.fill(
+            child: Center(
+              child: SizedBox(
+                width: iconSize,
+                height: iconSize,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: barColor ?? Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
     return Stack(
       children: [

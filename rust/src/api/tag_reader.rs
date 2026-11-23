@@ -575,6 +575,122 @@ pub fn get_picture_from_path(path: String, width: u32, height: u32) -> Option<Ve
     pic_option
 }
 
+/// for Flutter
+/// 从文件头部 + 尾部字节中解析音频封面（内嵌封面）。
+/// 用于云音频列表惰性加载：列表滚动时对可见项异步发 Range 请求拉取头部+尾部字节，
+/// 调用本函数解析封面，无需下载完整文件。
+///
+/// [head_bytes]: 文件头部字节（建议至少 256KB 以覆盖大多数封面）
+/// [tail_bytes]: 文件尾部字节（M4A/MP4 必需，其他格式可传空）
+/// [file_size]: 文件总大小（字节，M4A/MP4 必需，其他格式可传 0）
+/// [file_name]: 文件名（用于格式检测）
+/// [width]: 目标宽度（像素）
+/// [height]: 目标高度（像素）
+///
+/// 返回缩放后的 PNG 字节，失败返回 None。
+/// MP3/FLAC 封面在文件头部，仅需 head_bytes；
+/// M4A/MP4 封面在 moov atom（通常在文件尾部），需要 head + tail + file_size。
+pub fn get_picture_from_bytes(
+    head_bytes: Vec<u8>,
+    tail_bytes: Vec<u8>,
+    file_size: u32,
+    file_name: String,
+    width: u32,
+    height: u32,
+) -> Option<Vec<u8>> {
+    if head_bytes.is_empty() {
+        return None;
+    }
+
+    let file_type = Path::new(&file_name)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .and_then(|ext| FileType::from_ext(ext));
+
+    log_to_dart(format!(
+        "[DEBUG-PIC] get_picture_from_bytes: head={}, tail={}, file_size={}, file_name={}, file_type={:?}",
+        head_bytes.len(),
+        tail_bytes.len(),
+        file_size,
+        file_name,
+        file_type
+    ));
+
+    // FLAC 需要修正 last block 标志；MP4 需要 head+tail+修改 mdat size；其他格式直接用 head bytes
+    let buffer = match file_type {
+        Some(FileType::Flac) => construct_flac_virtual_file(head_bytes),
+        Some(FileType::Mp4) => {
+            if tail_bytes.is_empty() || file_size == 0 {
+                log_to_dart("[DEBUG-PIC] MP4 but no tail_bytes/file_size, cannot parse".to_string());
+                return None;
+            }
+            construct_mp4_virtual_file(head_bytes, tail_bytes, file_size as u64)
+        }
+        _ => head_bytes,
+    };
+
+    let mut cursor = Cursor::new(buffer);
+    let tagged_file = match file_type {
+        Some(ft) => match lofty::probe::Probe::with_file_type(&mut cursor, ft).read() {
+            Ok(val) => val,
+            Err(err) => {
+                log_to_dart(format!("[DEBUG-PIC] Probe::with_file_type({:?}) error: {}, trying Probe::new", ft, err));
+                // 指定类型失败时回退到自动检测
+                cursor.set_position(0);
+                match lofty::probe::Probe::new(&mut cursor).read() {
+                    Ok(val) => val,
+                    Err(err2) => {
+                        log_to_dart(format!("[DEBUG-PIC] Probe::new fallback error: {}", err2));
+                        return None;
+                    }
+                }
+            }
+        },
+        None => match lofty::probe::Probe::new(&mut cursor).read() {
+            Ok(val) => val,
+            Err(err) => {
+                log_to_dart(format!("[DEBUG-PIC] Probe::new error: {}", err));
+                return None;
+            }
+        },
+    };
+
+    let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag())?;
+    let pic = tag.pictures().first()?;
+    let pic_data = pic.data().to_vec();
+
+    log_to_dart(format!(
+        "[DEBUG-PIC] got cover, pic_data={} bytes",
+        pic_data.len()
+    ));
+
+    // 缩放（与 get_picture_from_path 保持一致）
+    if let Ok(loaded_pic) = image::load_from_memory(&pic_data) {
+        let pic_ratio = loaded_pic.width() as f32 / loaded_pic.height() as f32;
+        let (result_width, result_height) = if pic_ratio > 1.0 {
+            (width, (width as f32 / pic_ratio).round() as u32)
+        } else {
+            ((height as f32 * pic_ratio).round() as u32, height)
+        };
+        let resized_img = imageops::resize(
+            &loaded_pic,
+            result_width,
+            result_height,
+            imageops::FilterType::Triangle,
+        );
+        let mut output = Cursor::new(Vec::new());
+        if resized_img
+            .write_to(&mut output, image::ImageFormat::Png)
+            .is_ok()
+        {
+            return Some(output.into_inner());
+        }
+    }
+
+    // 缩放失败时返回原始封面字节
+    Some(pic_data)
+}
+
 fn _get_lyric_from_lofty(path: &String) -> Option<String> {
     if let Ok(tagged_file) = lofty::read_from_path(&path) {
         let tag = tagged_file
@@ -909,7 +1025,7 @@ fn construct_flac_virtual_file(mut head_bytes: Vec<u8>) -> Vec<u8> {
     head_bytes
 }
 
-/// 构造通用虚拟文件：头部 + 零填充 + 尾部（适用于 MP3/M4A 等格式）
+/// 构造通用虚拟文件：头部 + 零填充 + 尾部（适用于 MP3 等格式）
 fn construct_full_virtual_file(
     head_bytes: Vec<u8>,
     tail_bytes: Vec<u8>,
@@ -936,9 +1052,392 @@ fn construct_full_virtual_file(
     buffer
 }
 
+/// 在字节流中按 atom 结构查找指定 atom 的偏移量
+/// 仅扫描完整的 atom（按 size 跳转），适用于 head bytes
+fn find_atom_offset_in_head(bytes: &[u8], atom_type: &[u8; 4]) -> Option<usize> {
+    let mut offset = 0usize;
+    while offset + 8 <= bytes.len() {
+        let size = u32::from_be_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]) as usize;
+        let current_type = &bytes[offset + 4..offset + 8];
+
+        if current_type == atom_type {
+            return Some(offset);
+        }
+
+        let actual_size = if size == 1 {
+            // 64位扩展 size
+            if offset + 16 > bytes.len() {
+                return None;
+            }
+            u64::from_be_bytes([
+                bytes[offset + 8],
+                bytes[offset + 9],
+                bytes[offset + 10],
+                bytes[offset + 11],
+                bytes[offset + 12],
+                bytes[offset + 13],
+                bytes[offset + 14],
+                bytes[offset + 15],
+            ]) as usize
+        } else if size == 0 {
+            // size=0 表示到文件结束
+            return None;
+        } else {
+            size
+        };
+
+        if actual_size < 8 {
+            // size 异常，避免死循环
+            return None;
+        }
+        offset += actual_size;
+    }
+    None
+}
+
+/// 在字节流中搜索 "moov" magic，返回 (moov atom 起始偏移量, moov size)
+/// 适用于 tail bytes（moov 可能不在 atom 对齐位置）
+///
+/// 放宽验证：只要找到 "moov" magic 且 size >= 8 就返回。
+/// 不要求 moov 完整在 tail 中（moov 含封面时 size 可达几 MB，远超 tail 大小）。
+/// 调用方需根据返回的 size 判断 moov 是否完整，必要时重新下载完整 moov。
+fn find_moov_offset_in_tail(bytes: &[u8]) -> Option<(usize, usize)> {
+    if bytes.len() < 8 {
+        return None;
+    }
+    // 从第 4 字节开始搜索（moov 前面至少有 4 字节 size）
+    let mut i = 4;
+    while i + 4 <= bytes.len() {
+        if &bytes[i..i + 4] == b"moov" {
+            // 前 4 字节是 size
+            let moov_start = i - 4;
+            let size = u32::from_be_bytes([
+                bytes[moov_start],
+                bytes[moov_start + 1],
+                bytes[moov_start + 2],
+                bytes[moov_start + 3],
+            ]) as usize;
+            // size >= 8 即认为是有效的 moov atom
+            // 不要求 moov 完整在 tail 中（moov 可能含封面，size 很大）
+            if size >= 8 {
+                log_to_dart(format!(
+                    "[DEBUG-MP4-FIND] found moov at offset={}, size={}, tail_len={}, moov_complete={}",
+                    moov_start,
+                    size,
+                    bytes.len(),
+                    moov_start + size <= bytes.len()
+                ));
+                return Some((moov_start, size));
+            }
+        }
+        i += 1;
+    }
+    log_to_dart("[DEBUG-MP4-FIND] moov NOT found in tail".to_string());
+    None
+}
+
+/// 构造 MP4/M4A 专用虚拟文件
+///
+/// M4A 文件结构: ftyp + (moov | mdat) + (mdat | moov)
+/// moov atom 包含所有元数据（时长/艺术家/专辑/流派/封面）
+///
+/// 问题：mdat 声明的 size 很大（几 MB），construct_full_virtual_file 的零填充
+/// 会让 lofty seek 跳过 mdat 时跳到零填充区域，无法到达 moov
+///
+/// 修复：在 tail 中找到 moov 位置，修改 head 中 mdat 的 size 字段，
+/// 让 lofty seek 跳过 mdat 后正好到达 tail 中的 moov 位置
+fn construct_mp4_virtual_file(
+    head_bytes: Vec<u8>,
+    tail_bytes: Vec<u8>,
+    file_size: u64,
+) -> Vec<u8> {
+    let head_len = head_bytes.len() as u64;
+    let tail_len = tail_bytes.len() as u64;
+    let tail_start = file_size.saturating_sub(tail_len);
+
+    log_to_dart(format!(
+        "[DEBUG-MP4] construct_mp4_virtual_file: head_len={}, tail_len={}, file_size={}, tail_start={}",
+        head_len, tail_len, file_size, tail_start
+    ));
+
+    // 1. 在 tail 中搜索 moov atom
+    let moov_info = find_moov_offset_in_tail(&tail_bytes);
+    log_to_dart(format!(
+        "[DEBUG-MP4] moov_info={:?}",
+        moov_info
+    ));
+
+    // 2. 在 head 中查找 mdat atom
+    let mdat_offset_in_head = find_atom_offset_in_head(&head_bytes, b"mdat");
+    log_to_dart(format!(
+        "[DEBUG-MP4] mdat_offset_in_head={:?}",
+        mdat_offset_in_head
+    ));
+
+    let mut modified_head = head_bytes;
+
+    // 3. 如果 moov 在 tail 中且 mdat 在 head 中，修改 mdat size
+    if let (Some((moov_off, moov_size)), Some(mdat_off)) = (moov_info, mdat_offset_in_head) {
+        // 新的 mdat size = tail_start + moov_off - mdat_off
+        // 让 lofty 跳过 mdat 后正好到达 tail 中的 moov
+        let new_mdat_size = tail_start + moov_off as u64 - mdat_off as u64;
+
+        // 检查原始 mdat size 是否是 32 位（非扩展）
+        let original_size = u32::from_be_bytes([
+            modified_head[mdat_off],
+            modified_head[mdat_off + 1],
+            modified_head[mdat_off + 2],
+            modified_head[mdat_off + 3],
+        ]) as u64;
+
+        if original_size != 1 && new_mdat_size > 0 && new_mdat_size <= u32::MAX as u64 {
+            // 用 32 位 size 修改
+            modified_head[mdat_off..mdat_off + 4]
+                .copy_from_slice(&(new_mdat_size as u32).to_be_bytes());
+            log_to_dart(format!(
+                "[DEBUG-MP4] modified mdat size: {} -> {} (offset={})",
+                original_size, new_mdat_size, mdat_off
+            ));
+        } else if original_size == 1 {
+            // 扩展 size（64位），修改扩展 size 字段
+            if mdat_off + 16 <= modified_head.len() && new_mdat_size > 0 {
+                modified_head[mdat_off + 8..mdat_off + 16]
+                    .copy_from_slice(&new_mdat_size.to_be_bytes());
+                log_to_dart(format!(
+                    "[DEBUG-MP4] modified mdat extended size: {} (offset={})",
+                    new_mdat_size, mdat_off
+                ));
+            }
+        }
+
+        // 检查 moov 是否完整在 tail 中
+        let moov_end_in_tail = moov_off + moov_size;
+        if moov_end_in_tail > tail_bytes.len() {
+            log_to_dart(format!(
+                "[DEBUG-MP4] WARNING: moov NOT complete in tail! moov_end_in_tail={}, tail_len={}. moov will be truncated, metadata may be incomplete.",
+                moov_end_in_tail,
+                tail_bytes.len()
+            ));
+        } else {
+            log_to_dart(format!(
+                "[DEBUG-MP4] moov complete in tail: moov_end_in_tail={}, tail_len={}",
+                moov_end_in_tail,
+                tail_bytes.len()
+            ));
+        }
+    } else {
+        log_to_dart("[DEBUG-MP4] cannot find moov in tail or mdat in head, fallback to full virtual file".to_string());
+    }
+
+    // 4. 构造虚拟文件：head（含修改后的 mdat size）+ 零填充 + tail
+    let mut buffer = Vec::with_capacity(file_size as usize);
+    buffer.extend_from_slice(&modified_head);
+
+    if tail_start > head_len {
+        buffer.resize(tail_start as usize, 0);
+    }
+    if tail_start < head_len {
+        buffer.truncate(tail_start as usize);
+    }
+
+    buffer.extend_from_slice(&tail_bytes);
+
+    log_to_dart(format!(
+        "[DEBUG-MP4] virtual file size={}",
+        buffer.len()
+    ));
+
+    buffer
+}
+
+/// for Flutter
+/// 探测 MP4/M4A 文件 tail 字节中 moov atom 的位置和大小
+///
+/// 用于扫描入库时判断 moov 是否完整在 tail 中：
+/// - 若不完整（moov_size > tail 剩余字节），调用方需重新下载从 moov 绝对偏移到文件尾的字节
+/// - 若完整，可直接调用 [read_metadata_from_bytes]
+///
+/// [tail_bytes]: 文件尾部字节
+/// [file_size]: 文件总大小（字节）
+///
+/// 返回 JSON 字符串: {"moov_abs_offset": u64, "moov_size": u64, "tail_len": usize, "complete": bool}
+/// 未找到 moov 返回 None。
+pub fn probe_moov_in_tail(
+    tail_bytes: Vec<u8>,
+    file_size: u32,
+) -> Option<String> {
+    let file_size = file_size as u64;
+    let tail_len = tail_bytes.len() as u64;
+    let tail_start = file_size.saturating_sub(tail_len);
+
+    log_to_dart(format!(
+        "[DEBUG-PROBE] probe_moov_in_tail: tail_len={}, file_size={}, tail_start={}",
+        tail_len, file_size, tail_start
+    ));
+
+    let (moov_off_in_tail, moov_size) = find_moov_offset_in_tail(&tail_bytes)?;
+
+    let moov_abs_offset = tail_start + moov_off_in_tail as u64;
+    let moov_end_in_tail = moov_off_in_tail + moov_size;
+    let complete = moov_end_in_tail <= tail_bytes.len();
+
+    log_to_dart(format!(
+        "[DEBUG-PROBE] moov_abs_offset={}, moov_size={}, complete={}",
+        moov_abs_offset, moov_size, complete
+    ));
+
+    let result = serde_json::json!({
+        "moov_abs_offset": moov_abs_offset,
+        "moov_size": moov_size,
+        "tail_len": tail_bytes.len(),
+        "complete": complete,
+    });
+
+    Some(result.to_string())
+}
+
+/// for Flutter
+/// 探测 MP4/M4A 文件 head 字节中 moov atom 的位置和大小
+///
+/// 用于扫描入库时判断 moov 是否在 head 中且完整：
+/// - moov 在 head 中且完整 → 直接用现有 head+tail 解析
+/// - moov 在 head 中但不完整（moov_size > head 剩余字节）→ 调用方需下载 0~moov_end 的字节作为新 head
+/// - moov 不在 head 中 → 调用方应改用 probe_moov_in_tail 检测尾部
+///
+/// [head_bytes]: 文件头部字节
+///
+/// 返回 JSON 字符串: {"moov_offset": u64, "moov_size": u64, "moov_end": u64, "head_len": usize, "complete": bool}
+/// 未找到 moov 返回 None。
+pub fn probe_moov_in_head(head_bytes: Vec<u8>) -> Option<String> {
+    let moov_offset = find_atom_offset_in_head(&head_bytes, b"moov")?;
+
+    if moov_offset + 8 > head_bytes.len() {
+        log_to_dart("[DEBUG-PROBE-HEAD] moov found but size field truncated".to_string());
+        return None;
+    }
+
+    let size_field = u32::from_be_bytes([
+        head_bytes[moov_offset],
+        head_bytes[moov_offset + 1],
+        head_bytes[moov_offset + 2],
+        head_bytes[moov_offset + 3],
+    ]) as u64;
+
+    let moov_size = if size_field == 1 {
+        // 64位扩展 size
+        if moov_offset + 16 > head_bytes.len() {
+            log_to_dart("[DEBUG-PROBE-HEAD] moov uses extended size but field truncated".to_string());
+            return None;
+        }
+        u64::from_be_bytes([
+            head_bytes[moov_offset + 8],
+            head_bytes[moov_offset + 9],
+            head_bytes[moov_offset + 10],
+            head_bytes[moov_offset + 11],
+            head_bytes[moov_offset + 12],
+            head_bytes[moov_offset + 13],
+            head_bytes[moov_offset + 14],
+            head_bytes[moov_offset + 15],
+        ])
+    } else if size_field == 0 {
+        // size=0 表示到文件结束，无法确定大小（理论上 M4A 不会这样）
+        log_to_dart("[DEBUG-PROBE-HEAD] moov size=0 (extends to EOF), cannot determine".to_string());
+        return None;
+    } else {
+        size_field
+    };
+
+    if moov_size < 8 {
+        log_to_dart(format!("[DEBUG-PROBE-HEAD] invalid moov_size={}", moov_size));
+        return None;
+    }
+
+    let moov_end = moov_offset as u64 + moov_size;
+    let complete = moov_end <= head_bytes.len() as u64;
+
+    log_to_dart(format!(
+        "[DEBUG-PROBE-HEAD] probe_moov_in_head: moov_offset={}, moov_size={}, moov_end={}, head_len={}, complete={}",
+        moov_offset, moov_size, moov_end, head_bytes.len(), complete
+    ));
+
+    let result = serde_json::json!({
+        "moov_offset": moov_offset,
+        "moov_size": moov_size,
+        "moov_end": moov_end,
+        "head_len": head_bytes.len(),
+        "complete": complete,
+    });
+
+    Some(result.to_string())
+}
+
+/// 将 lofty 解析得到的 TaggedFile 转换为 JSON 字符串。
+/// 提取为独立函数，便于在「完整文件解析」和「虚拟文件解析」两条路径上复用。
+///
+/// JSON 字段：title/artist/album/track/genre/year/date/duration/bitrate/sample_rate
+fn metadata_to_json(tagged_file: &lofty::file::TaggedFile, file_name: &str) -> Option<String> {
+    let file_type = tagged_file.file_type();
+    let properties = tagged_file.properties();
+    let duration = properties.duration().as_secs();
+    let bitrate = properties.audio_bitrate();
+    let sample_rate = properties.sample_rate();
+
+    log_to_dart(format!(
+        "[DEBUG] metadata_to_json: file_type={:?}, duration={}s, bitrate={:?}, sample_rate={:?}",
+        file_type, duration, bitrate, sample_rate
+    ));
+
+    let (title, artist, album, track, genre, year, date) = if let Some(tag) = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag())
+    {
+        let artist_strs: Vec<_> = tag.get_strings(&ItemKey::TrackArtist).collect();
+        let artist = if artist_strs.is_empty() {
+            String::new()
+        } else {
+            artist_strs.join("/")
+        };
+
+        (
+            tag.title().map(|s| s.to_string()).unwrap_or_else(|| file_name.to_string()),
+            artist,
+            tag.album().map(|s| s.to_string()).unwrap_or_default(),
+            tag.track(),
+            tag.genre().map(|s| s.to_string()).unwrap_or_default(),
+            tag.year(),
+            tag.get_string(&ItemKey::RecordingDate).map(|s| s.to_string()).unwrap_or_default(),
+        )
+    } else {
+        log_to_dart("[DEBUG] metadata_to_json: no tag found in file".to_string());
+        (file_name.to_string(), String::new(), String::new(), None, String::new(), None, String::new())
+    };
+
+    let result = serde_json::json!({
+        "title": title,
+        "artist": artist,
+        "album": album,
+        "track": track,
+        "genre": genre,
+        "year": year,
+        "date": date,
+        "duration": duration,
+        "bitrate": bitrate,
+        "sample_rate": sample_rate,
+    });
+
+    log_to_dart(format!("[DEBUG] metadata_to_json: result={}", result));
+
+    Some(result.to_string())
+}
+
 /// for Flutter
 /// 从部分字节（文件头 + 文件尾）中解析音频元数据。
-/// [head_bytes]: 文件头部字节（建议至少 64KB）
+/// [head_bytes]: 文件头部字节（建议至少 64KB）；若包含完整文件则直接解析
 /// [tail_bytes]: 文件尾部字节（建议至少 128KB）
 /// [file_size]: 文件总大小（字节）
 /// [file_name]: 文件名（用于格式检测和作为标题回退）
@@ -953,6 +1452,41 @@ pub fn read_metadata_from_bytes(
     let file_size = file_size as u64;
     log_to_dart(format!("[DEBUG] read_metadata_from_bytes: head_bytes={}, tail_bytes={}, file_size={}, file_name={}", head_bytes.len(), tail_bytes.len(), file_size, file_name));
 
+    // 如果 head_bytes 包含完整文件，直接解析（无需虚拟文件构造）
+    // 适用于 Dart 端下载完整文件后调用的场景（如小文件 M4A moov 在开头但超过 head 范围）
+    if head_bytes.len() as u64 >= file_size {
+        log_to_dart("[DEBUG] read_metadata_from_bytes: head_bytes contains full file, parsing directly".to_string());
+        let mut cursor = Cursor::new(head_bytes);
+        let file_type = Path::new(&file_name)
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .and_then(|ext| FileType::from_ext(ext));
+        let tagged_file = match file_type {
+            Some(ft) => match lofty::probe::Probe::with_file_type(&mut cursor, ft).read() {
+                Ok(val) => val,
+                Err(err) => {
+                    log_to_dart(format!("[DEBUG] full file Probe::with_file_type({:?}) error: {}, falling back to Probe::new", ft, err));
+                    cursor.set_position(0);
+                    match lofty::probe::Probe::new(&mut cursor).read() {
+                        Ok(val) => val,
+                        Err(err2) => {
+                            log_to_dart(format!("[DEBUG] full file Probe::new fallback error: {}", err2));
+                            return None;
+                        }
+                    }
+                }
+            },
+            None => match lofty::probe::Probe::new(&mut cursor).read() {
+                Ok(val) => val,
+                Err(err) => {
+                    log_to_dart(format!("[DEBUG] full file Probe::new error: {}", err));
+                    return None;
+                }
+            },
+        };
+        return metadata_to_json(&tagged_file, &file_name);
+    }
+
     // 根据文件扩展名推断 FileType
     let file_type = Path::new(&file_name)
         .extension()
@@ -965,6 +1499,7 @@ pub fn read_metadata_from_bytes(
     // 零填充会导致 FLAC 解析器将零误读为元数据块，产生 "invalid item size" 错误
     let buffer = match file_type {
         Some(FileType::Flac) => construct_flac_virtual_file(head_bytes),
+        Some(FileType::Mp4) => construct_mp4_virtual_file(head_bytes, tail_bytes, file_size),
         _ => construct_full_virtual_file(head_bytes, tail_bytes, file_size),
     };
 
@@ -998,55 +1533,7 @@ pub fn read_metadata_from_bytes(
         },
     };
 
-    let file_type = tagged_file.file_type();
-    let properties = tagged_file.properties();
-    let duration = properties.duration().as_secs();
-    let bitrate = properties.audio_bitrate();
-    let sample_rate = properties.sample_rate();
-
-    log_to_dart(format!("[DEBUG] read_metadata_from_bytes: file_type={:?}, duration={}s, bitrate={:?}, sample_rate={:?}", file_type, duration, bitrate, sample_rate));
-
-    let (title, artist, album, track, genre, year, date) = if let Some(tag) = tagged_file
-        .primary_tag()
-        .or_else(|| tagged_file.first_tag())
-    {
-        let artist_strs: Vec<_> = tag.get_strings(&ItemKey::TrackArtist).collect();
-        let artist = if artist_strs.is_empty() {
-            String::new()
-        } else {
-            artist_strs.join("/")
-        };
-
-        (
-            tag.title().map(|s| s.to_string()).unwrap_or_else(|| file_name.clone()),
-            artist,
-            tag.album().map(|s| s.to_string()).unwrap_or_default(),
-            tag.track(),
-            tag.genre().map(|s| s.to_string()).unwrap_or_default(),
-            tag.year(),
-            tag.get_string(&ItemKey::RecordingDate).map(|s| s.to_string()).unwrap_or_default(),
-        )
-    } else {
-        log_to_dart("[DEBUG] read_metadata_from_bytes: no tag found in file".to_string());
-        (file_name.clone(), String::new(), String::new(), None, String::new(), None, String::new())
-    };
-
-    let result = serde_json::json!({
-        "title": title,
-        "artist": artist,
-        "album": album,
-        "track": track,
-        "genre": genre,
-        "year": year,
-        "date": date,
-        "duration": duration,
-        "bitrate": bitrate,
-        "sample_rate": sample_rate,
-    });
-
-    log_to_dart(format!("[DEBUG] read_metadata_from_bytes: result={}", result));
-
-    Some(result.to_string())
+    metadata_to_json(&tagged_file, &file_name)
 }
 
 // ==================== 元数据写入功能 ====================

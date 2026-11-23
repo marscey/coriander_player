@@ -1,12 +1,17 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/painting.dart';
 import 'package:path/path.dart' as path;
 import 'package:coriander_player/cloud_service/webdav_service.dart' as webdav;
 import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
+import 'package:coriander_player/cloud_service/cloud_cover_prefetcher.dart';
 import 'package:coriander_player/cloud_service/cloud_service_manager.dart';
 import 'package:coriander_player/cloud_service/cloud_connection.dart';
 import 'package:coriander_player/library/audio_library.dart';
+import 'package:coriander_player/metadata/media_cache.dart';
+import 'package:coriander_player/metadata/metadata_service.dart';
+import 'package:coriander_player/metadata/metadata_store.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/play_service/engine/player_engine_type.dart';
 import 'package:coriander_player/src/rust/api/tag_reader.dart';
@@ -91,7 +96,7 @@ class CloudAudioPlayer {
 
   /// 从文件名解析标题和艺术家。
   /// 支持格式："艺术家 - 标题.ext"、"标题.ext"
-  static ({String title, String artist}) _parseFileName(String fileName) {
+  static ({String title, String artist}) parseFileName(String fileName) {
     final ext = path.extension(fileName);
     final nameWithoutExt = fileName.replaceAll(ext, '');
 
@@ -117,7 +122,7 @@ class CloudAudioPlayer {
       {String? connectionId}) {
     registerPath(file.path, service);
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final parsed = _parseFileName(file.name);
+    final parsed = parseFileName(file.name);
     return Audio(
       parsed.title,
       parsed.artist,
@@ -138,50 +143,157 @@ class CloudAudioPlayer {
     );
   }
 
+  /// 统一的云音频元数据获取入口（单链路）。
+  ///
+  /// 流程：
+  /// 1. 检查 nowPlaying 是否已有完整元数据：
+  ///    a. 元数据完整 + 封面存在 → 直接返回，无需任何操作
+  ///    b. 元数据完整 + 封面缺失 → 只补封面 → applyThemeFromAudio
+  ///    c. 元数据缺失 → 进入步骤 2
+  /// 2. 从音乐库查找 → 命中则复制元数据+封面 → applyThemeFromAudio
+  /// 3. Range 请求快速获取 → applyThemeFromAudio
+  /// 4. 等待缓存完成后全量读取 → applyThemeFromAudio
   static Future<void> _updateMetadataAsync(
     webdav.WebDavService service,
     webdav.WebDavFile file,
   ) async {
     try {
       final webdavPath = file.path;
-      final library = AudioLibrary.instance;
-      final existingInLib = library.audioCollection
-          .where((a) => a.path == webdavPath && a.artist.isNotEmpty)
-          .toList();
-      if (existingInLib.isNotEmpty) {
-        LOGGER.i(
-            '[CloudAudioPlayer] metadata already cached in library: $webdavPath');
-        final libAudio = existingInLib.first;
-        final playbackService = PlayService.instance.playbackService;
-        if (playbackService.nowPlaying?.path == webdavPath) {
-          final np = playbackService.nowPlaying!;
-          np.title = libAudio.title;
-          np.artist = libAudio.artist;
-          np.splitedArtists = libAudio.splitedArtists;
-          np.album = libAudio.album;
-          np.track = libAudio.track;
-          np.duration = libAudio.duration;
-          np.bitrate = libAudio.bitrate;
-          np.sampleRate = libAudio.sampleRate;
-          if (libAudio.coverImage != null) {
-            np.setCover(libAudio.coverImage!);
-          }
-          playbackService.refreshNowPlaying();
-          try {
-            ThemeProvider.instance.applyThemeFromAudio(np);
-          } catch (_) {}
+      final playbackService = PlayService.instance.playbackService;
+
+      // 安全检查：nowPlaying 已经不是这首歌了，跳过
+      if (playbackService.nowPlaying?.path != webdavPath) return;
+      final np = playbackService.nowPlaying!;
+
+      // Step 1: 元数据已存在？
+      if (np.artist.isNotEmpty && np.duration > 0) {
+        if (np.coverImage != null) {
+          // 元数据和封面都存在，无需更新
+          return;
         }
+        // 只缺封面，从缓存文件获取
+        LOGGER.i('[CloudAudioPlayer] metadata complete, fetching cover only: $webdavPath');
+        await _fetchCoverFromCacheFile(np, webdavPath);
+        if (playbackService.nowPlaying?.path != webdavPath) return;
+        playbackService.refreshNowPlaying();
+        AudioLibrary.instance.notifyUpdated();
+        ThemeProvider.instance.applyThemeFromAudio(np);
         return;
       }
 
-      // 优先通过 Range 请求快速获取元数据
+      // Step 2: 从音乐库查找
+      final library = AudioLibrary.instance;
+      final existingInLib = library.audioCollection
+          .where((a) => a.path == webdavPath && a.artist.isNotEmpty)
+          .firstOrNull;
+      if (existingInLib != null) {
+        LOGGER.i('[CloudAudioPlayer] metadata from library: $webdavPath');
+        _copyMetadataFromLibrary(np, existingInLib);
+        if (np.coverImage == null) {
+          await _fetchCoverFromCacheFile(np, webdavPath);
+        } else {
+          // 已有封面，确保音乐库同步
+          AudioLibrary.instance.notifyUpdated();
+        }
+        if (playbackService.nowPlaying?.path != webdavPath) return;
+        playbackService.refreshNowPlaying();
+        AudioLibrary.instance.notifyUpdated();
+        ThemeProvider.instance.applyThemeFromAudio(np);
+        return;
+      }
+
+      // Step 3: Range 请求快速获取元数据
       final rangeOk = await _updateMetadataViaRange(service, file);
       if (rangeOk) return;
 
-      // 回退：等待缓存完成后读取元数据
+      // Step 4: 等待缓存完成后全量读取
       await _updateMetadataViaFullDownload(service, file);
     } catch (e) {
       LOGGER.e('[CloudAudioPlayer] 异步更新元数据失败: $e');
+    }
+  }
+
+  /// 统一应用封面到 Audio：设置封面 + 保存缓存 + 设置 source + 通知 UI 刷新
+  static Future<void> _applyCoverToAudio(
+    Audio audio,
+    Uint8List picBytes,
+  ) async {
+    final coverImg = MemoryImage(picBytes);
+    audio.setCover(coverImg);
+    for (final libAudio in AudioLibrary.instance.audioCollection) {
+      if (libAudio.path == audio.path && !identical(libAudio, audio)) {
+        libAudio.setCover(coverImg);
+      }
+    }
+    try {
+      final audioId = await MetadataService.instance.computeAudioId(audio);
+      if (audioId != null) {
+        await MediaCache.instance.saveCover(audioId, picBytes, mimeType: 'image/png');
+        await MetadataStore.instance.updateCoverSource(audioId, 'embedded');
+      }
+    } catch (_) {}
+    await audio.setCoverSource('embedded');
+    CloudCoverPrefetcher.instance.reset(audio.path);
+    AudioLibrary.instance.notifyUpdated();
+  }
+
+  /// 从缓存文件提取封面并设置到 audio 上。
+  static Future<void> _fetchCoverFromCacheFile(
+    Audio audio,
+    String webdavPath,
+  ) async {
+    try {
+      final cachedPath = CloudCacheManager.instance.getCachedFilePath(webdavPath);
+      if (cachedPath != null) {
+        final pic = await getPictureFromPath(
+          path: cachedPath,
+          width: 400,
+          height: 400,
+        );
+        if (pic != null && pic.isNotEmpty) {
+          await _applyCoverToAudio(audio, pic);
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// 从已下载的 head+tail bytes 中提取封面
+  static Future<Uint8List?> _extractCoverFromBytes({
+    required Uint8List headBytes,
+    required Uint8List tailBytes,
+    required int fileSize,
+    required String fileName,
+  }) async {
+    try {
+      return await getPictureFromBytes(
+        headBytes: headBytes,
+        tailBytes: tailBytes,
+        fileSize: fileSize,
+        fileName: fileName,
+        width: 400,
+        height: 400,
+      );
+    } catch (e) {
+      LOGGER.w('[CloudAudioPlayer] extract cover from bytes failed: $e');
+      return null;
+    }
+  }
+
+  /// 从音乐库音频复制元数据到目标音频。
+  static void _copyMetadataFromLibrary(Audio target, Audio source) {
+    target.title = source.title;
+    target.artist = source.artist;
+    target.splitedArtists = source.splitedArtists;
+    target.album = source.album;
+    target.track = source.track;
+    target.duration = source.duration;
+    target.bitrate = source.bitrate;
+    target.sampleRate = source.sampleRate;
+    target.genre = source.genre;
+    target.year = source.year;
+    target.date = source.date;
+    if (source.coverImage != null) {
+      target.setCover(source.coverImage!);
     }
   }
 
@@ -200,8 +312,12 @@ class CloudAudioPlayer {
         return false;
       }
 
-      final headSize = (64 * 1024).clamp(0, fileSize);
-      final tailSize = (128 * 1024).clamp(0, fileSize);
+      final isMp4 = file.name.toLowerCase().endsWith('.m4a') ||
+          file.name.toLowerCase().endsWith('.mp4');
+
+      // 使用与 CloudCoverPrefetcher 一致的 head/tail 大小，确保能提取封面
+      final headSize = (256 * 1024).clamp(0, fileSize);
+      final tailSize = isMp4 ? (256 * 1024).clamp(0, fileSize) : (128 * 1024).clamp(0, fileSize);
       final tailStart = (fileSize - tailSize).clamp(0, fileSize - 1);
 
       // 并行下载头尾
@@ -210,17 +326,63 @@ class CloudAudioPlayer {
         service.downloadRange(webdavPath, tailStart, fileSize - 1),
       ]);
 
-      final headBytes = results[0];
-      final tailBytes = results[1];
+      Uint8List? headBytes = results[0];
+      Uint8List? tailBytes = results[1];
 
       if (headBytes == null || tailBytes == null) {
         LOGGER.w('[CloudAudioPlayer] Range request failed for: $webdavPath');
         return false;
       }
 
+      // M4A: 探测 moov 位置，必要时重新下载完整 moov
+      if (isMp4) {
+        String? headProbeJson;
+        try {
+          headProbeJson = await probeMoovInHead(headBytes: headBytes);
+        } catch (_) {}
+
+        if (headProbeJson != null) {
+          final headProbe = json.decode(headProbeJson) as Map<String, dynamic>;
+          final moovEnd = headProbe['moov_end'] as int;
+          final complete = headProbe['complete'] as bool;
+          if (!complete && moovEnd > headBytes.length) {
+            final downloadEnd = moovEnd.clamp(headBytes.length, fileSize);
+            LOGGER.i('[CloudAudioPlayer] M4A moov in head incomplete, re-downloading 0~${downloadEnd - 1}');
+            final newHeadBytes = await service.downloadRange(webdavPath, 0, downloadEnd - 1);
+            if (newHeadBytes != null && newHeadBytes.isNotEmpty) {
+              headBytes = newHeadBytes;
+            }
+          }
+        } else {
+          try {
+            final tailProbeJson = await probeMoovInTail(
+              tailBytes: tailBytes,
+              fileSize: fileSize,
+            );
+            if (tailProbeJson != null) {
+              final probe = json.decode(tailProbeJson) as Map<String, dynamic>;
+              final moovAbsOffset = probe['moov_abs_offset'] as int;
+              final moovSize = probe['moov_size'] as int;
+              final complete = probe['complete'] as bool;
+              if (!complete && moovSize > 0) {
+                final newTailStart = moovAbsOffset.clamp(0, fileSize - 1);
+                LOGGER.i('[CloudAudioPlayer] M4A moov in tail incomplete, re-downloading from $newTailStart');
+                final newTailBytes = await service.downloadRange(webdavPath, newTailStart, fileSize - 1);
+                if (newTailBytes != null && newTailBytes.isNotEmpty) {
+                  tailBytes = newTailBytes;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      final Uint8List finalHeadBytes = headBytes!;
+      final Uint8List finalTailBytes = tailBytes!;
+
       final jsonStr = await readMetadataFromBytes(
-        headBytes: headBytes,
-        tailBytes: tailBytes,
+        headBytes: finalHeadBytes,
+        tailBytes: finalTailBytes,
         fileSize: fileSize,
         fileName: file.name,
       );
@@ -272,20 +434,31 @@ class CloudAudioPlayer {
         }
         np.fileSize = fileSize;
 
-        // 尝试从缓存文件获取封面
+        // 优先从已下载的 Range bytes 提取封面（最快，无需等待缓存）
+        bool coverSet = false;
         try {
-          final cachedPath =
-              CloudCacheManager.instance.getCachedFilePath(webdavPath);
-          if (cachedPath != null) {
-            final pic = await getPictureFromPath(
-                path: cachedPath, width: 400, height: 400);
-            if (pic != null) {
-              np.setCover(MemoryImage(pic));
-            }
+          final picFromBytes = await _extractCoverFromBytes(
+            headBytes: finalHeadBytes,
+            tailBytes: finalTailBytes,
+            fileSize: fileSize,
+            fileName: file.name,
+          );
+          if (picFromBytes != null && picFromBytes.isNotEmpty) {
+            await _applyCoverToAudio(np, picFromBytes);
+            coverSet = true;
+            LOGGER.i('[CloudAudioPlayer] cover extracted from Range bytes');
           }
-        } catch (_) {}
+        } catch (e) {
+          LOGGER.w('[CloudAudioPlayer] extract cover from bytes failed: $e');
+        }
+
+        // 如果从 bytes 提取封面失败，尝试从缓存文件获取
+        if (!coverSet) {
+          await _fetchCoverFromCacheFile(np, webdavPath);
+        }
 
         playbackService.refreshNowPlaying();
+        AudioLibrary.instance.notifyUpdated();
         try {
           ThemeProvider.instance.applyThemeFromAudio(np);
         } catch (_) {}
@@ -400,14 +573,15 @@ class CloudAudioPlayer {
               );
               LOGGER.i(
                   '[CloudAudioPlayer] getPictureFromPath result: ${pic != null ? "${pic.length} bytes" : "null"}, path=${updatedAudio.path}');
-              if (pic != null) {
-                np.setCover(MemoryImage(pic));
+              if (pic != null && pic.isNotEmpty) {
+                await _applyCoverToAudio(np, pic);
                 LOGGER.i(
                     '[CloudAudioPlayer] cover set on nowPlaying, _cover=${np.coverImage != null}');
               }
             } catch (_) {}
 
             playbackService.refreshNowPlaying();
+            AudioLibrary.instance.notifyUpdated();
             try {
               ThemeProvider.instance.applyThemeFromAudio(np);
             } catch (_) {}
@@ -420,117 +594,6 @@ class CloudAudioPlayer {
 
     await metaDir.delete(recursive: true);
     await metaIndexDir.delete(recursive: true);
-  }
-
-  static Future<void> updateMetadataFromCache(Audio audio) async {
-    try {
-      final library = AudioLibrary.instance;
-      final existingInLib = library.audioCollection
-          .where((a) => a.path == audio.path && a.artist.isNotEmpty)
-          .firstOrNull;
-      if (existingInLib != null) {
-        LOGGER
-            .i('[CloudAudioPlayer] metadata from library cache: ${audio.path}');
-        audio.title = existingInLib.title;
-        audio.artist = existingInLib.artist;
-        audio.splitedArtists = existingInLib.splitedArtists;
-        audio.album = existingInLib.album;
-        audio.track = existingInLib.track;
-        audio.duration = existingInLib.duration;
-        audio.bitrate = existingInLib.bitrate;
-        audio.sampleRate = existingInLib.sampleRate;
-        audio.genre = existingInLib.genre;
-        audio.year = existingInLib.year;
-        audio.date = existingInLib.date;
-        if (existingInLib.coverImage != null) {
-          audio.setCover(existingInLib.coverImage!);
-        }
-        PlayService.instance.playbackService.refreshNowPlaying();
-        return;
-      }
-
-      final cachedPath =
-          CloudCacheManager.instance.getCachedFilePath(audio.path);
-      if (cachedPath == null) {
-        LOGGER
-            .w('[CloudAudioPlayer] no cache file for metadata: ${audio.path}');
-        return;
-      }
-
-      final metaDir = Directory(path.join(
-        Directory.systemTemp.path,
-        'coriander_meta_${DateTime.now().millisecondsSinceEpoch}',
-      ));
-      await metaDir.create(recursive: true);
-
-      final originalName = audio.path.split('/').last;
-      final tempCopyPath = path.join(metaDir.path, originalName);
-      await File(cachedPath).copy(tempCopyPath);
-
-      final metaIndexDir = Directory(path.join(
-        Directory.systemTemp.path,
-        'coriander_metaidx_${DateTime.now().millisecondsSinceEpoch}',
-      ));
-      await metaIndexDir.create(recursive: true);
-
-      await buildIndexFromFoldersRecursively(
-        folders: [metaDir.path],
-        indexPath: metaIndexDir.path,
-      ).drain();
-
-      final indexFile = File(path.join(metaIndexDir.path, 'index.json'));
-      if (await indexFile.exists()) {
-        final indexStr = await indexFile.readAsString();
-        final Map indexJson = json.decode(indexStr);
-        final List foldersJson = indexJson["folders"];
-        if (foldersJson.isNotEmpty) {
-          final List audiosJson = foldersJson[0]["audios"];
-          if (audiosJson.isNotEmpty) {
-            final updatedAudio = Audio.fromMap(audiosJson[0]);
-            final playbackService = PlayService.instance.playbackService;
-            if (playbackService.nowPlaying?.path == audio.path) {
-              final np = playbackService.nowPlaying!;
-              np.title = updatedAudio.title;
-              np.artist = updatedAudio.artist;
-              np.splitedArtists = updatedAudio.splitedArtists;
-              np.album = updatedAudio.album;
-              np.track = updatedAudio.track;
-              np.duration = updatedAudio.duration;
-              np.bitrate = updatedAudio.bitrate;
-              np.sampleRate = updatedAudio.sampleRate;
-              np.genre = updatedAudio.genre;
-              np.year = updatedAudio.year;
-              np.date = updatedAudio.date;
-
-              try {
-                final pic = await getPictureFromPath(
-                  path: updatedAudio.path,
-                  width: 400,
-                  height: 400,
-                );
-                LOGGER.i(
-                    '[CloudAudioPlayer] getPictureFromPath: ${pic != null ? "${pic.length} bytes" : "null"}');
-                if (pic != null) {
-                  np.setCover(MemoryImage(pic));
-                }
-              } catch (_) {}
-
-              playbackService.refreshNowPlaying();
-              try {
-                ThemeProvider.instance.applyThemeFromAudio(np);
-              } catch (_) {}
-
-              _updateLibraryAudioMetadata(np);
-            }
-          }
-        }
-      }
-
-      await metaDir.delete(recursive: true);
-      await metaIndexDir.delete(recursive: true);
-    } catch (e) {
-      LOGGER.e('[CloudAudioPlayer] updateMetadataFromCache failed: $e');
-    }
   }
 
   static void _updateLibraryAudioMetadata(Audio updatedAudio) {
@@ -574,7 +637,7 @@ class CloudAudioPlayer {
     String? connectionId,
   }) async {
     final webdavPath = file.path;
-    final parsed = _parseFileName(file.name);
+    final parsed = parseFileName(file.name);
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
     final knownFileSize = file.size > 0 ? file.size : null;
@@ -611,18 +674,26 @@ class CloudAudioPlayer {
       }
 
       final headSize = (64 * 1024).clamp(0, fileSize);
-      final tailSize = (128 * 1024).clamp(0, fileSize);
-      final tailStart = (fileSize - tailSize).clamp(0, fileSize - 1);
+      final isMp4 = file.name.toLowerCase().endsWith('.m4a') ||
+          file.name.toLowerCase().endsWith('.mp4');
+
+      // M4A/MP4: moov atom 含元数据+封面，可能很大（几 MB）
+      // 先下载 tail 128KB 探测 moov 位置和大小，若不完整则重新下载完整 moov
+      // 其他格式: tail 128KB 足够
+      final initialTailSize = isMp4
+          ? (256 * 1024).clamp(0, fileSize)
+          : (128 * 1024).clamp(0, fileSize);
+      final initialTailStart = (fileSize - initialTailSize).clamp(0, fileSize - 1);
       LOGGER.i(
-          '[DEBUG] _createAudioViaRange: headSize=$headSize, tailSize=$tailSize, tailStart=$tailStart, fileSize=$fileSize');
+          '[DEBUG] _createAudioViaRange: headSize=$headSize, initialTailSize=$initialTailSize, initialTailStart=$initialTailStart, fileSize=$fileSize, isMp4=$isMp4');
 
       final results = await Future.wait([
         service.downloadRange(webdavPath, 0, headSize - 1),
-        service.downloadRange(webdavPath, tailStart, fileSize - 1),
+        service.downloadRange(webdavPath, initialTailStart, fileSize - 1),
       ]);
 
-      final headBytes = results[0];
-      final tailBytes = results[1];
+      var headBytes = results[0];
+      var tailBytes = results[1];
       LOGGER.i(
           '[DEBUG] _createAudioViaRange: headBytes=${headBytes != null ? headBytes.length : "null"}, tailBytes=${tailBytes != null ? tailBytes.length : "null"}');
 
@@ -631,17 +702,146 @@ class CloudAudioPlayer {
         return fallbackAudio;
       }
 
+      // M4A: 优先探测 moov 在 head 中（moov 在开头的常见情况），
+      // 不在 head 才探测 tail。精准下载所需部分，避免下载完整文件。
+      if (isMp4) {
+        // 步骤 1: probe head，看 moov 是否在 head 中
+        String? headProbeJson;
+        try {
+          headProbeJson = await probeMoovInHead(headBytes: headBytes!);
+          LOGGER.i(
+              '[DEBUG] _createAudioViaRange: probeMoovInHead result=$headProbeJson');
+        } catch (e) {
+          LOGGER.w(
+              '[DEBUG] _createAudioViaRange: probeMoovInHead failed: $e');
+        }
+
+        if (headProbeJson != null) {
+          // moov 在 head 中
+          final headProbe =
+              json.decode(headProbeJson) as Map<String, dynamic>;
+          final moovEnd = headProbe['moov_end'] as int;
+          final complete = headProbe['complete'] as bool;
+
+          if (!complete && moovEnd > headBytes!.length) {
+            // moov 在 head 中但不完整，精准下载 0~moov_end 作为新 head
+            // moov_end 可能接近文件末尾（小文件 moov 占大部分），需 clamp
+            final downloadEnd = moovEnd.clamp(headBytes!.length, fileSize);
+            LOGGER.i(
+                '[DEBUG] _createAudioViaRange: moov in head but NOT complete (moov_end=$moovEnd), downloading 0~${downloadEnd - 1}');
+            final newHeadBytes = await service.downloadRange(
+              webdavPath,
+              0,
+              downloadEnd - 1,
+            );
+            if (newHeadBytes != null && newHeadBytes.isNotEmpty) {
+              headBytes = newHeadBytes;
+              LOGGER.i(
+                  '[DEBUG] _createAudioViaRange: re-downloaded headBytes=${headBytes!.length} bytes (covers moov)');
+            } else {
+              LOGGER.w(
+                  '[DEBUG] _createAudioViaRange: head re-download failed, using original head');
+            }
+          } else {
+            LOGGER.i(
+                '[DEBUG] _createAudioViaRange: moov complete in head (moov_end=$moovEnd)');
+          }
+        } else {
+          // moov 不在 head 中，探测 tail
+          LOGGER.i(
+              '[DEBUG] _createAudioViaRange: moov NOT in head, probing tail');
+          try {
+            final tailProbeJson = await probeMoovInTail(
+              tailBytes: tailBytes!,
+              fileSize: fileSize,
+            );
+            LOGGER.i(
+                '[DEBUG] _createAudioViaRange: probeMoovInTail result=$tailProbeJson');
+
+            if (tailProbeJson != null) {
+              final probe =
+                  json.decode(tailProbeJson) as Map<String, dynamic>;
+              final moovAbsOffset = probe['moov_abs_offset'] as int;
+              final moovSize = probe['moov_size'] as int;
+              final complete = probe['complete'] as bool;
+
+              if (!complete && moovSize > 0) {
+                // moov 不完整，重新下载从 moov_abs_offset 到文件尾的所有字节
+                final newTailStart = moovAbsOffset.clamp(0, fileSize - 1);
+                LOGGER.i(
+                    '[DEBUG] _createAudioViaRange: moov NOT complete in tail (size=$moovSize), re-downloading from $newTailStart to ${fileSize - 1}');
+                final newTailBytes = await service.downloadRange(
+                  webdavPath,
+                  newTailStart,
+                  fileSize - 1,
+                );
+                if (newTailBytes != null && newTailBytes.isNotEmpty) {
+                  tailBytes = newTailBytes;
+                  LOGGER.i(
+                      '[DEBUG] _createAudioViaRange: re-downloaded tailBytes=${tailBytes!.length} bytes');
+                } else {
+                  LOGGER.w(
+                      '[DEBUG] _createAudioViaRange: tail re-download failed, using original tail');
+                }
+              } else {
+                LOGGER.i(
+                    '[DEBUG] _createAudioViaRange: moov complete in tail (size=$moovSize)');
+              }
+            } else {
+              LOGGER.w(
+                  '[DEBUG] _createAudioViaRange: moov NOT found in tail either');
+            }
+          } catch (e) {
+            LOGGER.w(
+                '[DEBUG] _createAudioViaRange: probeMoovInTail failed: $e');
+          }
+        }
+      }
+
+      // 此时 headBytes 和 tailBytes 已确认非空（前面已检查）
+      final Uint8List finalHeadBytes = headBytes!;
+      final Uint8List finalTailBytes = tailBytes!;
+
       LOGGER.i(
-          '[DEBUG] _createAudioViaRange: calling readMetadataFromBytes(headBytes=${headBytes.length}, tailBytes=${tailBytes.length}, fileSize=$fileSize, fileName=${file.name})');
-      final jsonStr = await readMetadataFromBytes(
-        headBytes: headBytes,
-        tailBytes: tailBytes,
+          '[DEBUG] _createAudioViaRange: calling readMetadataFromBytes(headBytes=${finalHeadBytes.length}, tailBytes=${finalTailBytes.length}, fileSize=$fileSize, fileName=${file.name})');
+      var jsonStr = await readMetadataFromBytes(
+        headBytes: finalHeadBytes,
+        tailBytes: finalTailBytes,
         fileSize: fileSize,
         fileName: file.name,
       );
 
       LOGGER.i(
           '[DEBUG] _createAudioViaRange: readMetadataFromBytes result=${jsonStr != null ? jsonStr : "NULL"}');
+
+      // M4A 最后兜底：moov 在 head 中但 moov_end 接近文件末尾时，
+      // 上面下载的 head 可能已经接近完整文件大小，
+      // 若仍失败且文件较小（< 10MB），下载完整文件作为最后回退
+      if (jsonStr == null && isMp4 && fileSize <= 10 * 1024 * 1024) {
+        LOGGER.i(
+            '[DEBUG] _createAudioViaRange: M4A still failed, downloading full file ($fileSize bytes) as last resort');
+        final fullBytes =
+            await service.downloadRange(webdavPath, 0, fileSize - 1);
+        if (fullBytes != null && fullBytes.isNotEmpty) {
+          LOGGER.i(
+              '[DEBUG] _createAudioViaRange: downloaded full file bytes=${fullBytes.length}');
+          final retryJsonStr = await readMetadataFromBytes(
+            headBytes: fullBytes,
+            tailBytes: Uint8List(0),
+            fileSize: fileSize,
+            fileName: file.name,
+          );
+          LOGGER.i(
+              '[DEBUG] _createAudioViaRange: retry readMetadataFromBytes result=${retryJsonStr != null ? retryJsonStr : "NULL"}');
+          if (retryJsonStr != null) {
+            jsonStr = retryJsonStr;
+          }
+        } else {
+          LOGGER.w(
+              '[DEBUG] _createAudioViaRange: full file download failed');
+        }
+      }
+
       if (jsonStr == null) {
         LOGGER.w(
             '[CloudAudioPlayer] readMetadataFromBytes returned null for: $webdavPath');
@@ -745,7 +945,7 @@ class CloudAudioPlayer {
       LOGGER.e('[CloudAudioPlayer] 读取云音频元数据失败: $e');
     }
 
-    final parsed = _parseFileName(path.basename(downloadedFile.path));
+    final parsed = parseFileName(path.basename(downloadedFile.path));
     return Audio(
       parsed.title,
       parsed.artist,
@@ -1027,7 +1227,7 @@ class CloudAudioPlayer {
           onProgress?.call(cloudAudios.length);
         } catch (e) {
           LOGGER.e('[CloudAudioPlayer] 处理文件失败: ${file.path} - $e');
-          final parsed = _parseFileName(file.name);
+          final parsed = parseFileName(file.name);
           final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
           cloudAudios.add(Audio(
             parsed.title,
@@ -1179,7 +1379,7 @@ class CloudAudioPlayer {
           onProgress?.call(cloudAudios.length);
         } catch (e) {
           LOGGER.e('[CloudAudioPlayer] 处理文件失败: ${file.path} - $e');
-          final parsed = _parseFileName(file.name);
+          final parsed = parseFileName(file.name);
           final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
           cloudAudios.add(Audio(
             parsed.title,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:coriander_player/component/app_shell.dart';
 import 'package:coriander_player/component/rectangle_progress_indicator.dart';
 import 'package:coriander_player/component/responsive_builder.dart';
@@ -7,6 +9,7 @@ import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/bass/bass_player.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
+import 'package:coriander_player/lyric/lyric.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -75,8 +78,49 @@ class _MiniNowPlayingState extends State<MiniNowPlaying> {
   }
 }
 
-class _NowPlayingForeground extends StatelessWidget {
+class _NowPlayingForeground extends StatefulWidget {
   const _NowPlayingForeground();
+
+  @override
+  State<_NowPlayingForeground> createState() => _NowPlayingForegroundState();
+}
+
+class _NowPlayingForegroundState extends State<_NowPlayingForeground> {
+  final lyricService = PlayService.instance.lyricService;
+  String? _currentLyricText;
+  StreamSubscription? _lyricLineSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _lyricLineSub = lyricService.lyricLineStream.listen(_onLyricLineChanged);
+  }
+
+  @override
+  void dispose() {
+    _lyricLineSub?.cancel();
+    super.dispose();
+  }
+
+  void _onLyricLineChanged(int lineIndex) {
+    lyricService.currLyricFuture.then((lyric) {
+      if (lyric == null || lineIndex < 0 || lineIndex >= lyric.lines.length) {
+        if (_currentLyricText != null) {
+          setState(() => _currentLyricText = null);
+        }
+        return;
+      }
+      final line = lyric.lines[lineIndex];
+      final text = line is SyncLyricLine
+          ? line.content
+          : (line is UnsyncLyricLine ? line.content : '');
+      if (text.isNotEmpty && text != _currentLyricText) {
+        setState(() => _currentLyricText = text);
+      } else if (text.isEmpty && _currentLyricText != null) {
+        setState(() => _currentLyricText = null);
+      }
+    });
+  }
 
   void _showPlaylistBottomSheet(BuildContext context) {
     final playbackService = PlayService.instance.playbackService;
@@ -146,11 +190,9 @@ class _NowPlayingForeground extends StatelessWidget {
                     itemCount: playlist.length,
                     itemBuilder: (context, index) {
                       final item = playlist[index];
-                      final isCurrent = index == currentIndex;
                       return PlaylistAudioItem(
                         audio: item,
                         index: index,
-                        isNowPlaying: isCurrent,
                         onTap: () {
                           playbackService.playIndexOfPlaylist(index);
                         },
@@ -173,115 +215,157 @@ class _NowPlayingForeground extends StatelessWidget {
     final nowPlaying = PlayService.instance.playbackService.nowPlaying;
     return Semantics(
       label: '迷你播放器 - ${nowPlaying != null ? nowPlaying.title : "Coriander Player"}',
-      button: true,
       child: Material(
       type: MaterialType.transparency,
       borderRadius: BorderRadius.circular(8.0),
-      child: InkWell(
-        onTap: () => context.push(app_paths.NOW_PLAYING_PAGE),
-        borderRadius: BorderRadius.circular(8.0),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: ListenableBuilder(
-            listenable: PlayService.instance.playbackService,
-            builder: (context, _) {
-              final playbackService = PlayService.instance.playbackService;
-              final nowPlaying = playbackService.nowPlaying;
-              final placeholder = Icon(
-                Symbols.broken_image,
-                size: 48.0,
-                color: scheme.onSecondaryContainer,
-              );
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: ListenableBuilder(
+          listenable: PlayService.instance.playbackService,
+          builder: (context, _) {
+            final playbackService = PlayService.instance.playbackService;
+            final nowPlaying = playbackService.nowPlaying;
+            final placeholder = Icon(
+              Symbols.broken_image,
+              size: 48.0,
+              color: scheme.onSecondaryContainer,
+            );
 
-              return Row(
-                children: [
-                  nowPlaying != null
-                      ? FutureBuilder(
-                          future: nowPlaying.cover,
-                          builder: (context, snapshot) =>
-                              switch (snapshot.connectionState) {
-                            ConnectionState.done => snapshot.data == null
-                                ? placeholder
-                                : ClipRRect(
-                                    borderRadius: BorderRadius.circular(8.0),
-                                    child: Image(
-                                      image: snapshot.data!,
-                                      width: 48.0,
-                                      height: 48.0,
-                                      errorBuilder: (_, __, ___) => placeholder,
-                                    ),
-                                  ),
-                            _ => const SizedBox(
-                                width: 48,
-                                height: 48,
-                                child: Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                              ),
-                          },
-                        )
-                      : placeholder,
-                  const SizedBox(width: 8.0),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
+            return Row(
+              children: [
+                // 封面 + 文字区域：点击跳转到正在播放页
+                Expanded(
+                  child: InkWell(
+                    onTap: () => context.push(app_paths.NOW_PLAYING_PAGE),
+                    borderRadius: BorderRadius.circular(8.0),
+                    child: Row(
                       children: [
-                        Text(
-                          nowPlaying != null
-                              ? nowPlaying.title
-                              : "Coriander Player",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: scheme.onSecondaryContainer),
-                        ),
-                        Text(
-                          nowPlaying != null
-                              ? nowPlaying.subtitleText
-                              : "Enjoy music",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: scheme.onSecondaryContainer),
+                        nowPlaying != null
+                            ? FutureBuilder(
+                                future: nowPlaying.cover,
+                                builder: (context, snapshot) =>
+                                    switch (snapshot.connectionState) {
+                                  ConnectionState.done => snapshot.data == null
+                                      ? placeholder
+                                      : ClipRRect(
+                                          borderRadius: BorderRadius.circular(8.0),
+                                          child: Image(
+                                            image: snapshot.data!,
+                                            width: 48.0,
+                                            height: 48.0,
+                                            errorBuilder: (_, __, ___) => placeholder,
+                                          ),
+                                        ),
+                                  _ => const SizedBox(
+                                      width: 48,
+                                      height: 48,
+                                      child: Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    ),
+                                },
+                              )
+                            : placeholder,
+                        const SizedBox(width: 8.0),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (_currentLyricText != null && _currentLyricText!.isNotEmpty) ...[
+                                Text(
+                                  _currentLyricText!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: scheme.onSecondaryContainer,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  nowPlaying != null
+                                      ? '${nowPlaying.title} - ${nowPlaying.artist}'
+                                      : "Enjoy music",
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: scheme.onSecondaryContainer.withValues(alpha: 0.6),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ] else ...[
+                                Text(
+                                  nowPlaying != null ? nowPlaying.title : "Coriander Player",
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: scheme.onSecondaryContainer),
+                                ),
+                                Text(
+                                  nowPlaying != null
+                                      ? '${nowPlaying.artist}${nowPlaying.album.isNotEmpty ? ' - ${nowPlaying.album}' : ''}'
+                                      : "Enjoy music",
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: scheme.onSecondaryContainer.withValues(alpha: 0.6),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 4.0),
-                  IconButton(
-                    tooltip: '播放列表',
-                    icon: Icon(Symbols.queue_music,
-                        color: scheme.onSecondaryContainer),
-                    onPressed: () => _showPlaylistBottomSheet(context),
-                  ),
-                  StreamBuilder(
-                    stream: playbackService.playerStateStream,
-                    initialData: playbackService.playerState,
-                    builder: (context, snapshot) {
-                      late void Function() onPressed;
-                      if (snapshot.data! == PlayerState.playing) {
-                        onPressed = playbackService.pause;
-                      } else if (snapshot.data! == PlayerState.completed) {
-                        onPressed = playbackService.playAgain;
-                      } else {
-                        onPressed = playbackService.start;
-                      }
-
+                ),
+                const SizedBox(width: 4.0),
+                IconButton(
+                  tooltip: '播放列表',
+                  icon: Icon(Symbols.queue_music,
+                      color: scheme.onSecondaryContainer),
+                  onPressed: () => _showPlaylistBottomSheet(context),
+                ),
+                StreamBuilder(
+                  stream: playbackService.playerStateStream,
+                  initialData: playbackService.playerState,
+                  builder: (context, snapshot) {
+                    // 恢复播放加载期间显示 loading 并禁用
+                    if (playbackService.isStartingFromRestored) {
                       return IconButton.filled(
-                        tooltip:
-                            snapshot.data! == PlayerState.playing ? "暂停" : "播放",
-                        onPressed: onPressed,
-                        icon: Icon(
-                          snapshot.data! == PlayerState.playing
-                              ? Symbols.pause
-                              : Symbols.play_arrow,
+                        tooltip: "加载中",
+                        onPressed: null,
+                        icon: const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2.0),
                         ),
                       );
-                    },
-                  ),
-                ],
-              );
-            },
-          ),
+                    }
+                    late void Function() onPressed;
+                    if (snapshot.data! == PlayerState.playing) {
+                      onPressed = playbackService.pause;
+                    } else if (snapshot.data! == PlayerState.completed) {
+                      onPressed = playbackService.playAgain;
+                    } else {
+                      onPressed = playbackService.start;
+                    }
+
+                    return IconButton.filled(
+                      tooltip:
+                          snapshot.data! == PlayerState.playing ? "暂停" : "播放",
+                      onPressed: onPressed,
+                      icon: Icon(
+                        snapshot.data! == PlayerState.playing
+                            ? Symbols.pause
+                            : Symbols.play_arrow,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            );
+          },
         ),
       ),
       ),  // Semantics

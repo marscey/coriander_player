@@ -42,7 +42,7 @@ Future<Directory> getAppDataDir() async {
 
 class AppSettings extends ChangeNotifier {
   static final github = GitHub();
-  static const String version = "1.9.0";
+  static const String version = "1.9.1";
 
   /// 主题模式：亮 / 暗
   ThemeMode themeMode = getWindowsThemeMode();
@@ -86,6 +86,12 @@ class AppSettings extends ChangeNotifier {
 
   /// 测试配置：自动配置云服务和导入音频（仅移动端 debug 模式）
   bool autoTestConfig = false;
+
+  /// 跑马灯滚动速度（像素/毫秒），值越大滚动越快
+  double marqueeSpeed = 40.0;
+
+  /// 跑马灯开关（默认关闭，后续再优化性能后可改为默认开）
+  bool marqueeEnabled = false;
 
   bool _showTrackIndex = !PlatformHelper.isMobile;
 
@@ -284,6 +290,16 @@ class AppSettings extends ChangeNotifier {
       if (atc != null) {
         _instance.autoTestConfig = atc;
       }
+
+      final ms = settingsMap["MarqueeSpeed"];
+      if (ms != null) {
+        _instance.marqueeSpeed = (ms as num).toDouble();
+      }
+
+      final me = settingsMap["MarqueeEnabled"];
+      if (me != null) {
+        _instance.marqueeEnabled = me;
+      }
     } catch (err, trace) {
       LOGGER.e(err, stackTrace: trace);
     }
@@ -322,6 +338,8 @@ class AppSettings extends ChangeNotifier {
         "CloudCacheMaxSizeMB": cloudCacheMaxSizeMB,
         "ShowTrackIndex": showTrackIndex,
         "AutoTestConfig": autoTestConfig,
+        "MarqueeSpeed": marqueeSpeed,
+        "MarqueeEnabled": marqueeEnabled,
       };
 
       // 只有桌面端保存窗口尺寸

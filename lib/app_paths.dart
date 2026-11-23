@@ -36,11 +36,11 @@ const String CLOUD_BROWSER_PAGE =
     "/cloud/browser"; // 实际路径: /cloud/browser/:connectionId
 
 /// 可以作为 start page 的 pages
-/// 顺序与移动端底部导航栏一致：音乐库、歌单、类别、连接、设置
+/// 顺序与移动端底部导航栏一致：音乐库、歌单、类别、连接
+/// 设置页面已移至顶级路由（push 进入），不再作为 tab
 const List<String> START_PAGES = [
   AUDIOS_PAGE,
   PLAYLISTS_PAGE,
   CATEGORIES_PAGE,
   CLOUD_CONNECTIONS_PAGE,
-  SETTINGS_PAGE,
 ];

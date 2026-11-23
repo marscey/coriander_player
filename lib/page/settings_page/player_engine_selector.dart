@@ -1,5 +1,7 @@
+import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/settings_tile.dart';
+import 'package:coriander_player/glass_theme/glass_dialog.dart';
 import 'package:coriander_player/platform_dependency_manager.dart';
 import 'package:coriander_player/play_service/engine/player_engine_type.dart';
 import 'package:coriander_player/play_service/play_service.dart';
@@ -69,18 +71,29 @@ class _PlayerEngineSelectorState extends State<PlayerEngineSelector> {
           LOGGER.i("[EngineSelector] User selected: ${newSelection.first}");
 
           if (context.mounted) {
+            final useGlass = AppPreference.instance.liquidGlassEnabled;
             showDialog(
               context: context,
               barrierDismissible: false,
-              builder: (context) => AlertDialog(
-                content: Row(
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(width: 16),
-                    Text('正在切换播放器引擎...'),
-                  ],
-                ),
-              ),
+              builder: (context) => useGlass
+                  ? GlassDialog(
+                      child: Row(
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(width: 16),
+                          Text('正在切换播放器引擎...'),
+                        ],
+                      ),
+                    )
+                  : AlertDialog(
+                      content: Row(
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(width: 16),
+                          Text('正在切换播放器引擎...'),
+                        ],
+                      ),
+                    ),
             );
           }
 

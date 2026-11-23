@@ -266,10 +266,13 @@ class CloudCacheManager {
   String? getCachedFilePath(String webdavPath) {
     final key = _cacheKey(webdavPath);
     final entry = _cacheEntries[key];
+    debugLog("[DEBUG-CACHE] getCachedFilePath: webdavPath=$webdavPath, key=$key, entryExists=${entry != null}, totalEntries=${_cacheEntries.length}");
     if (entry == null) return null;
 
     final file = File(entry.filePath);
-    if (!file.existsSync()) {
+    final fileExists = file.existsSync();
+    debugLog("[DEBUG-CACHE] getCachedFilePath: filePath=${entry.filePath}, fileExists=$fileExists");
+    if (!fileExists) {
       _cacheEntries.remove(key);
       return null;
     }

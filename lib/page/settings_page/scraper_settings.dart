@@ -1,8 +1,12 @@
+import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/metadata/metadata_store.dart';
 import 'package:coriander_player/metadata/scraper_orchestrator.dart';
 import 'package:coriander_player/component/settings_tile.dart';
+import 'package:coriander_player/glass_theme/glass_dialog.dart';
+import 'package:coriander_player/glass_theme/glass_presets.dart';
 import 'package:coriander_player/platform_helper.dart';
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' hide GlassDialog;
 import 'package:material_symbols_icons/symbols.dart';
 
 /// 刮削设置组件
@@ -61,6 +65,32 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final useGlass = AppPreference.instance.liquidGlassEnabled;
+
+    if (useGlass) {
+      return GlassDialog(
+        title: "刮削源设置",
+        width: PlatformHelper.isMobile ? null : 420.0,
+        height: PlatformHelper.isMobile
+            ? MediaQuery.of(context).size.height * 0.7
+            : 450.0,
+        actions: [
+          GlassDialogButton(
+            label: "关闭",
+            onTap: () => Navigator.pop(context),
+          ),
+        ],
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView.builder(
+                itemCount: _configs.length,
+                itemBuilder: (context, index) {
+                  final config = _configs[index];
+                  return _buildScraperTile(config, scheme, useGlass);
+                },
+              ),
+      );
+    }
 
     return Dialog(
       insetPadding: EdgeInsets.zero,
@@ -95,7 +125,7 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
                         itemCount: _configs.length,
                         itemBuilder: (context, index) {
                           final config = _configs[index];
-                          return _buildScraperTile(config, scheme);
+                          return _buildScraperTile(config, scheme, useGlass);
                         },
                       ),
               ),
@@ -117,7 +147,100 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
     );
   }
 
-  Widget _buildScraperTile(ScraperConfig config, ColorScheme scheme) {
+  Widget _buildScraperTile(
+      ScraperConfig config, ColorScheme scheme, bool useGlass) {
+    if (useGlass) {
+      // Glass 风格：用 GlassContainer（listTileSettings）包裹自定义布局
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8.0),
+        child: GlassContainer(
+          useOwnLayer: true,
+          shape: const LiquidRoundedSuperellipse(borderRadius: 12),
+          settings: listTileSettings,
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            child: Row(
+              children: [
+                // 左侧：名称 + 优先级 + API 地址
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              config.name,
+                              style: TextStyle(
+                                color: scheme.onSurface,
+                                fontSize: 14.0,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8.0),
+                          Text(
+                            '优先级: ${config.priority}',
+                            style: TextStyle(
+                              fontSize: 12.0,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (config.apiBase != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2.0),
+                          child: Text(
+                            config.apiBase!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11.0,
+                              color: scheme.outline,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // 右侧：编辑按钮 + 开关
+                // API 地址编辑按钮（仅 MusicBrainz 等有 apiBase 的源）
+                if (config.type == 'musicbrainz')
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4.0),
+                    child: GlassButton(
+                      icon: const Icon(Symbols.edit, size: 18.0),
+                      iconSize: 18.0,
+                      width: 36,
+                      height: 36,
+                      useOwnLayer: true,
+                      onTap: () => _editApiBase(config),
+                    ),
+                  ),
+                const SizedBox(width: 4.0),
+                // 启用/禁用开关（保留 Material Switch，项目无 GlassSwitch）
+                Switch(
+                  value: config.enabled,
+                  onChanged: (value) async {
+                    await MetadataStore.instance.toggleScraper(config.id, value);
+                    // 重新注册刮削源
+                    await ScraperOrchestrator.instance.initDefaults();
+                    _loadConfigs();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Material 风格（保持原样）
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Row(
@@ -166,29 +289,56 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
   /// 编辑 API 地址
   Future<void> _editApiBase(ScraperConfig config) async {
     final controller = TextEditingController(text: config.apiBase ?? '');
+    final useGlass = AppPreference.instance.liquidGlassEnabled;
+    final scheme = Theme.of(context).colorScheme;
 
     final result = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("修改 API 地址"),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: "API 地址",
-            hintText: "https://musicbrainz.org/ws/2",
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("取消"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text("确定"),
-          ),
-        ],
-      ),
+      builder: (context) => useGlass
+          ? GlassDialog(
+              title: "修改 API 地址",
+              actions: [
+                GlassDialogButton(
+                  label: "取消",
+                  onTap: () => Navigator.pop(context),
+                ),
+                GlassDialogButton(
+                  label: "确定",
+                  primary: true,
+                  onTap: () => Navigator.pop(context, controller.text),
+                ),
+              ],
+              child: TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  labelText: "API 地址",
+                  hintText: "https://musicbrainz.org/ws/2",
+                  filled: true,
+                  fillColor: scheme.surface.withValues(alpha: 0.3),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            )
+          : AlertDialog(
+              title: const Text("修改 API 地址"),
+              content: TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: "API 地址",
+                  hintText: "https://musicbrainz.org/ws/2",
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("取消"),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, controller.text),
+                  child: const Text("确定"),
+                ),
+              ],
+            ),
     );
 
     if (result != null) {

@@ -16,6 +16,7 @@ class DestinationDesc {
 
 /// 导航项与 StatefulShellRoute 分支的对应关系
 /// 分支顺序必须与 entry.dart 中 StatefulShellRoute.indexedStack 的 branches 顺序一致
+/// 设置已移至顶级路由（push 进入，不嵌套在 shell 内）
 final destinations = <DestinationDesc>[
   DestinationDesc(Symbols.library_music, "音乐库", app_paths.AUDIOS_PAGE),
   DestinationDesc(Symbols.list, "歌单", app_paths.PLAYLISTS_PAGE),
@@ -23,7 +24,6 @@ final destinations = <DestinationDesc>[
   DestinationDesc(Symbols.folder, "本地", app_paths.FOLDERS_PAGE),
   DestinationDesc(Symbols.cloud, "连接", app_paths.CLOUD_CONNECTIONS_PAGE),
   DestinationDesc(Symbols.search, "搜索", app_paths.SEARCH_PAGE),
-  DestinationDesc(Symbols.settings, "设置", app_paths.SETTINGS_PAGE),
 ];
 
 class SideNav extends StatelessWidget {
@@ -131,17 +131,17 @@ class SideNav extends StatelessWidget {
 }
 
 /// 移动端底部导航栏的导航项
-/// key: 显示在底部导航栏中的项 index (0-4)
+/// key: 显示在底部导航栏中的项 index (0-3)
 /// value: 对应 StatefulShellRoute 的分支 index
-const _mobileNavBranchMapping = [0, 1, 2, 4, 6];
+/// 设置已移至顶级路由（push 进入），不在底部导航栏
+const _mobileNavBranchMapping = [0, 1, 2, 4];
 
-/// 移动端底部导航栏显示的5个导航项
+/// 移动端底部导航栏显示的4个导航项
 final _mobileDestinations = <DestinationDesc>[
   destinations[0], // 音乐库
   destinations[1], // 歌单
   destinations[2], // 类别
   destinations[4], // 连接
-  destinations[6], // 设置
 ];
 
 /// Maestro 自动化测试用的语义标识符
@@ -150,7 +150,6 @@ const _mobileTabIds = [
   'tab_playlist',
   'tab_category',
   'tab_cloud',
-  'tab_settings'
 ];
 
 class MobileBottomNav extends StatelessWidget {

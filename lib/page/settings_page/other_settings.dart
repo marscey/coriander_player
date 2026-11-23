@@ -104,6 +104,8 @@ class AudioLibraryEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 移动端不显示文件夹管理（移动端通过系统文件访问，不需要配置音乐库目录）
+    if (PlatformHelper.isMobile) return const SizedBox.shrink();
     return SettingsTile(
       description: "文件夹管理",
       action: FilledButton.icon(
@@ -326,6 +328,85 @@ class _ShowTrackIndexSwitchState extends State<ShowTrackIndexSwitch> {
           });
           await settings.saveSettings();
         },
+      ),
+    );
+  }
+}
+
+/// 跑马灯开关
+class MarqueeEnabledSwitch extends StatefulWidget {
+  const MarqueeEnabledSwitch({super.key});
+
+  @override
+  State<MarqueeEnabledSwitch> createState() => _MarqueeEnabledSwitchState();
+}
+
+class _MarqueeEnabledSwitchState extends State<MarqueeEnabledSwitch> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: "跑马灯效果",
+      subtitle: "过长标题/文件名滚动显示（默认关闭，可能影响性能）",
+      action: Switch(
+        value: settings.marqueeEnabled,
+        onChanged: (value) async {
+          setState(() {
+            settings.marqueeEnabled = value;
+          });
+          await settings.saveSettings();
+        },
+      ),
+    );
+  }
+}
+
+/// 跑马灯滚动速度
+class MarqueeSpeedControl extends StatefulWidget {
+  const MarqueeSpeedControl({super.key});
+
+  @override
+  State<MarqueeSpeedControl> createState() => _MarqueeSpeedControlState();
+}
+
+class _MarqueeSpeedControlState extends State<MarqueeSpeedControl> {
+  final settings = AppSettings.instance;
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsTile(
+      description: "跑马灯速度",
+      subtitle: "控制过长标题/文件名的滚动速度",
+      action: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Slider(
+            value: settings.marqueeSpeed,
+            min: 10.0,
+            max: 120.0,
+            divisions: 11,
+            label: settings.marqueeSpeed.toStringAsFixed(0),
+            onChanged: (value) {
+              setState(() {
+                settings.marqueeSpeed = value;
+              });
+            },
+            onChangeEnd: (value) async {
+              await settings.saveSettings();
+            },
+          ),
+          SizedBox(
+            width: 40,
+            child: Text(
+              settings.marqueeSpeed.toStringAsFixed(0),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

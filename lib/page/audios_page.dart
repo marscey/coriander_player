@@ -8,6 +8,7 @@ import 'package:coriander_player/page/uni_page_components.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class AudiosPage extends StatefulWidget {
@@ -19,6 +20,9 @@ class AudiosPage extends StatefulWidget {
 }
 
 class _AudiosPageState extends State<AudiosPage> {
+  final MultiSelectController<Audio> _multiSelectController =
+      MultiSelectController<Audio>();
+
   @override
   void initState() {
     super.initState();
@@ -28,6 +32,7 @@ class _AudiosPageState extends State<AudiosPage> {
   @override
   void dispose() {
     PlayService.instance.playbackService.removeListener(_onPlaybackChanged);
+    _multiSelectController.dispose();
     super.dispose();
   }
 
@@ -49,7 +54,6 @@ class _AudiosPageState extends State<AudiosPage> {
       listenable: AudioLibrary.instance,
       builder: (context, _) {
         final contentList = List<Audio>.from(AudioLibrary.instance.audioCollection);
-        final multiSelectController = MultiSelectController<Audio>();
         return UniPage<Audio>(
       pref: AppPreference.instance.audiosPagePref,
       title: "音乐库",
@@ -66,7 +70,9 @@ class _AudiosPageState extends State<AudiosPage> {
       enableSortOrder: true,
       enableContentViewSwitch: true,
       locateTo: widget.locateTo,
-      multiSelectController: multiSelectController,
+      multiSelectController: _multiSelectController,
+      showBackButton: false,
+      showSettingsButton: true,
       emptyStateBuilder: (context) => Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -80,25 +86,43 @@ class _AudiosPageState extends State<AudiosPage> {
         ),
       ),
       multiSelectViewActions: [
-        BatchScrapeMetadata(multiSelectController: multiSelectController),
-        AddAllToPlaylist(multiSelectController: multiSelectController),
-        RemoveFromLibrary(multiSelectController: multiSelectController),
+        BatchScrapeMetadata(multiSelectController: _multiSelectController),
+        AddAllToPlaylist(multiSelectController: _multiSelectController),
+        RemoveFromLibrary(multiSelectController: _multiSelectController),
         MultiSelectSelectOrClearAll(
-          multiSelectController: multiSelectController,
+          multiSelectController: _multiSelectController,
           contentList: contentList,
         ),
-        MultiSelectExit(multiSelectController: multiSelectController),
+        MultiSelectExit(multiSelectController: _multiSelectController),
       ],
-      primaryAction: LocatePlayingButton(
-        hasPlayingAudio: _hasPlayingAudioInLibrary,
-        onLocate: () {
-          final nowPlaying =
-              PlayService.instance.playbackService.nowPlaying;
-          if (nowPlaying == null) return;
-          // 通过 push 带上 locateTo 参数，让 UniPage 自动滚动
-          context.push('/audios', extra: nowPlaying);
-        },
+      primaryAction: ListenableBuilder(
+        listenable: PlayService.instance.playbackService,
+        builder: (context, _) => LocatePlayingButton(
+          hasPlayingAudio: _hasPlayingAudioInLibrary,
+          onLocate: () {
+            final nowPlaying =
+                PlayService.instance.playbackService.nowPlaying;
+            if (nowPlaying == null) return;
+            // 通过 push 带上 locateTo 参数，让 UniPage 自动滚动
+            context.push('/audios', extra: nowPlaying);
+          },
+        ),
       ),
+      glassMenuItems: [
+        if (_hasPlayingAudioInLibrary) ...[
+          GlassMenuItem(
+            title: '定位播放文件',
+            icon: const Icon(Icons.my_location, size: 20),
+            onTap: () {
+              final nowPlaying =
+                  PlayService.instance.playbackService.nowPlaying;
+              if (nowPlaying == null) return;
+              context.push('/audios', extra: nowPlaying);
+            },
+          ),
+          const GlassMenuDivider(),
+        ],
+      ],
       sortMethods: [
         SortMethodDesc(
           icon: Symbols.title,

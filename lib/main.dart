@@ -230,6 +230,9 @@ Future<void> main() async {
 
   await migrateAppData();
 
+  // DebugLogger 必须在任何使用前初始化，不受 settings.json 是否存在影响
+  await DebugLogger.instance.init();
+
   final supportPath = (await getAppDataDir()).path;
   if (File(PlatformHelper.joinPaths([supportPath, "settings.json"]))
       .existsSync()) {

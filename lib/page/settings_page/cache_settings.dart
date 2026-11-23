@@ -1,11 +1,16 @@
 import 'dart:io';
+import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
+import 'package:coriander_player/component/settings_tile.dart';
+import 'package:coriander_player/glass_theme/glass_dialog.dart';
+import 'package:coriander_player/glass_theme/glass_presets.dart';
 import 'package:coriander_player/metadata/media_cache.dart';
 import 'package:coriander_player/platform_helper.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' hide GlassDialog;
 import 'package:material_symbols_icons/symbols.dart';
 
 /// 缓存类型枚举
@@ -20,25 +25,14 @@ enum CacheType {
   const CacheType(this.label, this.icon);
 }
 
-class CacheManagementSettings extends StatefulWidget {
+/// 缓存管理设置项
+///
+/// 点击后弹出对话框进行缓存管理
+class CacheManagementSettings extends StatelessWidget {
   const CacheManagementSettings({super.key});
 
-  @override
-  State<CacheManagementSettings> createState() => _CacheManagementSettingsState();
-}
-
-class _CacheManagementSettingsState extends State<CacheManagementSettings> {
-  Map<CacheType, int> _cacheSizes = {};
-  Map<CacheType, int> _cacheCounts = {};
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAllCacheInfo();
-  }
-
-  Future<void> _loadAllCacheInfo() async {
+  /// 加载所有缓存信息
+  static Future<(Map<CacheType, int>, Map<CacheType, int>)> loadCacheInfo() async {
     final sizes = <CacheType, int>{};
     final counts = <CacheType, int>{};
 
@@ -58,16 +52,10 @@ class _CacheManagementSettingsState extends State<CacheManagementSettings> {
     sizes[CacheType.cover] = coverInfo.$1;
     counts[CacheType.cover] = coverInfo.$2;
 
-    if (mounted) {
-      setState(() {
-        _cacheSizes = sizes;
-        _cacheCounts = counts;
-        _loading = false;
-      });
-    }
+    return (sizes, counts);
   }
 
-  (int, int) _getDirInfo(Directory dir) {
+  static (int, int) _getDirInfo(Directory dir) {
     if (!dir.existsSync()) return (0, 0);
     int totalSize = 0;
     int count = 0;
@@ -82,111 +70,38 @@ class _CacheManagementSettingsState extends State<CacheManagementSettings> {
     return (totalSize, count);
   }
 
-  String _formatSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-  }
-
-  int get _totalSize => _cacheSizes.values.fold(0, (a, b) => a + b);
-
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    return SettingsTile(
+      description: "缓存管理",
+      action: FilledButton.icon(
+        icon: const Icon(Symbols.tune),
+        label: const Text("缓存设置"),
+        onPressed: () async {
+          // 加载缓存信息
+          final (cacheSizes, cacheCounts) = await loadCacheInfo();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "缓存管理",
-          style: TextStyle(
-            color: scheme.onSurface,
-            fontSize: 16.0,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12.0),
-
-        if (!_loading) ...[
-          // 总览
-          Container(
-            padding: const EdgeInsets.all(12.0),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-            child: Row(
-              children: [
-                Icon(Symbols.storage, color: scheme.primary, size: 20.0),
-                const SizedBox(width: 8.0),
-                Text(
-                  '总缓存: ${_formatSize(_totalSize)}',
-                  style: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w500),
-                ),
-                const Spacer(),
-                FilledButton.tonalIcon(
-                  onPressed: () => _showCacheDetailDialog(context),
-                  icon: const Icon(Symbols.settings, size: 18.0),
-                  label: const Text("管理"),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8.0),
-
-          // 各类缓存概览
-          for (final type in CacheType.values) ...[
-            _buildCacheTypeTile(type, scheme),
-            const SizedBox(height: 4.0),
-          ],
-        ] else ...[
-          const Center(child: CircularProgressIndicator()),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildCacheTypeTile(CacheType type, ColorScheme scheme) {
-    final size = _cacheSizes[type] ?? 0;
-    final count = _cacheCounts[type] ?? 0;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      child: Row(
-        children: [
-          Icon(type.icon, size: 16.0, color: scheme.onSurfaceVariant),
-          const SizedBox(width: 8.0),
-          Text(type.label, style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13.0)),
-          const Spacer(),
-          Text(
-            '$count 个文件，${_formatSize(size)}',
-            style: TextStyle(color: scheme.outline, fontSize: 12.0),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showCacheDetailDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => _CacheDetailDialog(
-        onRefresh: _loadAllCacheInfo,
-        cacheSizes: _cacheSizes,
-        cacheCounts: _cacheCounts,
+          if (context.mounted) {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => _CacheDetailDialog(
+                cacheSizes: cacheSizes,
+                cacheCounts: cacheCounts,
+              ),
+            );
+          }
+        },
       ),
     );
   }
 }
 
 class _CacheDetailDialog extends StatefulWidget {
-  final VoidCallback onRefresh;
   final Map<CacheType, int> cacheSizes;
   final Map<CacheType, int> cacheCounts;
 
   const _CacheDetailDialog({
-    required this.onRefresh,
     required this.cacheSizes,
     required this.cacheCounts,
   });
@@ -207,6 +122,25 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
+  Future<void> _refresh() async {
+    final (cacheSizes, cacheCounts) = await CacheManagementSettings.loadCacheInfo();
+    setState(() {
+      // Update widget.cacheSizes and widget.cacheCounts indirectly by reloading
+    });
+    // Close and reopen to show updated data
+    Navigator.pop(context);
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => _CacheDetailDialog(
+          cacheSizes: cacheSizes,
+          cacheCounts: cacheCounts,
+        ),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -222,6 +156,64 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final useGlass = AppPreference.instance.liquidGlassEnabled;
+
+    if (useGlass) {
+      return GlassDialog(
+        titleWidget: Row(
+          children: [
+            Icon(Symbols.storage, color: scheme.primary),
+            const SizedBox(width: 8.0),
+            Text(
+              "缓存管理",
+              style: TextStyle(
+                color: scheme.onSurface,
+                fontSize: 18.0,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        width: 520.0,
+        height: 480.0,
+        actions: [
+          if (_clearing)
+            const SizedBox(
+              width: 20.0,
+              height: 20.0,
+              child: CircularProgressIndicator(strokeWidth: 2.0),
+            ),
+          GlassDialogButton(
+            label: "关闭",
+            onTap: () => Navigator.pop(context),
+          ),
+        ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(icon: Icon(Symbols.cloud, size: 18.0), text: "云音频"),
+                Tab(icon: Icon(Symbols.lyrics, size: 18.0), text: "歌词"),
+                Tab(icon: Icon(Symbols.image, size: 18.0), text: "封面"),
+              ],
+            ),
+            const SizedBox(height: 12.0),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildCloudAudioTab(scheme, useGlass),
+                  _buildLyricTab(scheme, useGlass),
+                  _buildCoverTab(scheme, useGlass),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Dialog(
       insetPadding: const EdgeInsets.all(24.0),
@@ -266,9 +258,9 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                    _buildCloudAudioTab(scheme),
-                    _buildLyricTab(scheme),
-                    _buildCoverTab(scheme),
+                    _buildCloudAudioTab(scheme, useGlass),
+                    _buildLyricTab(scheme, useGlass),
+                    _buildCoverTab(scheme, useGlass),
                   ],
                 ),
               ),
@@ -299,7 +291,7 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
     );
   }
 
-  Widget _buildCloudAudioTab(ColorScheme scheme) {
+  Widget _buildCloudAudioTab(ColorScheme scheme, bool useGlass) {
     final size = widget.cacheSizes[CacheType.cloudAudio] ?? 0;
     final count = widget.cacheCounts[CacheType.cloudAudio] ?? 0;
     final cache = CloudCacheManager.instance;
@@ -315,22 +307,37 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
           _buildInfoRow("占用空间", _formatSize(size), scheme),
           const SizedBox(height: 12.0),
 
-          _buildCacheLimitSelector(scheme, size),
+          _buildCacheLimitSelector(scheme, size, useGlass),
           const SizedBox(height: 16.0),
 
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Symbols.delete, size: 18.0),
-                  label: const Text('清空缓存'),
-                  onPressed: count == 0 || _clearing ? null : () async {
-                    setState(() => _clearing = true);
-                    await CloudCacheManager.instance.clearCache();
-                    await _refresh();
-                    if (mounted) setState(() => _clearing = false);
-                  },
-                ),
+                child: useGlass
+                    ? _buildGlassActionButton(
+                        scheme,
+                        icon: Symbols.delete,
+                        label: '清空缓存',
+                        expand: true,
+                        onPressed: count == 0 || _clearing
+                            ? null
+                            : () async {
+                                setState(() => _clearing = true);
+                                await CloudCacheManager.instance.clearCache();
+                                await _refresh();
+                                if (mounted) setState(() => _clearing = false);
+                              },
+                      )
+                    : OutlinedButton.icon(
+                        icon: const Icon(Symbols.delete, size: 18.0),
+                        label: const Text('清空缓存'),
+                        onPressed: count == 0 || _clearing ? null : () async {
+                          setState(() => _clearing = true);
+                          await CloudCacheManager.instance.clearCache();
+                          await _refresh();
+                          if (mounted) setState(() => _clearing = false);
+                        },
+                      ),
               ),
             ],
           ),
@@ -339,19 +346,35 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Symbols.folder_open, size: 18.0),
-                    label: const Text('更改目录'),
-                    onPressed: _clearing ? null : _changeCloudCacheDir,
-                  ),
+                  child: useGlass
+                      ? _buildGlassActionButton(
+                          scheme,
+                          icon: Symbols.folder_open,
+                          label: '更改目录',
+                          expand: true,
+                          onPressed: _clearing ? null : _changeCloudCacheDir,
+                        )
+                      : OutlinedButton.icon(
+                          icon: const Icon(Symbols.folder_open, size: 18.0),
+                          label: const Text('更改目录'),
+                          onPressed: _clearing ? null : _changeCloudCacheDir,
+                        ),
                 ),
                 const SizedBox(width: 8.0),
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Symbols.folder_open, size: 18.0),
-                    label: const Text('打开目录'),
-                    onPressed: () => _openDirectory(cache.cacheDir),
-                  ),
+                  child: useGlass
+                      ? _buildGlassActionButton(
+                          scheme,
+                          icon: Symbols.folder_open,
+                          label: '打开目录',
+                          expand: true,
+                          onPressed: () => _openDirectory(cache.cacheDir),
+                        )
+                      : OutlinedButton.icon(
+                          icon: const Icon(Symbols.folder_open, size: 18.0),
+                          label: const Text('打开目录'),
+                          onPressed: () => _openDirectory(cache.cacheDir),
+                        ),
                 ),
               ],
             ),
@@ -360,7 +383,7 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
     );
   }
 
-  Widget _buildLyricTab(ColorScheme scheme) {
+  Widget _buildLyricTab(ColorScheme scheme, bool useGlass) {
     final size = widget.cacheSizes[CacheType.lyric] ?? 0;
     final count = widget.cacheCounts[CacheType.lyric] ?? 0;
 
@@ -379,27 +402,52 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
               _buildInfoRow("占用空间", _formatSize(size), scheme),
               const SizedBox(height: 16.0),
 
-              OutlinedButton.icon(
-                icon: const Icon(Symbols.delete, size: 18.0),
-                label: const Text('清空歌词缓存'),
-                onPressed: count == 0 || _clearing ? null : () async {
-                  setState(() => _clearing = true);
-                  final dir = await MediaCache.instance.lyricsDir;
-                  if (dir.existsSync()) {
-                    await dir.delete(recursive: true);
-                    dir.createSync(recursive: true);
-                  }
-                  await _refresh();
-                  if (mounted) setState(() => _clearing = false);
-                },
-              ),
+              useGlass
+                  ? _buildGlassActionButton(
+                      scheme,
+                      icon: Symbols.delete,
+                      label: '清空歌词缓存',
+                      onPressed: count == 0 || _clearing
+                          ? null
+                          : () async {
+                              setState(() => _clearing = true);
+                              final dir = await MediaCache.instance.lyricsDir;
+                              if (dir.existsSync()) {
+                                await dir.delete(recursive: true);
+                                dir.createSync(recursive: true);
+                              }
+                              await _refresh();
+                              if (mounted) setState(() => _clearing = false);
+                            },
+                    )
+                  : OutlinedButton.icon(
+                      icon: const Icon(Symbols.delete, size: 18.0),
+                      label: const Text('清空歌词缓存'),
+                      onPressed: count == 0 || _clearing ? null : () async {
+                        setState(() => _clearing = true);
+                        final dir = await MediaCache.instance.lyricsDir;
+                        if (dir.existsSync()) {
+                          await dir.delete(recursive: true);
+                          dir.createSync(recursive: true);
+                        }
+                        await _refresh();
+                        if (mounted) setState(() => _clearing = false);
+                      },
+                    ),
               const SizedBox(height: 8.0),
               if (PlatformHelper.isDesktop)
-                OutlinedButton.icon(
-                  icon: const Icon(Symbols.folder_open, size: 18.0),
-                  label: const Text('打开目录'),
-                  onPressed: () => _openDirectory(dirPath),
-                ),
+                useGlass
+                    ? _buildGlassActionButton(
+                        scheme,
+                        icon: Symbols.folder_open,
+                        label: '打开目录',
+                        onPressed: () => _openDirectory(dirPath),
+                      )
+                    : OutlinedButton.icon(
+                        icon: const Icon(Symbols.folder_open, size: 18.0),
+                        label: const Text('打开目录'),
+                        onPressed: () => _openDirectory(dirPath),
+                      ),
             ],
           ),
         );
@@ -407,7 +455,7 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
     );
   }
 
-  Widget _buildCoverTab(ColorScheme scheme) {
+  Widget _buildCoverTab(ColorScheme scheme, bool useGlass) {
     final size = widget.cacheSizes[CacheType.cover] ?? 0;
     final count = widget.cacheCounts[CacheType.cover] ?? 0;
 
@@ -426,27 +474,52 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
               _buildInfoRow("占用空间", _formatSize(size), scheme),
               const SizedBox(height: 16.0),
 
-              OutlinedButton.icon(
-                icon: const Icon(Symbols.delete, size: 18.0),
-                label: const Text('清空封面缓存'),
-                onPressed: count == 0 || _clearing ? null : () async {
-                  setState(() => _clearing = true);
-                  final dir = await MediaCache.instance.coversDir;
-                  if (dir.existsSync()) {
-                    await dir.delete(recursive: true);
-                    dir.createSync(recursive: true);
-                  }
-                  await _refresh();
-                  if (mounted) setState(() => _clearing = false);
-                },
-              ),
+              useGlass
+                  ? _buildGlassActionButton(
+                      scheme,
+                      icon: Symbols.delete,
+                      label: '清空封面缓存',
+                      onPressed: count == 0 || _clearing
+                          ? null
+                          : () async {
+                              setState(() => _clearing = true);
+                              final dir = await MediaCache.instance.coversDir;
+                              if (dir.existsSync()) {
+                                await dir.delete(recursive: true);
+                                dir.createSync(recursive: true);
+                              }
+                              await _refresh();
+                              if (mounted) setState(() => _clearing = false);
+                            },
+                    )
+                  : OutlinedButton.icon(
+                      icon: const Icon(Symbols.delete, size: 18.0),
+                      label: const Text('清空封面缓存'),
+                      onPressed: count == 0 || _clearing ? null : () async {
+                        setState(() => _clearing = true);
+                        final dir = await MediaCache.instance.coversDir;
+                        if (dir.existsSync()) {
+                          await dir.delete(recursive: true);
+                          dir.createSync(recursive: true);
+                        }
+                        await _refresh();
+                        if (mounted) setState(() => _clearing = false);
+                      },
+                    ),
               const SizedBox(height: 8.0),
               if (PlatformHelper.isDesktop)
-                OutlinedButton.icon(
-                  icon: const Icon(Symbols.folder_open, size: 18.0),
-                  label: const Text('打开目录'),
-                  onPressed: () => _openDirectory(dirPath),
-                ),
+                useGlass
+                    ? _buildGlassActionButton(
+                        scheme,
+                        icon: Symbols.folder_open,
+                        label: '打开目录',
+                        onPressed: () => _openDirectory(dirPath),
+                      )
+                    : OutlinedButton.icon(
+                        icon: const Icon(Symbols.folder_open, size: 18.0),
+                        label: const Text('打开目录'),
+                        onPressed: () => _openDirectory(dirPath),
+                      ),
             ],
           ),
         );
@@ -454,7 +527,7 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
     );
   }
 
-  Widget _buildCacheLimitSelector(ColorScheme scheme, int currentSize) {
+  Widget _buildCacheLimitSelector(ColorScheme scheme, int currentSize, bool useGlass) {
     final settings = AppSettings.instance;
     final currentLimitMB = settings.cloudCacheMaxSizeMB;
 
@@ -471,6 +544,124 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
         ? (currentSize / (currentLimitMB * 1024 * 1024) * 100).clamp(0, 100)
         : 0.0;
 
+    // glass 分支：使用 GlassContainer + GlassButton.custom 模拟 ChoiceChip
+    if (useGlass) {
+      return GlassContainer(
+        useOwnLayer: true,
+        shape: const LiquidRoundedSuperellipse(borderRadius: 12),
+        settings: cardSettings,
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Symbols.database, size: 16.0, color: scheme.primary),
+                  const SizedBox(width: 8.0),
+                  Text(
+                    '缓存容量上限',
+                    style: TextStyle(
+                      color: scheme.onSurface,
+                      fontSize: 13.0,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    currentLimitMB == -1
+                        ? '无限制'
+                        : _formatSize(currentLimitMB * 1024 * 1024),
+                    style: TextStyle(
+                      color: scheme.primary,
+                      fontSize: 13.0,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              if (currentLimitMB > 0) ...[
+                const SizedBox(height: 8.0),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4.0),
+                  child: LinearProgressIndicator(
+                    value: usagePercent / 100,
+                    backgroundColor: scheme.surfaceContainer,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      usagePercent > 90
+                          ? scheme.error
+                          : usagePercent > 70
+                              ? scheme.tertiary
+                              : scheme.primary,
+                    ),
+                    minHeight: 6.0,
+                  ),
+                ),
+                const SizedBox(height: 4.0),
+                Text(
+                  '已使用 ${_formatSize(currentSize)} (${usagePercent.toStringAsFixed(0)}%)',
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 11.0,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10.0),
+              Wrap(
+                spacing: 6.0,
+                runSpacing: 6.0,
+                children: options.map((opt) {
+                  final isSelected = currentLimitMB == opt.$1;
+                  final textColor =
+                      isSelected ? scheme.onPrimary : scheme.onSurface;
+                  return GlassButton.custom(
+                    onTap: _clearing
+                        ? () {}
+                        : () async {
+                            setState(() => _clearing = true);
+                            settings.cloudCacheMaxSizeMB = opt.$1;
+                            CloudCacheManager.instance
+                                .setMaxCacheSizeMB(opt.$1);
+                            await settings.saveSettings();
+                            await CloudCacheManager.instance.evictIfNeeded();
+                            await _refresh();
+                            if (mounted) setState(() => _clearing = false);
+                          },
+                    enabled: !_clearing,
+                    style: isSelected
+                        ? GlassButtonStyle.filled
+                        : GlassButtonStyle.transparent,
+                    shape: const LiquidRoundedSuperellipse(borderRadius: 10),
+                    height: 32,
+                    useOwnLayer: isSelected,
+                    settings: isSelected
+                        ? cardSettings.copyWith(
+                            glassColor: scheme.primary.withValues(alpha: 0.7),
+                          )
+                        : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                      child: Text(
+                        opt.$2,
+                        style: TextStyle(
+                          fontSize: 12.0,
+                          color: textColor,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // material 分支：保持原有实色背景与 ChoiceChip
     return Container(
       padding: const EdgeInsets.all(12.0),
       decoration: BoxDecoration(
@@ -564,6 +755,45 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
     );
   }
 
+  /// Glass 风格操作按钮（替代 OutlinedButton.icon）
+  ///
+  /// 使用 [GlassButton.custom] + [GlassButtonStyle.transparent] 承载图标 + 文字，
+  /// 适配 [Expanded] 撑满（[expand] = true）或按内容自适应宽度。
+  Widget _buildGlassActionButton(
+    ColorScheme scheme, {
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+    bool expand = false,
+  }) {
+    final isDisabled = onPressed == null;
+    final textColor = isDisabled
+        ? scheme.onSurface.withValues(alpha: 0.4)
+        : scheme.onSurface;
+    return GlassButton.custom(
+      onTap: onPressed ?? () {},
+      enabled: !isDisabled,
+      style: GlassButtonStyle.transparent,
+      shape: const LiquidRoundedSuperellipse(borderRadius: 12),
+      height: 40,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18.0, color: textColor),
+            const SizedBox(width: 6.0),
+            Text(
+              label,
+              style: TextStyle(color: textColor, fontSize: 14.0),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildInfoRow(String label, String value, ColorScheme scheme) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -585,10 +815,6 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
         ),
       ],
     );
-  }
-
-  Future<void> _refresh() async {
-    widget.onRefresh();
   }
 
   /// 更改云音频缓存目录（跨平台）

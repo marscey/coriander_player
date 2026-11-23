@@ -21,6 +21,7 @@ class MetadataRecord {
   final bool? lyricSynced;
   final String? coverCachePath; // 本地缓存封面路径
   final String? coverMimeType;
+  final String? coverSource; // 封面来源: 'embedded' | 'scraped' | 'custom' | 'none'
   final String? scraperSource; // 刮削来源标识
   final DateTime? scrapedAt; // 刮削时间
   final DateTime? updatedAt; // 最后更新时间
@@ -41,6 +42,7 @@ class MetadataRecord {
     this.lyricSynced,
     this.coverCachePath,
     this.coverMimeType,
+    this.coverSource,
     this.scraperSource,
     this.scrapedAt,
     this.updatedAt,
@@ -63,6 +65,7 @@ class MetadataRecord {
       lyricSynced: map['lyric_synced'] == 1,
       coverCachePath: map['cover_cache_path'] as String?,
       coverMimeType: map['cover_mime_type'] as String?,
+      coverSource: map['cover_source'] as String?,
       scraperSource: map['scraper_source'] as String?,
       scrapedAt: map['scraped_at'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['scraped_at'] as int)
@@ -90,6 +93,7 @@ class MetadataRecord {
       'lyric_synced': lyricSynced == true ? 1 : 0,
       'cover_cache_path': coverCachePath,
       'cover_mime_type': coverMimeType,
+      'cover_source': coverSource,
       'scraper_source': scraperSource,
       'scraped_at': scrapedAt?.millisecondsSinceEpoch,
       'updated_at': updatedAt?.millisecondsSinceEpoch ??
@@ -115,6 +119,7 @@ class MetadataRecord {
       lyricSynced: other.lyricSynced ?? lyricSynced,
       coverCachePath: other.coverCachePath ?? coverCachePath,
       coverMimeType: other.coverMimeType ?? coverMimeType,
+      coverSource: other.coverSource ?? coverSource,
       scraperSource: other.scraperSource ?? scraperSource,
       scrapedAt: other.scrapedAt ?? scrapedAt,
       updatedAt: DateTime.now(),
@@ -176,7 +181,7 @@ class ScraperConfig {
 /// 文件移动/重命名后，只要内容不变，audioId 不变，可直接匹配元数据
 class MetadataStore {
   static const _dbName = 'coriander_metadata.db';
-  static const _dbVersion = 1;
+  static const _dbVersion = 2;
 
   static const metadataTable = 'metadata';
   static const scraperConfigTable = 'scraper_config';
@@ -234,6 +239,7 @@ class MetadataStore {
         lyric_synced INTEGER DEFAULT 0,
         cover_cache_path TEXT,
         cover_mime_type TEXT,
+        cover_source TEXT,
         scraper_source TEXT,
         scraped_at INTEGER,
         updated_at INTEGER
@@ -266,7 +272,13 @@ class MetadataStore {
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     _log.i(
         '[MetadataStore] Upgrading database from $oldVersion to $newVersion');
-    // 后续版本升级时在此添加迁移逻辑
+    // v1 → v2: 新增 cover_source 字段（封面来源标记）
+    if (oldVersion < 2) {
+      await db.execute(
+        'ALTER TABLE $metadataTable ADD COLUMN cover_source TEXT',
+      );
+      _log.i('[MetadataStore] Added cover_source column (v1 → v2)');
+    }
   }
 
   Future<void> _insertDefaultScraperConfigs(Database db) async {
@@ -410,6 +422,36 @@ class MetadataStore {
       whereArgs: [audioId],
     );
     _log.i('[MetadataStore] Updated cover cache for: $audioId');
+  }
+
+  /// 更新封面来源标记
+  /// [coverSource] 取值: 'embedded' | 'scraped' | 'custom' | 'none'
+  Future<void> updateCoverSource(String audioId, String coverSource) async {
+    final db = await database;
+    await db.update(
+      metadataTable,
+      {
+        'cover_source': coverSource,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'audio_id = ?',
+      whereArgs: [audioId],
+    );
+    _log.i('[MetadataStore] Updated cover_source=$coverSource for: $audioId');
+  }
+
+  /// 获取封面来源标记（仅查询此字段，性能优于 getMetadata）
+  Future<String?> getCoverSource(String audioId) async {
+    final db = await database;
+    final results = await db.query(
+      metadataTable,
+      columns: ['cover_source'],
+      where: 'audio_id = ?',
+      whereArgs: [audioId],
+      limit: 1,
+    );
+    if (results.isEmpty) return null;
+    return results.first['cover_source'] as String?;
   }
 
   /// 删除元数据记录

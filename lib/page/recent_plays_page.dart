@@ -9,6 +9,7 @@ import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/play_service/recent_play_service.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class RecentPlaysPage extends StatefulWidget {
@@ -20,6 +21,7 @@ class RecentPlaysPage extends StatefulWidget {
 
 class _RecentPlaysPageState extends State<RecentPlaysPage> {
   final _playbackService = PlayService.instance.playbackService;
+  final _multiSelectController = MultiSelectController<Audio>();
 
   @override
   void initState() {
@@ -30,6 +32,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
   @override
   void dispose() {
     _playbackService.removeListener(_onPlaybackChanged);
+    _multiSelectController.dispose();
     super.dispose();
   }
 
@@ -76,7 +79,6 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
       listenable: RecentPlayService.instance,
       builder: (context, _) {
         final contentList = RecentPlayService.instance.recentAudios;
-        final multiSelectController = MultiSelectController<Audio>();
 
         return UniPage<Audio>(
           pref: AppPreference.instance.recentPlaysPagePref,
@@ -93,10 +95,23 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
           enableSortMethod: false,
           enableSortOrder: false,
           enableContentViewSwitch: true,
-          primaryAction: LocatePlayingButton(
-            hasPlayingAudio: _hasPlayingAudioInRecent,
-            onLocate: _locatePlaying,
+          primaryAction: ListenableBuilder(
+            listenable: _playbackService,
+            builder: (context, _) => LocatePlayingButton(
+              hasPlayingAudio: _hasPlayingAudioInRecent,
+              onLocate: _locatePlaying,
+            ),
           ),
+          glassMenuItems: [
+            if (_hasPlayingAudioInRecent) ...[
+              GlassMenuItem(
+                title: '定位播放文件',
+                icon: const Icon(Icons.my_location, size: 20),
+                onTap: _locatePlaying,
+              ),
+              const GlassMenuDivider(),
+            ],
+          ],
           emptyStateBuilder: (context) {
             final scheme = Theme.of(context).colorScheme;
             return Center(
@@ -113,14 +128,14 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
               ),
             );
           },
-          multiSelectController: multiSelectController,
+          multiSelectController: _multiSelectController,
           multiSelectViewActions: [
-            AddAllToPlaylist(multiSelectController: multiSelectController),
+            AddAllToPlaylist(multiSelectController: _multiSelectController),
             MultiSelectSelectOrClearAll(
-              multiSelectController: multiSelectController,
+              multiSelectController: _multiSelectController,
               contentList: contentList,
             ),
-            MultiSelectExit(multiSelectController: multiSelectController),
+            MultiSelectExit(multiSelectController: _multiSelectController),
           ],
         );
       },

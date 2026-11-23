@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 /// 所有 Tab 一级页面路径（mini player 在这些页面显示）
+/// 设置页面已移至顶级路由（push 进入），不在 tab 内
 const List<String> _shellRootPages = [
   '/audios',
   '/categories',
@@ -20,7 +21,6 @@ const List<String> _shellRootPages = [
   '/playlists',
   '/playlists/detail',
   '/search',
-  '/settings',
 ];
 
 /// 迷你播放器可见性通知器

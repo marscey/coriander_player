@@ -918,6 +918,8 @@ class _EditTagDialogState extends State<EditTagDialog> {
             _selectedCoverData!,
             mimeType: _selectedCoverMimeType ?? 'image/jpeg',
           );
+          // 用户主动应用搜索结果封面，标记来源为 'scraped'（优先级高于内嵌）
+          await MetadataStore.instance.updateCoverSource(audioId, 'scraped');
         }
       }
 
@@ -928,7 +930,8 @@ class _EditTagDialogState extends State<EditTagDialog> {
         RegExp(AppSettings.instance.artistSplitPattern),
       );
       if (track != null) audio.track = track;
-      audio.clearCoverCache();
+      // 重置封面来源查询状态，让下次访问 cover 时按新的 source 重新加载
+      audio.resetCoverSourceQuery();
       AudioLibrary.instance.notifyUpdated();
       PlayService.instance.playbackService.refreshNowPlaying();
 

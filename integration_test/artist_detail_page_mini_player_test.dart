@@ -71,7 +71,7 @@ void main() {
 
     // 创建基本的 settings.json（避免 AppSettings 初始化异常）
     File(p.join(appDir.path, 'settings.json')).writeAsStringSync('''{
-      "Version": "1.9.0",
+      "Version": "1.9.1",
       "ThemeMode": false,
       "DynamicTheme": true,
       "UseSystemTheme": true,

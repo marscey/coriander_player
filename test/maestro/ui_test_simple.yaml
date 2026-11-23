@@ -1,0 +1,17 @@
+appId: com.senyepss.corianderPlayer
+---
+- launchApp
+
+- takeScreenshot: 01_home_music
+
+- tapOn: "歌单"
+- takeScreenshot: 02_playlists_tab
+
+- tapOn: "类别"
+- takeScreenshot: 03_categories_tab
+
+- tapOn: "连接"
+- takeScreenshot: 04_connections_tab
+
+- tapOn: "音乐"
+- takeScreenshot: 05_music_tab

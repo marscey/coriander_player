@@ -1,8 +1,11 @@
 // ignore_for_file: unnecessary_this
 
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:pinyin/pinyin.dart';
 
 extension StringHMMSS on Duration {
@@ -104,3 +107,48 @@ final LOGGER = Logger(
   output: LOGGER_MEMORY,
   level: Level.all,
 );
+
+/// 调试日志写入文件，用于真机无法查看 flutter logs 的场景
+class DebugLogger {
+  static final DebugLogger _instance = DebugLogger._();
+  static DebugLogger get instance => _instance;
+  DebugLogger._();
+
+  File? _logFile;
+  final List<String> _memLogs = [];
+  bool _initialized = false;
+
+  Future<void> init() async {
+    if (_initialized) return;
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      _logFile = File(p.join(dir.path, 'debug.log'));
+      // 启动时清空旧日志
+      await _logFile!.writeAsString('');
+      _initialized = true;
+    } catch (_) {}
+  }
+
+  void log(String message) {
+    final ts = DateTime.now().toString().substring(11, 23);
+    final entry = '[$ts] $message';
+    _memLogs.add(entry);
+    _logFile?.writeAsString('$entry\n', mode: FileMode.append);
+  }
+
+  Future<String> readLogs() async {
+    if (_logFile == null) return '日志未初始化';
+    if (!await _logFile!.exists()) return '日志文件不存在';
+    return _logFile!.readAsString();
+  }
+
+  Future<void> clear() async {
+    _memLogs.clear();
+    await _logFile?.writeAsString('');
+  }
+}
+
+/// 便捷函数：同时输出到 print 和 DebugLogger
+void debugLog(String message) {
+  DebugLogger.instance.log(message);
+}

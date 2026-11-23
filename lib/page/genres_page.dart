@@ -76,6 +76,7 @@ class _GenreTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final useGlass = AppPreference.instance.liquidGlassEnabled;
     return Tooltip(
       message: genre.name,
       child: Semantics(
@@ -88,21 +89,45 @@ class _GenreTile extends StatelessWidget {
               extra: genre,
             );
           },
-          borderRadius: BorderRadius.circular(8.0),
-          child: Padding(
+          borderRadius: BorderRadius.circular(useGlass ? 14.0 : 8.0),
+          child: Container(
             padding: const EdgeInsets.all(8.0),
+            decoration: useGlass
+                ? BoxDecoration(
+                    color: scheme.surface.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(14.0),
+                    border: Border.all(
+                      color: scheme.onSurface.withValues(alpha: 0.05),
+                      width: 0.5,
+                    ),
+                  )
+                : null,
             child: Row(
               children: [
                 Container(
                   width: 48.0,
                   height: 48.0,
                   decoration: BoxDecoration(
-                    color: scheme.primaryContainer,
+                    color: useGlass
+                        ? scheme.primary.withValues(alpha: 0.7)
+                        : scheme.primaryContainer,
+                    gradient: useGlass
+                        ? LinearGradient(
+                            colors: [
+                              scheme.primary.withValues(alpha: 0.7),
+                              scheme.primary.withValues(alpha: 0.4),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: Icon(
                     Symbols.genres,
-                    color: scheme.onPrimaryContainer,
+                    color: useGlass
+                        ? scheme.onPrimary.withValues(alpha: 0.9)
+                        : scheme.onPrimaryContainer,
                     size: 24,
                   ),
                 ),

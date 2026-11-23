@@ -5,6 +5,8 @@ import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
 import 'package:coriander_player/metadata/media_cache.dart';
 import 'package:coriander_player/metadata/metadata_service.dart';
+import 'package:coriander_player/metadata/metadata_store.dart';
+import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/rust/api/tag_reader.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:coriander_player/platform_helper.dart';
@@ -83,6 +85,9 @@ class AudioLibrary extends ChangeNotifier {
 
     // 无论 index.json 是否加载成功，都尝试加载云音频
     await instance._loadCloudAudios();
+
+    // 音频库加载完成后，恢复上次播放状态
+    await PlayService.instance.playbackService.restorePlaybackState();
   }
 
   static Future<String> _getCloudAudiosFilePath() async {
@@ -445,8 +450,16 @@ class Audio {
   String? connectionId;
 
   ImageProvider? _cover;
+  int _coverGeneration = 0;
 
   ImageProvider? get coverImage => _cover;
+
+  Future<ImageProvider?>? _coverFuture;
+
+  /// 封面来源标记的内存缓存，避免每次访问 cover 都查 DB。
+  /// 取值: null(未查询) | 'embedded' | 'scraped' | 'custom' | 'none'
+  String? _coverSourceCache;
+  bool _coverSourceQueried = false;
 
   Future<ImageProvider?>? _largeCoverFuture;
 
@@ -542,108 +555,184 @@ class Audio {
       };
 
   /// 读取音乐文件的图片，自动适应缩放
+  ///
+  /// 封面来源优先级（基于 MetadataStore.cover_source）:
+  /// 1. 'custom' → 读 MediaCache（用户自定义，最高优先级）
+  /// 2. 'scraped' → 读 MediaCache（用户主动刮削）
+  /// 3. 'none' → 返回 null（用户主动清除，显示占位图）
+  /// 4. 'embedded' 或 null:
+  ///    a. 云音频: 优先从本地缓存文件读内嵌 → 失败回退 MediaCache
+  ///    b. 本地音频: 直接读文件内嵌 → 失败回退 MediaCache
   Future<ImageProvider?> _getResizedPic({
     required int width,
     required int height,
   }) async {
-    // 只有当请求尺寸不超过已缓存的封面尺寸（48x48）时才复用缓存
     if (_cover != null && width <= 48 && height <= 48) return _cover;
+
+    final gen = _coverGeneration;
+    final ratio = PlatformDispatcher.instance.views.first.devicePixelRatio;
+    final targetWidth = (width * ratio).round();
+    final targetHeight = (height * ratio).round();
+
+    final coverSource = await _getCoverSource();
+
+    // generation 变化说明 clearCoverCache/setCover 被调用过
+    if (gen != _coverGeneration) return _cover;
+    if (_cover != null && width <= 48 && height <= 48) return _cover;
+
+    if (coverSource == 'custom' || coverSource == 'scraped') {
+      try {
+        final audioId = await MetadataService.instance.computeAudioId(this);
+        if (audioId != null) {
+          final cached = await MediaCache.instance.getCover(audioId);
+          if (cached != null) {
+            if (gen == _coverGeneration && _cover == null) {
+              _cover = MemoryImage(cached.$1);
+            }
+            return _cover;
+          }
+          if (gen == _coverGeneration) await _setCoverSource('embedded');
+        }
+      } catch (e) {
+        LOGGER.e("[Audio] Failed to get ${coverSource}Cover: $e");
+      }
+    }
+
+    if (coverSource == 'none') {
+      return null;
+    }
 
     if (isCloudAudio) {
       final cachedPath = CloudCacheManager.instance.getCachedFilePath(path);
       if (cachedPath != null) {
-        final ratio = PlatformDispatcher.instance.views.first.devicePixelRatio;
-        return getPictureFromPath(
+        final pic = await getPictureFromPath(
           path: cachedPath,
-          width: (width * ratio).round(),
-          height: (height * ratio).round(),
-        ).then((pic) async {
-          if (pic != null) {
+          width: targetWidth,
+          height: targetHeight,
+        );
+        if (pic != null) {
+          if (gen == _coverGeneration && _cover == null) {
             _cover = MemoryImage(pic);
-            return _cover;
+            if (coverSource == null) await _setCoverSource('embedded');
           }
-
-          // 缓存文件无内嵌封面，尝试从 MediaCache 获取刮削的封面
-          try {
-            final audioId = await MetadataService.instance.computeAudioId(this);
-            if (audioId != null) {
-              final cached = await MediaCache.instance.getCover(audioId);
-              if (cached != null) {
-                _cover = MemoryImage(cached.$1);
-                return _cover;
-              }
-            }
-          } catch (e) {
-            LOGGER.e("[Audio] Failed to get cover from MediaCache: $e");
-          }
-          return null;
-        });
-      }
-
-      // 无本地缓存文件，直接从 MediaCache 获取刮削的封面
-      try {
-        final audioId = await MetadataService.instance.computeAudioId(this);
-        if (audioId != null) {
-          final cached = await MediaCache.instance.getCover(audioId);
-          if (cached != null) {
-            _cover = MemoryImage(cached.$1);
-            return _cover;
-          }
+          return _cover;
         }
-      } catch (e) {
-        LOGGER.e("[Audio] Failed to get cover from MediaCache: $e");
       }
-      return null;
+    } else {
+      final pic = await getPictureFromPath(
+        path: path,
+        width: targetWidth,
+        height: targetHeight,
+      );
+      if (pic != null) {
+        if (gen == _coverGeneration && _cover == null) {
+          _cover = MemoryImage(pic);
+          if (coverSource == null) await _setCoverSource('embedded');
+        }
+        return _cover;
+      }
     }
-    final ratio = PlatformDispatcher.instance.views.first.devicePixelRatio;
-    return getPictureFromPath(
-      path: path,
-      width: (width * ratio).round(),
-      height: (height * ratio).round(),
-    ).then((pic) async {
-      if (pic != null) return MemoryImage(pic);
 
-      // 文件内嵌封面不存在，尝试从 MediaCache 获取刮削的封面
-      try {
-        final audioId = await MetadataService.instance.computeAudioId(this);
-        if (audioId != null) {
-          final cached = await MediaCache.instance.getCover(audioId);
-          if (cached != null) {
-            final coverBytes = cached.$1;
-            return MemoryImage(coverBytes);
+    try {
+      final audioId = await MetadataService.instance.computeAudioId(this);
+      if (audioId != null) {
+        final cached = await MediaCache.instance.getCover(audioId);
+        if (cached != null) {
+          if (gen == _coverGeneration && _cover == null) {
+            _cover = MemoryImage(cached.$1);
           }
+          return _cover;
         }
-      } catch (e) {
-        LOGGER.e("[Audio] Failed to get cover from cache: $e");
       }
-      return null;
-    });
+    } catch (e) {
+      LOGGER.e("[Audio] Failed to get cover from MediaCache: $e");
+    }
+    return null;
   }
 
-  /// 缓存ImageProvider而不是Uint8List（bytes）
-  /// 缓存bytes时，每次加载图片都要重新解码，内存占用很大。快速滚动时能到700mb
-  /// 缓存ImageProvider不用重新解码。快速滚动时最多250mb
-  /// 48*48
-  Future<ImageProvider?> get cover {
-    if (_cover == null) {
-      return _getResizedPic(width: 48, height: 48).then((value) {
-        if (value == null) return null;
-
-        _cover = value;
-        return _cover;
-      });
+  /// 获取封面来源标记（内存缓存优先）
+  Future<String?> _getCoverSource() async {
+    if (_coverSourceQueried) return _coverSourceCache;
+    _coverSourceQueried = true;
+    try {
+      final audioId = await MetadataService.instance.computeAudioId(this);
+      if (audioId != null) {
+        _coverSourceCache = await MetadataStore.instance.getCoverSource(audioId);
+      }
+    } catch (e) {
+      LOGGER.e("[Audio] Failed to query cover_source: $e");
     }
-    return Future.value(_cover);
+    return _coverSourceCache;
+  }
+
+  /// 设置封面来源标记（同步更新内存缓存与 DB）
+  Future<void> _setCoverSource(String source) async {
+    _coverSourceCache = source;
+    _coverSourceQueried = true;
+    try {
+      final audioId = await MetadataService.instance.computeAudioId(this);
+      if (audioId != null) {
+        await MetadataStore.instance.updateCoverSource(audioId, source);
+      }
+    } catch (e) {
+      LOGGER.e("[Audio] Failed to update cover_source: $e");
+    }
+  }
+
+  /// 外部调用：设置封面来源标记（用于 EditTagDialog 等场景）
+  Future<void> setCoverSource(String source) async {
+    await _setCoverSource(source);
+  }
+
+  Future<ImageProvider?> get cover {
+    if (_cover != null) {
+      return Future.value(_cover);
+    }
+    if (_coverFuture != null) {
+      return _coverFuture!;
+    }
+    final gen = _coverGeneration;
+    _coverFuture = _getResizedPic(width: 48, height: 48).then((value) {
+      // 只在 generation 未变化时操作（未被 setCover/clearCoverCache 打断）
+      if (gen == _coverGeneration) {
+        _coverFuture = null;
+        if (_cover != null) {
+          AudioLibrary.instance.notifyUpdated();
+        }
+      }
+      return _cover;
+    });
+    return _coverFuture!;
   }
 
   void setCover(ImageProvider cover) {
+    final changed = !identical(_cover, cover);
     _cover = cover;
+    _coverGeneration++;
+    _coverFuture = Future.value(cover);
+    if (changed) {
+      AudioLibrary.instance.notifyUpdated();
+    }
   }
 
   /// 清除封面缓存，下次访问时重新加载
+  /// 注意：不重置 _coverSourceCache，保留来源标记以便下次按优先级加载
   void clearCoverCache() {
+    final hadCover = _cover != null;
     _cover = null;
+    _coverGeneration++;
+    _coverFuture = null;
     _largeCoverFuture = null;
+    if (hadCover) {
+      AudioLibrary.instance.notifyUpdated();
+    }
+  }
+
+  /// 强制重置封面来源查询状态（用于音频文件被替换、元数据被覆盖等场景）
+  void resetCoverSourceQuery() {
+    _coverSourceCache = null;
+    _coverSourceQueried = false;
+    clearCoverCache();
   }
 
   bool get isCloudAudio => by == 'Cloud';

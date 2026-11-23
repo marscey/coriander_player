@@ -21,61 +21,51 @@ class ScrollAwareFutureBuilder<T> extends StatefulWidget {
 class _ScrollAwareFutureBuilderState<T>
     extends State<ScrollAwareFutureBuilder<T>> {
   Future<T>? _future;
-  T? _cachedData;
+  bool _isDeferred = false;
 
-  void _createDeferredFuture() {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _createFuture();
+    });
+  }
+
+  void _createFuture() {
     if (!context.mounted) return;
 
-    // 如果已有缓存数据，直接使用
-    if (_cachedData != null) {
-      if (_future == null) {
-        setState(() {
-          _future = Future.value(_cachedData);
-        });
-      }
-      return;
-    }
-
-    // 检查是否应延迟加载（滚动中）
     if (Scrollable.recommendDeferredLoadingForContext(context)) {
-      if (_future != null) {
-        setState(() {
-          _future = null;
-        });
+      if (!_isDeferred) {
+        _isDeferred = true;
+        if (mounted) setState(() {});
       }
-      // 滚动停止后重试
       SchedulerBinding.instance.scheduleFrameCallback((_) {
         if (mounted) {
-          scheduleMicrotask(_createDeferredFuture);
+          scheduleMicrotask(_createFuture);
         }
       });
       return;
     }
 
-    // 创建新的 Future
-    setState(() {
+    _isDeferred = false;
+    if (_future == null) {
       _future = widget.future();
-    });
+      if (mounted) setState(() {});
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    _createDeferredFuture();
-
-    if (_future == null) {
-      return const Center(child: CircularProgressIndicator());
+    if (_future == null || _isDeferred) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _createFuture();
+      });
+      return const SizedBox.shrink();
     }
 
     return FutureBuilder<T>(
       future: _future,
-      builder: (context, snapshot) {
-        // 缓存成功加载的数据
-        if (snapshot.connectionState == ConnectionState.done &&
-            snapshot.data != null) {
-          _cachedData = snapshot.data;
-        }
-        return widget.builder(context, snapshot);
-      },
+      builder: widget.builder,
     );
   }
 }
