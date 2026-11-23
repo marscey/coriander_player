@@ -755,7 +755,7 @@ class _AudioTileState extends State<AudioTile> {
               useOwnLayer: true,
               quality: GlassQuality.premium,
               shape: const LiquidRoundedSuperellipse(borderRadius: 24),
-              settings: sheetSettings,
+              settings: sheetSettings(glassIsDark(context)),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 480),
                 child: Column(
@@ -1007,7 +1007,7 @@ class _AudioTileState extends State<AudioTile> {
               useOwnLayer: true,
               quality: GlassQuality.premium,
               shape: const LiquidRoundedSuperellipse(borderRadius: 24),
-              settings: sheetSettings,
+              settings: sheetSettings(glassIsDark(context)),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 480),
                 child: Column(

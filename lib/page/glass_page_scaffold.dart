@@ -144,10 +144,8 @@ class _GlassPageScaffoldState extends State<GlassPageScaffold> {
     }
     allMenuItems.addAll(widget.menuItems);
 
-    // 胶囊 settings：基于 navButtonSettings，glassColor 稍微更透
-    final pillSettings = navButtonSettings.copyWith(
-      glassColor: navButtonSettings.glassColor.withValues(alpha: 0.12),
-    );
+    // 胶囊 settings：统一走 searchPillSettings 预设
+    final pillSettings = searchPillSettings(glassIsDark(context));
 
     final hasLeading = widget.isSelectionMode
         ? true

@@ -407,7 +407,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage>
                   showDividers: true,
                   borderRadius: 22.0,
                   useOwnLayer: true,
-                  settings: buttonGroupSettings,
+                  settings: buttonGroupSettings(glassIsDark(context)),
                   children: [
                     Expanded(
                       child: GlassButton.custom(
@@ -673,7 +673,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage>
       child: GlassCard(
         padding: const EdgeInsets.all(16.0),
         shape: const LiquidRoundedSuperellipse(borderRadius: 20),
-        settings: navButtonSettings,
+        settings: navButtonSettings(glassIsDark(context)),
         child: Column(
           children: [
             Row(

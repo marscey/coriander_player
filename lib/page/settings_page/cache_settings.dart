@@ -549,7 +549,7 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
       return GlassContainer(
         useOwnLayer: true,
         shape: const LiquidRoundedSuperellipse(borderRadius: 12),
-        settings: cardSettings,
+        settings: cardSettings(glassIsDark(context)),
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Column(
@@ -635,7 +635,7 @@ class _CacheDetailDialogState extends State<_CacheDetailDialog>
                     height: 32,
                     useOwnLayer: isSelected,
                     settings: isSelected
-                        ? cardSettings.copyWith(
+                        ? cardSettings(glassIsDark(context)).copyWith(
                             glassColor: scheme.primary.withValues(alpha: 0.7),
                           )
                         : null,

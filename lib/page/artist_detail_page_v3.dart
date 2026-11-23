@@ -97,22 +97,6 @@ class _ArtistDetailPageV3State extends State<ArtistDetailPageV3>
 
   // ─── 玻璃效果参数（参考 showcase/ShowcaseGlassTheme + 底部导航栏 + 迷你播放器）───
 
-  static const _navButtonQuality = GlassQuality.premium;
-
-  /// 顶部导航按钮 — 参考 showcase detailHeaderButtons + 底部导航栏配置
-  static LiquidGlassSettings get _navButtonSettings => LiquidGlassSettings(
-        blur: 3,
-        thickness: 30,
-        ambientStrength: 1,
-        lightIntensity: 0.6,
-        lightAngle: 0.75 * 3.14159, // 135° Apple 标准
-        chromaticAberration: 0.3,
-        refractiveIndex: 1.59,
-        saturation: 0.7,
-        glassColor: const Color(0x3DFFFFFF), // Colors.white24
-        specularSharpness: GlassSpecularSharpness.medium,
-      );
-
   // ─── 生命周期 ───────────────────────────────────────
 
   @override
@@ -159,23 +143,6 @@ class _ArtistDetailPageV3State extends State<ArtistDetailPageV3>
       _isSearching = false;
       _searchFieldFocused = false;
     });
-  }
-
-  /// 导航栏玻璃设置（参考 showcase GlassBottomBar 配置）
-  LiquidGlassSettings get _barGlassSettings {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return LiquidGlassSettings(
-      glassColor: isDark ? const Color(0xAA1C1C1E) : const Color(0xAAF2F2F7),
-      thickness: 30,
-      blur: 3,
-      chromaticAberration: 0.3,
-      lightAngle: 0.75 * 3.14159, // 135° Apple 标准
-      lightIntensity: 0.6,
-      ambientStrength: 1,
-      refractiveIndex: 1.59,
-      saturation: 0.7,
-      specularSharpness: GlassSpecularSharpness.medium,
-    );
   }
 
   Future<void> _loadBackground() async {
@@ -326,7 +293,7 @@ class _ArtistDetailPageV3State extends State<ArtistDetailPageV3>
 
     return GlassScaffold(
       background: _buildBackground(),
-      settings: _navButtonSettings,
+      settings: navButtonSettings(glassIsDark(context)),
       statusBarStyle: GlassStatusBarStyle.auto,
       // 注意：不设 topEdgeFade/bottomEdgeFade。
       // edgeFade 的白色淡出在背景图未加载时会产生明显白色条带（见分析报告 v2）。
@@ -339,7 +306,7 @@ class _ArtistDetailPageV3State extends State<ArtistDetailPageV3>
       appBar: GlassAppBar(
         preferredSize: const Size.fromHeight(56.0),
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-        buttonSettings: _navButtonSettings,
+        buttonSettings: navButtonSettings(glassIsDark(context)),
         leading: GlassButton(
           icon: Icon(Icons.arrow_back_ios_new, size: 20),
           iconSize: 20,
@@ -368,7 +335,7 @@ class _ArtistDetailPageV3State extends State<ArtistDetailPageV3>
         actions: [
           GlassMenu(
             menuWidth: 220,
-            quality: _navButtonQuality,
+            quality: navButtonQuality,
             triggerBuilder: (context, toggleMenu) => GlassButton(
               onTap: toggleMenu,
               icon: Icon(Icons.more_horiz, size: 22),
@@ -456,7 +423,7 @@ class _ArtistDetailPageV3State extends State<ArtistDetailPageV3>
         iconLabelSpacing: 0,
         quality: GlassQuality.premium,
         interactionBehavior: GlassInteractionBehavior.full,
-        settings: _barGlassSettings,
+        settings: tabBarSettings(glassIsDark(context)),
         searchConfig: GlassSearchBarConfig(
           focusNode: _searchFocusNode,
           autoFocusOnExpand: false,
@@ -655,7 +622,7 @@ class _ArtistDetailPageV3State extends State<ArtistDetailPageV3>
                     showDividers: true,
                     borderRadius: 22.0,
                     useOwnLayer: true,
-                    settings: _navButtonSettings,
+                    settings: navButtonSettings(glassIsDark(context)),
                     children: [
                       Expanded(
                         child: GlassButton.custom(
@@ -799,7 +766,7 @@ class _ArtistDetailPageV3State extends State<ArtistDetailPageV3>
       child: GlassCard(
         padding: const EdgeInsets.all(16.0),
         shape: const LiquidRoundedSuperellipse(borderRadius: 20),
-        settings: _navButtonSettings,
+        settings: navButtonSettings(glassIsDark(context)),
         child: Column(
           children: [
             // 头像 + 信息
@@ -1119,18 +1086,7 @@ class _PlayBarPill extends StatelessWidget {
               width: double.infinity,
               height: _kBarH,
               shape: const LiquidRoundedSuperellipse(borderRadius: _kBarH / 2),
-              settings: LiquidGlassSettings(
-                glassColor:
-                    isDark ? const Color(0xCC1C1C1E) : const Color(0xCCF2F2F7),
-                thickness: 30,
-                blur: 3,
-                lightIntensity: 0.6,
-                chromaticAberration: 0.3,
-                refractiveIndex: 1.59,
-                saturation: 0.7,
-                ambientStrength: 1,
-                lightAngle: 0.75 * 3.14159,
-              ),
+              settings: playBarPillSettings(isDark),
               child: _PlayBarContent(
                 isMiniMode: isMiniMode,
                 isPlaying: isPlaying,

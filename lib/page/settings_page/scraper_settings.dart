@@ -157,7 +157,7 @@ class _ScraperSettingsDialogState extends State<ScraperSettingsDialog> {
         child: GlassContainer(
           useOwnLayer: true,
           shape: const LiquidRoundedSuperellipse(borderRadius: 12),
-          settings: listTileSettings,
+          settings: listTileSettings(scheme.brightness == Brightness.dark),
           child: Padding(
             padding:
                 const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),

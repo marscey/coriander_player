@@ -220,7 +220,6 @@ class _GlassSearchResultPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isDark = scheme.brightness == Brightness.dark;
     final sysBottom =
         (Theme.of(context).platform == TargetPlatform.iOS ||
                 Theme.of(context).platform == TargetPlatform.macOS)
@@ -242,7 +241,7 @@ class _GlassSearchResultPage extends StatelessWidget {
           bottomBarHeight: searchBarTotal,
           resizeToAvoidBottomInset: true,
           appBar: GlassAppBar(
-            buttonSettings: navButtonSettings,
+            buttonSettings: navButtonSettings(glassIsDark(context)),
             preferredSize: const Size.fromHeight(56.0),
             padding:
                 const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
@@ -273,7 +272,6 @@ class _GlassSearchResultPage extends StatelessWidget {
             child: _BottomSearchBar(
               controller: searchBarController,
               onSubmitted: onSubmitted,
-              isDark: isDark,
             ),
           ),
           body: _SearchResultScrollContent(
@@ -292,12 +290,10 @@ class _BottomSearchBar extends StatelessWidget {
   const _BottomSearchBar({
     required this.controller,
     required this.onSubmitted,
-    required this.isDark,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> onSubmitted;
-  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
@@ -306,18 +302,7 @@ class _BottomSearchBar extends StatelessWidget {
     final textColor = scheme.onSurface;
 
     return GlassContainer(
-      settings: LiquidGlassSettings(
-        glassColor:
-            isDark ? const Color(0xCC1C1C1E) : const Color(0xCCF2F2F7),
-        thickness: 30,
-        blur: 3,
-        lightIntensity: 0.6,
-        chromaticAberration: 0.3,
-        refractiveIndex: 1.59,
-        saturation: 0.7,
-        ambientStrength: 1,
-        lightAngle: kAppleLightAngle,
-      ),
+      settings: searchPillSettings(glassIsDark(context)),
       shape: const LiquidRoundedSuperellipse(borderRadius: 32.0),
       width: double.infinity,
       height: 50,

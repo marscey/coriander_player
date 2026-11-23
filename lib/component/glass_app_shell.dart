@@ -162,27 +162,10 @@ class _GlassAppShellState extends State<GlassAppShell> {
     _selectedTab = 0;
   }
 
-  // ─── 导航栏玻璃设置（照搬 Artist V3._barGlassSettings）─────
-
-  LiquidGlassSettings get _barGlassSettings {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return LiquidGlassSettings(
-      glassColor: isDark ? const Color(0xAA1C1C1E) : const Color(0xAAF2F2F7),
-      thickness: 30,
-      blur: 3,
-      chromaticAberration: 0.3,
-      lightAngle: kAppleLightAngle,
-      lightIntensity: 0.6,
-      ambientStrength: 1,
-      refractiveIndex: 1.59,
-      saturation: 0.7,
-      specularSharpness: GlassSpecularSharpness.medium,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
 
     // 检测是否在搜索结果页
     final location = GoRouterState.of(context).uri.toString();
@@ -212,7 +195,7 @@ class _GlassAppShellState extends State<GlassAppShell> {
     if (isSearchResult) {
       return GlassScaffold(
         background: buildGlassBackground(scheme),
-        settings: navButtonSettings,
+        settings: navButtonSettings(glassIsDark(context)),
         statusBarStyle: GlassStatusBarStyle.auto,
         edgeFade: false,
         edgeStyle: GlassScrollEdgeStyle.soft,
@@ -226,7 +209,7 @@ class _GlassAppShellState extends State<GlassAppShell> {
     // 正常 tab 页面：保留原有 GlassSearchableBottomBar + PlayBarPill
     return GlassScaffold(
       background: buildGlassBackground(scheme),
-      settings: navButtonSettings,
+      settings: navButtonSettings(glassIsDark(context)),
       statusBarStyle: GlassStatusBarStyle.auto,
       edgeFade: false,
       edgeStyle: GlassScrollEdgeStyle.soft,
@@ -277,7 +260,7 @@ class _GlassAppShellState extends State<GlassAppShell> {
         iconLabelSpacing: 0,
         quality: GlassQuality.premium,
         interactionBehavior: GlassInteractionBehavior.full,
-        settings: _barGlassSettings,
+        settings: tabBarSettings(isDark),
         searchConfig: GlassSearchBarConfig(
           focusNode: _searchFocusNode,
           autoFocusOnExpand: false,
@@ -596,18 +579,7 @@ class _PlayBarPill extends StatelessWidget {
               width: double.infinity,
               height: kBarHeight,
               shape: const LiquidRoundedSuperellipse(borderRadius: kBarHeight / 2),
-              settings: LiquidGlassSettings(
-                glassColor:
-                    isDark ? const Color(0xCC1C1C1E) : const Color(0xCCF2F2F7),
-                thickness: 30,
-                blur: 3,
-                lightIntensity: 0.6,
-                chromaticAberration: 0.3,
-                refractiveIndex: 1.59,
-                saturation: 0.7,
-                ambientStrength: 1,
-                lightAngle: 0.75 * 3.14159,
-              ),
+              settings: playBarPillSettings(isDark),
               child: _PlayBarContent(
                 isMiniMode: isMiniMode,
                 isPlaying: isPlaying,

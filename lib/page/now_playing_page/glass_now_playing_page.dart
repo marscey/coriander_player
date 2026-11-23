@@ -576,7 +576,7 @@ class _GlassNowPlayingInfoState extends State<_GlassNowPlayingInfo> {
                     child: GlassCard(
                       padding: EdgeInsets.zero,
                       shape: const LiquidRoundedSuperellipse(borderRadius: 20),
-                      settings: cardSettings,
+                      settings: cardSettings(glassIsDark(context)),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(20),
                         child: nowPlayingCover == null
@@ -864,9 +864,7 @@ class _GlassNowPlayingMainControls extends StatelessWidget {
                 width: 72,
                 height: 72,
                 useOwnLayer: true,
-                settings: navButtonSettings.copyWith(
-                  thickness: 30,
-                ),
+                settings: navButtonSettings(glassIsDark(context)),
                 shape: const LiquidRoundedSuperellipse(borderRadius: 36),
                 child: SizedBox(
                   width: 28,
@@ -898,9 +896,7 @@ class _GlassNowPlayingMainControls extends StatelessWidget {
                   width: 72,
                   height: 72,
                   useOwnLayer: true,
-                  settings: navButtonSettings.copyWith(
-                    thickness: 30,
-                  ),
+                  settings: navButtonSettings(glassIsDark(context)),
                   shape: const LiquidRoundedSuperellipse(borderRadius: 36),
                   child: Icon(
                     playerState == PlayerState.playing

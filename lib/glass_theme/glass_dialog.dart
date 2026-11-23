@@ -60,7 +60,7 @@ class GlassDialog extends StatelessWidget {
           useOwnLayer: true,
           quality: GlassQuality.premium,
           shape: const LiquidRoundedSuperellipse(borderRadius: 24),
-          settings: sheetSettings,
+          settings: dialogSettings(glassIsDark(context)),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: width ?? (isMobile ? double.infinity : 480),

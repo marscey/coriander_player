@@ -54,7 +54,7 @@ class __ArtistSeparatorEditDialogState
   Widget _buildSeparatorItem(String item) {
     if (_useGlass) {
       return GlassContainer(
-        settings: listTileSettings,
+        settings: listTileSettings(glassIsDark(context)),
         shape: const LiquidRoundedSuperellipse(borderRadius: 12),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -98,7 +98,7 @@ class __ArtistSeparatorEditDialogState
     if (_useGlass) {
       final scheme = Theme.of(context).colorScheme;
       return GlassContainer(
-        settings: listTileSettings,
+        settings: listTileSettings(glassIsDark(context)),
         shape: const LiquidRoundedSuperellipse(borderRadius: 12),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

@@ -147,7 +147,7 @@ class GlassBottomSheetBody extends StatelessWidget {
             useOwnLayer: true,
             quality: GlassQuality.premium,
             shape: const LiquidRoundedSuperellipse(borderRadius: 24),
-            settings: sheetSettings,
+            settings: sheetSettings(glassIsDark(context)),
             child: child,
           ),
         ),

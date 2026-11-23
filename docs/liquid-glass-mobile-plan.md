@@ -26,7 +26,14 @@
 
 另有可顺手清理的死代码/重复实现：`recent_plays_page.dart` 全项目无引用；搜索历史存在两份实现（`glass_app_shell.dart:22` 与 `search_result_page.dart:18`）。
 
-## 三、任务清单
+## 三、进度
+
+- ✅ **P1-1 预设单一真相源**（`b541994` 之后）：`glass_presets.dart` 重写为全函数式预设（`navButtonSettings` / `topBarSettings` / `tabBarSettings` / `pillSettings` / `searchPillSettings` / `playBarPillSettings` / `cardSettings` / `listTileSettings` / `settingsTileSettings` / `searchSettings` / `sheetSettings` / `dialogSettings` / `buttonGroupSettings`），全部接受 `isDark`；删除壳层 `_barGlassSettings`、Artist V3 的 `_navButtonSettings`/`_barGlassSettings`/`_navButtonQuality`，6 处裸写 `LiquidGlassSettings` 与 3 处 `copyWith` 调参全部收编。校验：`lib/` 内除 `glass_presets.dart` 已无 `LiquidGlassSettings(`。
+- ✅ **P1-2 深色模式全量**：所有预设按 `isDark` 出 tint，`sheetSettings` / `dialogSettings` 深色改用 0xE6/0xD9 深底保证文字可读；`buildGlassBackground` 深色暗化层加深（0.35/0.12）。
+- ✅ **P1-4 假玻璃替换**：`settings_tile.dart` 的 `Container + surface alpha` 改为真 `GlassContainer(listTileSettings)`。
+- ⬜ **P1-3 玻璃控件层**（`glass_controls.dart`：Switch / Slider / TextField / ProgressBar / Checkbox / PopupMenu）——下一步。
+
+## 四、任务清单
 
 ### P1：统一的基础设施（先做，否则后面每页都要返工）
 

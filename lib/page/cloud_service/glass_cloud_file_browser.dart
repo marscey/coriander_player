@@ -412,11 +412,9 @@ class _GlassCloudFileBrowserState extends State<GlassCloudFileBrowser> {
     // 胶囊高度：46（单行） → 60（两行）
     final pillHeight = 46 + (60 - 46) * progress;
 
-    // 胶囊 settings：与返回/更多按钮同源（navButtonSettings），
-    // 仅微调 glassColor alpha 稍微更透
-    final pillSettings = navButtonSettings.copyWith(
-      glassColor: navButtonSettings.glassColor.withValues(alpha: 0.12),
-    );
+    // 胶囊 settings：统一走 searchPillSettings 预设
+    final pillSettings =
+        searchPillSettings(Theme.of(context).brightness == Brightness.dark);
 
     return Padding(
       padding: EdgeInsets.only(
@@ -2067,7 +2065,7 @@ class _ScanToLibraryDialogState extends State<_ScanToLibraryDialog> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return GlassCard(
-      settings: sheetSettings,
+      settings: sheetSettings(scheme.brightness == Brightness.dark),
       margin: const EdgeInsets.symmetric(horizontal: 40),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -2177,7 +2175,7 @@ class _AddToLibraryDialogState extends State<_AddToLibraryDialog> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return GlassCard(
-      settings: sheetSettings,
+      settings: sheetSettings(scheme.brightness == Brightness.dark),
       margin: const EdgeInsets.symmetric(horizontal: 40),
       child: Padding(
         padding: const EdgeInsets.all(20.0),

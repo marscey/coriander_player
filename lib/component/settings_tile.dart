@@ -1,5 +1,7 @@
 import 'package:coriander_player/app_preference.dart';
+import 'package:coriander_player/glass_theme/glass_presets.dart';
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 /// 由 SettingsGroup 注入，用于 SettingsTile 检测是否在分组内
 class _SettingsGroupScope extends InheritedWidget {
@@ -70,17 +72,17 @@ class SettingsTile extends StatelessWidget {
     );
 
     if (useGlass && !grouped) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
-        decoration: BoxDecoration(
-          color: scheme.surface.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(14.0),
-          border: Border.all(
-            color: scheme.onSurface.withValues(alpha: 0.05),
-            width: 0.5,
+      return GlassContainer(
+        useOwnLayer: true,
+        shape: const LiquidRoundedSuperellipse(borderRadius: 14),
+        settings: listTileSettings(glassIsDark(context)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14.0,
+            vertical: 10.0,
           ),
+          child: content,
         ),
-        child: content,
       );
     }
 
