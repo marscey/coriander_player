@@ -1,0 +1,65 @@
+appId: com.senyepss.corianderPlayer
+---
+# ============================================================
+# 搜索功能测试
+# 覆盖场景：
+#   1. 搜索页面正常加载
+#   2. 输入搜索关键词
+#   3. 搜索结果展示
+#   4. 点击搜索结果进入详情
+# 注意事项：
+#   - 搜索依赖音乐库数据
+#   - 搜索支持本地和在线
+# ============================================================
+
+# ---------- 阶段 1：启动并进入搜索 ----------
+- launchApp
+- extendedWaitUntil:
+    visible: "音乐库"
+    timeout: 15000
+- tapOn: "搜索"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: search/01_loaded
+
+# ---------- 阶段 2：输入搜索关键词 ----------
+- tapOn:
+    text: "搜索"
+    optional: true
+- inputText: "周杰伦"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: search/02_search_results
+
+# ---------- 阶段 3：验证搜索结果 ----------
+# 如果有结果，应显示匹配的音频
+- assertVisible:
+    text: "周杰伦"
+    optional: true
+
+# ---------- 阶段 4：点击搜索结果 ----------
+- runFlow:
+    when:
+      visible: "周杰伦"
+    commands:
+      - tapOn:
+          text: "周杰伦"
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - takeScreenshot: search/03_result_detail
+      - back
+      - waitForAnimationToEnd:
+          timeout: 1000
+
+# ---------- 阶段 5：清空搜索 ----------
+- clearText
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: search/04_cleared
+
+# ---------- 阶段 6：搜索其他关键词 ----------
+- inputText: "最伟大的作品"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: search/05_second_search

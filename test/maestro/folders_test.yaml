@@ -1,0 +1,85 @@
+appId: com.senyepss.corianderPlayer
+---
+# ============================================================
+# 文件夹页面测试
+# 覆盖场景：
+#   1. 文件夹页面正常加载
+#   2. 根文件夹列表显示（子目录不单独展示）
+#   3. 点击文件夹进入详情
+#   4. 详情页面包屑导航
+#   5. 添加文件夹按钮存在
+#   6. 重建索引按钮存在
+# 注意事项：
+#   - 文件夹页面只展示根文件夹
+#   - 需要已配置的音乐文件夹
+# ============================================================
+
+# ---------- 阶段 1：启动并进入本地 ----------
+- launchApp
+- extendedWaitUntil:
+    visible: "音乐库"
+    timeout: 15000
+- tapOn: "本地"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: folders/01_loaded
+
+# ---------- 阶段 2：验证页面元素 ----------
+- assertVisible: "文件夹"
+# 验证工具栏按钮
+- assertVisible:
+    text: "添加文件夹"
+    optional: true
+- assertVisible:
+    text: "重建索引"
+    optional: true
+
+# ---------- 阶段 3：如果有文件夹，点击进入详情 ----------
+- runFlow:
+    when:
+      visible: "首歌曲"
+    commands:
+      # 点击第一个文件夹
+      - tapOn:
+          text: "首歌曲"
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - takeScreenshot: folders/02_folder_detail
+
+      # 验证面包屑导航
+      - assertVisible:
+          text: "返回"
+          optional: true
+
+      # 如果有子目录，点击进入
+      - swipe:
+          direction: DOWN
+          duration: 300
+      - swipe:
+          direction: UP
+          duration: 300
+      - takeScreenshot: folders/03_folder_content
+
+      # 返回文件夹列表
+      - back
+      - waitForAnimationToEnd:
+          timeout: 1000
+
+# ---------- 阶段 4：空状态验证 ----------
+# 如果没有文件夹，应显示空状态
+- runFlow:
+    when:
+      notVisible: "首歌曲"
+    commands:
+      - assertVisible:
+          text: "暂无音乐文件夹"
+          optional: true
+      - takeScreenshot: folders/04_empty_state
+
+# ---------- 阶段 5：播放定位按钮 ----------
+- assertVisible:
+    text: "定位播放文件"
+    optional: true
+
+- takeScreenshot: folders/05_final

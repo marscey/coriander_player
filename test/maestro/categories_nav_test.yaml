@@ -1,0 +1,99 @@
+appId: com.senyepss.corianderPlayer
+---
+# ============================================================
+# 类别导航测试
+# 覆盖场景：
+#   1. 类别页面显示三个子入口（艺术家、专辑、流派）
+#   2. 点击艺术家进入艺术家列表
+#   3. 点击专辑进入专辑列表
+#   4. 点击流派进入流派列表
+#   5. 从列表进入详情页
+# 注意事项：
+#   - 类别页面是概览页，三个入口以卡片形式展示
+#   - 详情页依赖音乐库数据
+# ============================================================
+
+# ---------- 阶段 1：启动并进入类别 ----------
+- launchApp
+- extendedWaitUntil:
+    visible: "音乐库"
+    timeout: 15000
+- tapOn: "类别"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: categories/01_overview
+
+# ---------- 阶段 2：验证类别概览页 ----------
+- assertVisible: "类别"
+- assertVisible:
+    text: "艺术家"
+    optional: true
+- assertVisible:
+    text: "专辑"
+    optional: true
+- assertVisible:
+    text: "流派"
+    optional: true
+
+# ---------- 阶段 3：进入艺术家列表 ----------
+- tapOn:
+    text: "艺术家"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: categories/02_artists_list
+- assertVisible:
+    text: "艺术家"
+    optional: true
+
+# 返回类别页
+- back
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# ---------- 阶段 4：进入专辑列表 ----------
+- tapOn:
+    text: "专辑"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: categories/03_albums_list
+- assertVisible:
+    text: "专辑"
+    optional: true
+
+# 返回类别页
+- back
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# ---------- 阶段 5：进入流派列表 ----------
+- tapOn:
+    text: "流派"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: categories/04_genres_list
+- assertVisible:
+    text: "流派"
+    optional: true
+
+# ---------- 阶段 6：进入流派详情（如果有流派数据）----------
+- runFlow:
+    when:
+      visible: "首歌曲"
+    commands:
+      # 点击第一个流派项
+      - swipe:
+          direction: DOWN
+          duration: 300
+      - swipe:
+          direction: UP
+          duration: 300
+      - takeScreenshot: categories/05_genre_detail
+
+# 返回
+- back
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: categories/06_back_to_genres

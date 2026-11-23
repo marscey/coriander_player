@@ -1,0 +1,73 @@
+appId: com.senyepss.corianderPlayer
+---
+# ============================================================
+# 音乐库页面测试
+# 覆盖场景：
+#   1. 音乐库页面正常加载
+#   2. 音频列表显示（有音乐时）
+#   3. 音频详情页可打开
+#   4. 正在播放页面可打开
+# 注意事项：
+#   - 需要音乐库中有音频数据
+#   - 无音频时验证空状态提示
+# ============================================================
+
+# ---------- 阶段 1：启动并进入音乐库 ----------
+- launchApp
+- extendedWaitUntil:
+    visible: "音乐库"
+    timeout: 15000
+- takeScreenshot: audios/01_loaded
+
+# ---------- 阶段 2：验证页面元素 ----------
+# 标题和工具栏应可见
+- assertVisible: "音乐库"
+
+# ---------- 阶段 3：如果有音频，点击第一首 ----------
+# 使用 optional 避免无音频时测试失败
+- assertVisible:
+    text: "首歌曲"
+    optional: true
+
+# 如果列表中有音频，尝试点击进入详情
+- runFlow:
+    when:
+      visible: "首歌曲"
+    commands:
+      - tapOn:
+          text: "首歌曲"
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - takeScreenshot: audios/02_audio_detail
+
+# ---------- 阶段 4：打开正在播放页面 ----------
+# 点击底部迷你播放器（如果存在）
+- assertVisible:
+    text: "正在播放"
+    optional: true
+- runFlow:
+    when:
+      visible: "正在播放"
+    commands:
+      - tapOn: "正在播放"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - takeScreenshot: audios/03_now_playing
+      # 返回
+      - back
+
+# ---------- 阶段 5：排序功能 ----------
+# 点击排序按钮（三点菜单）
+- tapOn:
+    text: "更多"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: audios/04_sort_menu
+
+# 关闭菜单
+- back
+
+# ---------- 阶段 6：返回验证 ----------
+- takeScreenshot: audios/05_final

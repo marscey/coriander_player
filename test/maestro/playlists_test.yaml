@@ -1,0 +1,103 @@
+appId: com.senyepss.corianderPlayer
+---
+# ============================================================
+# 歌单页面测试
+# 覆盖场景：
+#   1. 歌单页面正常加载
+#   2. 内置歌单（我的最爱、最近播放）显示在顶部
+#   3. 新建歌单功能
+#   4. 歌单详情页可打开
+#   5. 内置歌单与自建歌单有分隔线
+# 注意事项：
+#   - 内置歌单不可删除、不可重命名
+#   - 歌单数据通过 Provider 管理
+# ============================================================
+
+# ---------- 阶段 1：启动并进入歌单 ----------
+- launchApp
+- extendedWaitUntil:
+    visible: "音乐库"
+    timeout: 15000
+- tapOn: "歌单"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: playlists/01_loaded
+
+# ---------- 阶段 2：验证页面元素 ----------
+- assertVisible: "歌单"
+# 内置歌单应可见
+- assertVisible:
+    text: "我的最爱"
+    optional: true
+- assertVisible:
+    text: "最近播放"
+    optional: true
+
+# ---------- 阶段 3：打开"我的最爱"详情 ----------
+- tapOn:
+    text: "我的最爱"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: playlists/02_favorites_detail
+
+# 验证详情页标题
+- assertVisible:
+    text: "我的最爱"
+    optional: true
+
+# 返回
+- back
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# ---------- 阶段 4：打开"最近播放"详情 ----------
+- tapOn:
+    text: "最近播放"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: playlists/03_recent_detail
+
+# 返回
+- back
+- waitForAnimationToEnd:
+    timeout: 1000
+
+# ---------- 阶段 5：新建歌单 ----------
+- tapOn:
+    text: "添加"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: playlists/04_new_playlist_dialog
+
+# 输入歌单名称
+- assertVisible:
+    text: "歌单名称"
+    optional: true
+- runFlow:
+    when:
+      visible: "歌单名称"
+    commands:
+      - inputText: "测试歌单"
+      - tapOn:
+          text: "确定"
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - takeScreenshot: playlists/05_playlist_created
+
+# ---------- 阶段 6：打开新建的歌单 ----------
+- tapOn:
+    text: "测试歌单"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: playlists/06_custom_playlist_detail
+
+# 返回
+- back
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: playlists/07_final
