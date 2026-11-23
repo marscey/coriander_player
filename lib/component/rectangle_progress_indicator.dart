@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:coriander_player/play_service/play_service.dart';
-import 'package:coriander_player/utils.dart';
 import 'package:flutter/material.dart';
 
 class RectangleProgressIndicator extends StatefulWidget {
@@ -46,7 +45,6 @@ class _RectangleProgressIndicatorState
     final playbackService = PlayService.instance.playbackService;
     final len = playbackService.displayLength;
     final pos = playbackService.displayPosition;
-    print("[DEBUG] MiniProgress: len=$len, pos=$pos, isRestored=${playbackService.isRestoredState}");
     progress.value = len > 0 ? (pos / len).clamp(0.0, 1.0) : 0.0;
   }
 

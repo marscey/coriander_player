@@ -1,11 +1,11 @@
 // ignore_for_file: unnecessary_this
 
 import 'dart:io';
+import 'package:coriander_player/app_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:pinyin/pinyin.dart';
 
 extension StringHMMSS on Duration {
@@ -101,54 +101,147 @@ void showTextOnSnackBar(String text) {
 final LOGGER_MEMORY = MemoryOutput(
   secondOutput: kDebugMode ? ConsoleOutput() : null,
 );
+
+/// 把 logger 的输出同步落盘，交给 DebugLogger
+class _FileLogOutput extends LogOutput {
+  @override
+  void output(OutputEvent event) {
+    for (final line in event.lines) {
+      DebugLogger.instance.log(line);
+    }
+  }
+}
+
 final LOGGER = Logger(
   filter: ProductionFilter(),
   printer: SimplePrinter(colors: false),
-  output: LOGGER_MEMORY,
+  output: MultiOutput([LOGGER_MEMORY, _FileLogOutput()]),
   level: Level.all,
 );
 
-/// 调试日志写入文件，用于真机无法查看 flutter logs 的场景
+/// 运行日志落盘
+///
+/// 路径：macOS 为 `~/Library/Logs/coriander_player/`，其他平台为 `<appData>/logs/`。
+/// 按天切分（app-YYYY-MM-DD.log），默认保留最近 7 天，追加写入不清空。
 class DebugLogger {
+  static const int _retainDays = 7;
+  static const int _maxMemoryLines = 3000;
+
   static final DebugLogger _instance = DebugLogger._();
   static DebugLogger get instance => _instance;
   DebugLogger._();
 
-  File? _logFile;
   final List<String> _memLogs = [];
-  bool _initialized = false;
+  Directory? _dir;
+  IOSink? _sink;
+  String? _dayKey;
+  Future<void>? _initFuture;
 
-  Future<void> init() async {
-    if (_initialized) return;
+  Future<void> init() => _initFuture ??= _init();
+
+  Future<void> _init() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      _logFile = File(p.join(dir.path, 'debug.log'));
-      // 启动时清空旧日志
-      await _logFile!.writeAsString('');
-      _initialized = true;
-    } catch (_) {}
+      _dir = await getLogsDir();
+      _openSink(DateTime.now());
+      _sink?.writeln('===== app start ${DateTime.now()} =====');
+      _cleanupOldLogs();
+    } catch (err) {
+      // 日志不可写不应阻塞启动
+      stdout.writeln('[log] init failed: $err');
+    }
   }
 
   void log(String message) {
-    final ts = DateTime.now().toString().substring(11, 23);
-    final entry = '[$ts] $message';
+    final now = DateTime.now();
+    final entry = '[${_clock(now)}] $message';
     _memLogs.add(entry);
-    _logFile?.writeAsString('$entry\n', mode: FileMode.append);
+    if (_memLogs.length > _maxMemoryLines) _memLogs.removeAt(0);
+
+    final sink = _sink;
+    if (sink == null) return;
+
+    final key = _dateKey(now);
+    if (key != _dayKey) {
+      _openSink(now);
+      _cleanupOldLogs();
+    }
+    _sink?.writeln(entry);
   }
 
+  File get _currentFile {
+    final dir = _dir;
+    if (dir == null) throw StateError('日志目录未初始化');
+    return File(p.join(dir.path, 'app-${_dayKey ?? _dateKey(DateTime.now())}.log'));
+  }
+
+  void _openSink(DateTime now) {
+    try {
+      _dayKey = _dateKey(now);
+      _sink?.flush();
+      _sink?.close();
+      final dir = _dir;
+      if (dir == null) return;
+      final file = File(p.join(dir.path, 'app-${_dayKey!}.log'));
+      if (!file.parent.existsSync()) file.parent.createSync(recursive: true);
+      _sink = file.openWrite(mode: FileMode.append);
+    } catch (err) {
+      _sink = null;
+      stdout.writeln('[log] open failed: $err');
+    }
+  }
+
+  void _cleanupOldLogs() {
+    try {
+      final dir = _dir;
+      if (dir == null || !dir.existsSync()) return;
+      final limit = DateTime.now().subtract(const Duration(days: _retainDays));
+      for (final entity in dir.listSync()) {
+        if (entity is! File || !entity.path.endsWith('.log')) continue;
+        if (entity.statSync().modified.isBefore(limit)) entity.deleteSync();
+      }
+    } catch (_) {}
+  }
+
+  /// 读取当天日志文件；文件不可用时回退到内存日志
   Future<String> readLogs() async {
-    if (_logFile == null) return '日志未初始化';
-    if (!await _logFile!.exists()) return '日志文件不存在';
-    return _logFile!.readAsString();
+    try {
+      final file = _currentFile;
+      if (await file.exists()) {
+        final text = await file.readAsString();
+        if (text.isNotEmpty) return text;
+      }
+    } catch (_) {}
+    if (_memLogs.isEmpty) return '暂无日志';
+    return _memLogs.join('\n');
   }
 
   Future<void> clear() async {
     _memLogs.clear();
-    await _logFile?.writeAsString('');
+    try {
+      _sink?.flush();
+      final file = _currentFile;
+      if (await file.exists()) await file.writeAsString('');
+    } catch (_) {}
   }
+
+  /// 日志目录绝对路径，方便"打开日志目录"
+  Future<String?> logsPath() async {
+    try {
+      return (await getLogsDir()).path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _dateKey(DateTime t) =>
+      '${t.year.toString().padLeft(4, '0')}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
+
+  String _clock(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}.${t.millisecond.toString().padLeft(3, '0')}';
 }
 
-/// 便捷函数：同时输出到 print 和 DebugLogger
+/// 便捷函数：写一条运行日志（同时进内存与文件）
 void debugLog(String message) {
-  DebugLogger.instance.log(message);
+  LOGGER.d(message);
 }
+

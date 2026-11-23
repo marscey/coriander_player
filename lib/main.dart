@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:ui';
 
+import 'package:coriander_player/app_storage.dart';
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/cloud_service/cloud_cache_manager.dart';
@@ -83,12 +85,13 @@ Future<void> initWindow() async {
     if (PlatformHelper.isWindows) {
       await trayManager.setIcon('app_icon.ico');
     } else if (PlatformHelper.isMacOS) {
+      // macOS 未打包 PNG 托盘图标，沿用系统状态栏默认图标
       await trayManager.setIcon('AppIcon');
     } else {
       await trayManager.setIcon('app_icon.png');
     }
   } catch (e) {
-    LOGGER.e('Failed to set tray icon: $e');
+    LOGGER.w('托盘图标设置失败（不影响主功能）: $e');
   }
 
   await _updateTrayMenu();
@@ -209,40 +212,75 @@ Future<void> loadPrefFont() async {
   }
 }
 
+/// 安装全局错误钩子：未捕获异常写入运行日志，便于事后排查
+void _installErrorHandlers() {
+  FlutterError.onError = (details) {
+    LOGGER.e('[flutter] ${details.exceptionAsString()}',
+        stackTrace: details.stack);
+    FlutterError.presentError(details);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    LOGGER.e('[async] $error', stackTrace: stack);
+    return true;
+  };
+}
+
+/// 启动阶段单步容错：某一步失败只记录日志，不阻断后续启动
+Future<T?> _guardValue<T>(String name, Future<T> Function() action) async {
+  try {
+    return await action();
+  } catch (err, trace) {
+    LOGGER.e('[init] $name 失败: $err', stackTrace: trace);
+    return null;
+  }
+}
+
+Future<void> _guard(String name, Future<void> Function() action) async {
+  await _guardValue<dynamic>(name, action);
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 日志必须最先初始化：此后任何一步失败都能落到日志文件
+  await DebugLogger.instance.init();
+  _installErrorHandlers();
+  LOGGER.i('[init] app start, platform=${Platform.operatingSystem}');
+
   // 预热 Liquid Glass shader，消除首次渲染白闪
-  await LiquidGlassWidgets.initialize();
+  await _guard('预热 Liquid Glass', LiquidGlassWidgets.initialize);
 
   MediaKit.ensureInitialized();
 
-  await RustLib.init();
+  await _guard('初始化 Rust 库', RustLib.init);
 
   initRustLogger().listen((msg) {
     LOGGER.i("[rs]: $msg");
   });
 
   if (PlatformHelper.isDesktop) {
-    await HotkeysHelper.unregisterAll();
-    HotkeysHelper.registerHotKeys();
+    await _guard('注册全局快捷键', () async {
+      await HotkeysHelper.unregisterAll();
+      HotkeysHelper.registerHotKeys();
+    });
   }
 
-  await migrateAppData();
+  await _guard('迁移旧数据目录', migrateAppData);
 
-  // DebugLogger 必须在任何使用前初始化，不受 settings.json 是否存在影响
-  await DebugLogger.instance.init();
+  final appDataDir = await _guardValue('读取数据目录', getAppDataDir);
+  final supportPath = appDataDir?.path;
+  LOGGER.i('[init] app data dir: ${supportPath ?? "<unavailable>"}');
 
-  final supportPath = (await getAppDataDir()).path;
-  if (File(PlatformHelper.joinPaths([supportPath, "settings.json"]))
-      .existsSync()) {
-    await AppSettings.readFromJson();
+  if (supportPath != null &&
+      File(PlatformHelper.joinPaths([supportPath, "settings.json"]))
+          .existsSync()) {
+    await _guard('读取设置', AppSettings.readFromJson);
 
-    await CloudCacheManager.init();
+    await _guard('初始化云缓存', CloudCacheManager.init);
     CloudCacheManager.instance
         .setMaxCacheSizeMB(AppSettings.instance.cloudCacheMaxSizeMB);
 
-    await PlatformDependencyManager.instance.initialize();
+    await _guard('初始化平台依赖', PlatformDependencyManager.instance.initialize);
 
     final dependencyManager = PlatformDependencyManager.instance;
     if (AppSettings.instance.playerEngineType != null &&
@@ -250,35 +288,38 @@ Future<void> main() async {
             .isPlayerEngineSupported(AppSettings.instance.playerEngineType!)) {
       AppSettings.instance.playerEngineType =
           dependencyManager.getRecommendedPlayerEngine();
-      await AppSettings.instance.saveSettings();
+      await _guard('保存设置', AppSettings.instance.saveSettings);
     }
 
-    await loadPrefFont();
+    await _guard('加载自定义字体', loadPrefFont);
   }
-  if (File(PlatformHelper.joinPaths([supportPath, "app_preference.json"]))
-      .existsSync()) {
-    await AppPreference.read();
+  if (supportPath != null &&
+      File(PlatformHelper.joinPaths([supportPath, "app_preference.json"]))
+          .existsSync()) {
+    await _guard('读取偏好', AppPreference.read);
   }
   final welcome = PlatformHelper.isMobile
       ? false
-      : !File(PlatformHelper.joinPaths([supportPath, "index.json"]))
-          .existsSync();
+      : supportPath != null &&
+          !File(PlatformHelper.joinPaths([supportPath, "index.json"]))
+              .existsSync();
 
-  await initWindow();
+  await _guard('初始化窗口', initWindow);
 
-  await RecentPlayService.instance.load();
+  await _guard('加载最近播放', RecentPlayService.instance.load);
 
   // GenreService 需要在 AudioLibrary 初始化之后加载
   // 但 AudioLibrary.initFromIndex() 在用户选择文件夹后才调用
   // 所以先初始化 GenreService（此时为空），后续在 AudioLibrary 初始化后刷新
-  await GenreService.instance.load();
+  await _guard('加载流派', GenreService.instance.load);
 
-  await ScraperOrchestrator.instance.initDefaults();
+  await _guard('初始化刮削器', ScraperOrchestrator.instance.initDefaults);
 
-  await PlayService.instance.initialize();
+  await _guard('初始化播放服务', PlayService.instance.initialize);
 
   final cloudServiceManager = CloudServiceManager();
 
+  LOGGER.i('[init] bootstrap done, launching UI (welcome=$welcome)');
   runApp(LiquidGlassWidgets.wrap(
     child: App(welcome: welcome, cloudServiceManager: cloudServiceManager),
   ));

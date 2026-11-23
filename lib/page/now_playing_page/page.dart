@@ -661,7 +661,6 @@ class _NowPlayingSliderState extends State<_NowPlayingSlider> {
               final defaultDuration = playbackService.displayLength;
               final defaultPosition = playbackService.displayPosition;
               final defaultBuffer = playbackService.displayBuffer;
-              print("[DEBUG] NowPlayingSlider: isRestored=$isRestored, displayLen=$defaultDuration, displayPos=$defaultPosition");
               return StreamBuilder(
                 stream: playbackService.durationStream,
                 builder: (context, durationSnapshot) {

@@ -11,7 +11,6 @@ import 'package:coriander_player/lyric/lyric.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/src/bass/bass_player.dart';
 import 'package:coriander_player/page/search_page/search_page.dart';
-import 'package:coriander_player/utils.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';

@@ -1,9 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/app_storage.dart';
 import 'package:coriander_player/utils.dart';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 
 /// 播放状态持久化服务
 ///
@@ -16,9 +15,7 @@ class PlaybackStateService {
   static const String _fileName = "playback_state.json";
 
   Future<Directory> get _appDataDir async {
-    final dir = await getApplicationDocumentsDirectory();
-    return Directory(path.join(dir.path, "coriander_player"))
-        .create(recursive: true);
+    return getAppDataDir();
   }
 
   /// 保存播放状态到磁盘

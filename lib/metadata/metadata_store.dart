@@ -1,5 +1,8 @@
 import 'dart:io';
 
+import 'package:coriander_player/app_storage.dart';
+import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/utils.dart';
 import 'package:logger/logger.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
@@ -205,17 +208,36 @@ class MetadataStore {
   }
 
   Future<Database> _initDb() async {
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, _dbName);
+    try {
+      final path = await _dbPath();
+      _log.i('[MetadataStore] Opening database at: $path');
+      return await openDatabase(
+        path,
+        version: _dbVersion,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+      );
+    } catch (err, trace) {
+      // 数据库不可用时不能让整个应用启动失败：退化为内存库，功能可用但不持久化
+      LOGGER.e('[MetadataStore] 打开数据库失败，回退到内存数据库: $err',
+          stackTrace: trace);
+      return openDatabase(
+        inMemoryDatabasePath,
+        version: _dbVersion,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+      );
+    }
+  }
 
-    _log.i('[MetadataStore] Opening database at: $path');
-
-    return openDatabase(
-      path,
-      version: _dbVersion,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-    );
+  Future<String> _dbPath() async {
+    // macOS 交给应用数据目录（Application Support），
+    // 避免 sqflite 默认把库建在 ~/Documents 被云盘抽空
+    if (PlatformHelper.isMacOS) {
+      final dir = await getAppDataDir();
+      return p.join(dir.path, _dbName);
+    }
+    return p.join(await getDatabasesPath(), _dbName);
   }
 
   Future<void> _onCreate(Database db, int version) async {

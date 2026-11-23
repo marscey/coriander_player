@@ -166,7 +166,18 @@ lib/
 
 **Metadata Flow**: `MetadataService` computes `contentHash` (local: SHA256 of file head; cloud: MD5 of path) as stable ID -> checks `MetadataStore` (SQLite) -> if miss, `ScraperOrchestrator` dispatches to enabled scrapers -> results cached in `MediaCache` + `MetadataStore`. Auto-scrape runs in background after playback; only exact matches are auto-saved.
 
-### Platform-Specific Notes
+### App Data & Logs
+
+Single source of truth: `lib/app_storage.dart` (`getAppDataDir`, `getLogsDir`, `migrateAppData`). Never hardcode data paths elsewhere; `app_settings.dart` re-exports these helpers.
+
+- **Data**:
+  - macOS: `~/Library/Application Support/coriander_player/` (settings.json, app_preference.json, playback_state.json, index.json, playlists.json, recent_plays.json, lyric_source.json, cloud_audios.json, coriander_metadata.db)
+  - Windows/Linux/Android/iOS: `getApplicationDocumentsDirectory()/coriander_player/` (unchanged legacy behavior)
+  - Do **not** put app data in `~/Documents` on macOS: iCloud "optimize storage" turns files into `compressed,dataless` placeholders that fail to read and break startup.
+- **Logs**: macOS `~/Library/Logs/coriander_player/app-YYYY-MM-DD.log` (Console.app searchable); other platforms `<appData>/logs/`. Daily rotation, 7 days retained. In-app: Settings → 缓存管理 →「查看运行日志」（可清除 / 打开目录）。
+- **Legacy migration**: `migrateAppData()` runs at startup, one-shot (skipped when the target dir is non-empty), copies readable files and skips dataless placeholders.
+- **Startup**: `main()` initializes `DebugLogger` first, installs `FlutterError.onError` + `PlatformDispatcher.onError`, then wraps every init step in `_guard` so one failing service logs and does not block the UI.
+
 
 - **BASS library** (desktop only): Native audio libs must be present in `windows/bass/` or `macos/bass/`. CMake/build scripts copy them to the app bundle automatically.
 - **WASAPI**: Windows-only audio output API. macOS/Linux do not need `basswasapi` files.

@@ -10,6 +10,7 @@ import 'package:coriander_player/lyric/lyric_source.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/app_paths.dart' as app_paths;
 import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/utils.dart';
 import 'package:filepicker_windows/filepicker_windows.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -114,17 +115,17 @@ class _FolderSelectorViewState extends State<FolderSelectorView> {
   // 平台特定的文件夹选择函数
   Future<String?> pickSingleFolder() async {
     if (PlatformHelper.isWindows) {
-      print("1. 准备调用DirectoryPicker");
+      LOGGER.d("[welcome] 准备调用 DirectoryPicker");
       final dirPicker = DirectoryPicker();
       dirPicker.title = "选择文件夹";
-      print("2. 调用getDirectory()");
+      LOGGER.d("[welcome] 调用 getDirectory()");
       final dir = dirPicker.getDirectory();
       return dir?.path;
     } else {
       // 非Windows平台使用file_picker
-      print("1. 准备调用FilePicker");
+      LOGGER.d("[welcome] 准备调用 FilePicker");
       final result = await FilePicker.platform.getDirectoryPath();
-      print("2. 调用getDirectoryPath()");
+      LOGGER.d("[welcome] 调用 getDirectoryPath()");
       return result;
     }
   }
@@ -137,7 +138,7 @@ class _FolderSelectorViewState extends State<FolderSelectorView> {
           children: [
             FilledButton(
               onPressed: () async {
-                print("开始点击添加文件夹按钮");
+                LOGGER.d("[welcome] 点击添加文件夹");
                 final path = await pickSingleFolder();
                 if (path == null) return;
 

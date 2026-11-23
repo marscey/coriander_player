@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:coriander_player/app_preference.dart';
 import 'package:coriander_player/app_settings.dart';
 import 'package:coriander_player/component/settings_tile.dart';
@@ -251,7 +253,7 @@ class DebugLogTile extends StatelessWidget {
         child: Row(
           children: [
             Text(
-              '查看缓存诊断日志',
+              '查看运行日志',
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 18,
@@ -290,6 +292,20 @@ class _DebugLogSheet extends StatelessWidget {
                     Navigator.pop(context);
                   },
                   child: const Text('清除'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final path = await DebugLogger.instance.logsPath();
+                    if (path == null) return;
+                    if (PlatformHelper.isMacOS) {
+                      await Process.run('open', [path]);
+                    } else if (PlatformHelper.isWindows) {
+                      await Process.run('explorer', [path]);
+                    } else if (PlatformHelper.isLinux) {
+                      await Process.run('xdg-open', [path]);
+                    }
+                  },
+                  child: const Text('打开目录'),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
