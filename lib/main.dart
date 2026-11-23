@@ -13,6 +13,7 @@ import 'package:coriander_player/library/genre_service.dart';
 import 'package:coriander_player/lyric/lyric_source.dart';
 import 'package:coriander_player/platform_dependency_manager.dart';
 import 'package:coriander_player/platform_helper.dart';
+import 'package:coriander_player/single_instance.dart';
 import 'package:coriander_player/metadata/scraper_orchestrator.dart';
 import 'package:coriander_player/play_service/play_service.dart';
 import 'package:coriander_player/play_service/recent_play_service.dart';
@@ -245,6 +246,18 @@ Future<void> main() async {
   _installErrorHandlers();
   LOGGER.i('[init] app start, platform=${Platform.operatingSystem}');
 
+  // 桌面端单实例：已有实例时请求其显示窗口并退出本次启动
+  if (!await SingleInstance.acquire(
+    onActivate: () async {
+      if (PlatformHelper.isDesktop) {
+        await windowManager.show();
+        await windowManager.focus();
+      }
+    },
+  )) {
+    exit(0);
+  }
+
   // 预热 Liquid Glass shader，消除首次渲染白闪
   await _guard('预热 Liquid Glass', LiquidGlassWidgets.initialize);
 
@@ -296,6 +309,9 @@ Future<void> main() async {
           .existsSync()) {
     await _guard('读取偏好', AppPreference.read);
   }
+  LOGGER.i('[init] glass: enabled=${AppPreference.instance.liquidGlassEnabled}, '
+      'mobile=${PlatformHelper.isMobile}, '
+      'active=${AppPreference.instance.glassActive}');
   final welcome = PlatformHelper.isMobile
       ? false
       : supportPath != null &&
