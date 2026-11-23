@@ -84,11 +84,9 @@ Future<void> initWindow() async {
   try {
     if (PlatformHelper.isWindows) {
       await trayManager.setIcon('app_icon.ico');
-    } else if (PlatformHelper.isMacOS) {
-      // macOS 未打包 PNG 托盘图标，沿用系统状态栏默认图标
-      await trayManager.setIcon('AppIcon');
     } else {
-      await trayManager.setIcon('app_icon.png');
+      // macOS / Linux 托盘走 Flutter asset（tray_manager 用 rootBundle 读图）
+      await trayManager.setIcon('assets/tray/app_icon.png');
     }
   } catch (e) {
     LOGGER.w('托盘图标设置失败（不影响主功能）: $e');
